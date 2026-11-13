@@ -4,3 +4,4 @@
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
+utility_billing.patches.v0_1.tariff_title_fixed_date

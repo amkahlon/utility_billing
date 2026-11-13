@@ -57,7 +57,7 @@ class IntegrationTestTariff(IntegrationTestCase):
 
 	def test_title_and_flat_charge(self):
 		t = make_tariff(self.category, "2026-07-01")
-		self.assertEqual(t.tariff_title, "TST Residential from 01-07-2026")
+		self.assertEqual(t.tariff_title, "TST Residential from 01 Jul 2026")  # same on every site
 		self.assertEqual(float(t.calculate_energy(264).amount), 18480.0)
 
 	def test_overlap_refused(self):

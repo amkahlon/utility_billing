@@ -71,8 +71,7 @@ class Tariff(Document):
 				frappe.throw(_("Row {0}: rate can't be negative.").format(row.idx))
 
 	def set_title(self):
-		category = frappe.db.get_value("Consumer Category", self.consumer_category, "category_name")
-		self.tariff_title = f"{category or self.consumer_category} from {formatdate(self.effective_from)}"
+		self.tariff_title = tariff_title(self.consumer_category, self.effective_from)
 
 	def find_overlap_or_predecessor(self):
 		"""Refuse overlapping approved tariffs, except an open-ended older version, which is returned
@@ -118,6 +117,13 @@ class Tariff(Document):
 			slabs=self.slabs,
 			minimum_charge=self.minimum_charge,
 		)
+
+
+def tariff_title(consumer_category: str, effective_from) -> str:
+	"""Stored title, e.g. "Residential from 01 Jul 2026". Uses a fixed date format so the stored
+	title doesn't change with a site's date-format setting (found in QA, 2026-11-13)."""
+	category = frappe.db.get_value("Consumer Category", consumer_category, "category_name")
+	return f"{category or consumer_category} from {getdate(effective_from).strftime('%d %b %Y')}"
 
 
 def get_applicable_tariff(society: str, utility: str, consumer_category: str, on_date) -> str | None:

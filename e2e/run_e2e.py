@@ -1,0 +1,391 @@
+# Copyright (c) 2026, SoftVerx. All rights reserved. See license.txt.
+"""HTTP end-to-end QA suite for utility_billing.
+
+Talks to a running bench over HTTP exactly like the desk does: it logs in, then saves and submits
+through frappe.desk.form.save.savedocs with values as text, the way the browser form sends them.
+
+Run (inside WSL, with `bench start` running):
+    cd ~/frappe-bench && env/bin/python apps/utility_billing/e2e/run_e2e.py
+Environment: E2E_SITE (default qa.localhost), E2E_URL (default http://127.0.0.1:8000),
+the admin password is read from QA_ADMIN_PASSWORD in ~/.dev-secrets.
+Exit code 0 = all passed.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import random
+import sys
+import traceback
+from pathlib import Path
+
+import requests
+
+SITE = os.environ.get("E2E_SITE", "qa.localhost")
+URL = os.environ.get("E2E_URL", "http://127.0.0.1:8000")
+RUN = f"{random.randint(1000, 9999)}"  # makes every run's records unique
+
+
+def secret(key: str) -> str:
+	for line in (Path.home() / ".dev-secrets").read_text().splitlines():
+		if line.startswith(key + "="):
+			return line.split("=", 1)[1]
+	raise SystemExit(f"{key} missing in ~/.dev-secrets")
+
+
+class ServerError(Exception):
+	def __init__(self, status, message):
+		super().__init__(f"HTTP {status}: {message}")
+		self.status = status
+		self.message = message
+
+
+class Desk:
+	def __init__(self):
+		self.s = requests.Session()
+		self.s.headers.update({"Host": SITE, "Accept": "application/json"})
+
+	def login(self, user="Administrator", password=None):
+		r = self.s.post(f"{URL}/api/method/login", data={"usr": user, "pwd": password or secret("QA_ADMIN_PASSWORD")})
+		r.raise_for_status()
+
+	def call(self, method, **params):
+		r = self.s.post(f"{URL}/api/method/{method}", data={k: _enc(v) for k, v in params.items()})
+		data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+		if r.status_code != 200:
+			raise ServerError(r.status_code, _message(data) or r.text[:300])
+		return data.get("message")
+
+	def save(self, doc: dict, action="Save") -> dict:
+		doc = {"docstatus": 0, "__islocal": 1, **doc} if "name" not in doc else doc
+		return self.call("frappe.desk.form.save.savedocs", doc=json.dumps(doc), action=action) or self.last_doc(doc)
+
+	def last_doc(self, doc):
+		# savedocs returns the saved doc in docs[]; fetch it by name if not.
+		return self.get(doc["doctype"], doc["name"])
+
+	def get(self, doctype, name) -> dict:
+		r = self.s.get(f"{URL}/api/resource/{doctype}/{requests.utils.quote(name)}")
+		if r.status_code != 200:
+			raise ServerError(r.status_code, r.text[:300])
+		return r.json()["data"]
+
+	def save_doc(self, doc: dict, action="Save") -> dict:
+		"""Save through the desk endpoint and return the stored document.
+		Like the browser, an unsaved record carries a temporary name "new-<doctype>-<random>"."""
+		if "name" not in doc:
+			slug = doc["doctype"].lower().replace(" ", "-")
+			doc = {"docstatus": 0, "__islocal": 1, "__unsaved": 1,
+			       "name": f"new-{slug}-{random.randint(10**9, 10**10)}", **doc}
+		r = self.s.post(
+			f"{URL}/api/method/frappe.desk.form.save.savedocs",
+			data={"doc": json.dumps(doc), "action": action},
+		)
+		data = r.json()
+		if r.status_code != 200:
+			raise ServerError(r.status_code, _message(data))
+		saved = data["docs"][0]
+		return saved
+
+
+def _enc(v):
+	return json.dumps(v) if isinstance(v, (dict, list)) else v
+
+
+def _message(data) -> str:
+	msgs = data.get("_server_messages")
+	if msgs:
+		try:
+			return " | ".join(json.loads(m).get("message", "") for m in json.loads(msgs))
+		except Exception:
+			return str(msgs)
+	return data.get("exception") or data.get("exc_type") or ""
+
+
+# ---------------------------------------------------------------- test registry
+CASES: list[tuple[str, str, object]] = []
+
+
+def case(qa_id, requirement):
+	def wrap(fn):
+		CASES.append((qa_id, requirement, fn))
+		return fn
+
+	return wrap
+
+
+def expect_error(fn, contains=""):
+	try:
+		fn()
+	except ServerError as e:
+		if contains and contains.lower() not in e.message.lower():
+			raise AssertionError(f"error raised, but message was: {e.message}") from None
+		return e.message
+	raise AssertionError("expected the server to refuse this, but it was accepted")
+
+
+def eq(actual, expected, what=""):
+	if actual != expected:
+		raise AssertionError(f"{what}: expected {expected!r}, got {actual!r}")
+
+
+# ---------------------------------------------------------------- shared state
+S: dict = {}
+
+
+# ---------------------------------------------------------------- increment 1
+@case("QA-01", "Install: default utilities")
+def t_utilities(d: Desk):
+	for name, code in (("Electricity", 1), ("Water", 2), ("Gas", 3)):
+		u = d.get("Utility Type", name)
+		eq(u["reference_code"], code, f"{name} reference code")
+
+
+@case("QA-02", "FS-CLT-01/02, FS-CFG-15/16: society saved as the form sends it")
+def t_society(d: Desk):
+	short = f"qa{RUN}"
+	saved = d.save_doc({
+		"doctype": "Society", "society_name": f"QA Society {RUN}", "short_name": short,
+		"enable_electricity": 1, "enable_fixed_charges": 1, "billing_cycle": "Monthly",
+		"reading_window_days": "5", "days_to_due_date": "14", "grace_days": "0", "minimum_bill": "0",
+		"rounding_rule": "Nearest rupee", "payment_posting_order": "Current bill, Arrears, Surcharge",
+		"surcharge_basis": "Percentage of current bill", "surcharge_rate": "10",
+		"website": "www.qa-society.example", "logo": "/files/qa-logo.png",
+		"bank_accounts": [{"bank_name": "MBL", "account_title": "QA", "account_number": "1", "print_on_bill": 1}],
+		"offices": [{"office_name": "Main", "office_type": "Office"}],
+	})
+	eq(saved["name"], short.upper(), "society ID")
+	eq(saved["website"], "https://www.qa-society.example", "website")
+	eq(float(saved["surcharge_rate"]), 10.0, "surcharge rate")
+	S["society"] = saved["name"]
+
+
+@case("QA-03", "FS-CFG-16: surcharge rate must be 0-100%")
+def t_society_bad_rate(d: Desk):
+	expect_error(lambda: d.save_doc({"doctype": "Society", "society_name": "Bad", "short_name": f"qb{RUN}",
+	                                 "enable_electricity": 1, "days_to_due_date": "14",
+	                                 "surcharge_basis": "Percentage of current bill", "surcharge_rate": "150"}),
+	             "between 0 and 100")
+
+
+@case("QA-04", "FS-CLT-02: logo must be an image")
+def t_society_bad_logo(d: Desk):
+	expect_error(lambda: d.save_doc({"doctype": "Society", "society_name": "Bad logo", "short_name": f"qc{RUN}",
+	                                 "enable_electricity": 1, "days_to_due_date": "14",
+	                                 "surcharge_basis": "Percentage of current bill", "surcharge_rate": "10",
+	                                 "logo": "/files/logo.pdf"}), "logo")
+
+
+@case("QA-05", "FS-CFG-02: categories per utility")
+def t_categories(d: Desk):
+	for cat in ("Residential", "Commercial"):
+		saved = d.save_doc({"doctype": "Consumer Category", "category_name": f"{cat} {RUN}", "utility": "Electricity"})
+		S[cat] = saved["name"]
+	eq(S["Residential"], f"Electricity-Residential {RUN}", "category ID")
+	S["water_cat"] = d.save_doc({"doctype": "Consumer Category", "category_name": f"Domestic {RUN}", "utility": "Water"})["name"]
+
+
+@case("QA-06", "FS-CFG-03: charge types")
+def t_charges(d: Desk):
+	for name, group, basis in (("Service", "Society", "Fixed"), ("O&M", "Electricity", "Per Unit")):
+		saved = d.save_doc({"doctype": "Charge Type", "charge_name": f"{name} {RUN}", "charge_group": group,
+		                    "calculation_basis": basis, "bill_order": "10", "rounding_rule": "Nearest rupee"})
+		S[name] = saved["name"]
+
+
+def tariff(d, category, start, end=None, method="Flat rate", rate="70", slabs=None, charges=None, action="Submit"):
+	doc = {"doctype": "Tariff", "naming_series": "TRF-.YYYY.-.####", "society": S["society"], "utility": "Electricity",
+	       "consumer_category": category, "effective_from": start, "effective_to": end,
+	       "pricing_method": method, "flat_rate": rate, "minimum_charge": "0",
+	       "slabs": slabs or [], "charges": charges or []}
+	saved = d.save_doc(doc)
+	if action == "Submit":
+		saved = d.save_doc({**saved, "docstatus": 0}, action="Submit")
+	return saved
+
+
+def preview(d, name, units):
+	return d.call("utility_billing.utility_billing.doctype.tariff.tariff.preview_energy", tariff=name, units=units)
+
+
+@case("QA-07", "FS-CFG-04/06, test case 1: flat Rs 70 tariff, 264 units = 18,480")
+def t_tariff_flat(d: Desk):
+	t = tariff(d, S["Residential"], "2026-07-01", charges=[{"charge_type": S["Service"], "rate": "1700"}])
+	eq(t["docstatus"], 1, "submitted")
+	eq(preview(d, t["name"], 264)["amount"], 18480.0, "energy charge")
+	S["tariff_v1"] = t
+
+
+@case("QA-08", "FS-CFG-08: an approved tariff is locked")
+def t_tariff_locked(d: Desk):
+	t = dict(S["tariff_v1"], flat_rate="75")
+	expect_error(lambda: d.save_doc(t, action="Update"))
+
+
+@case("QA-09", "FS-CFG-05: a new version closes the previous one")
+def t_tariff_version(d: Desk):
+	v2 = tariff(d, S["Residential"], "2027-01-01", rate="75")
+	old = d.get("Tariff", S["tariff_v1"]["name"])
+	eq(old["effective_to"], "2026-12-31", "old version end date")
+	eq(preview(d, v2["name"], 100)["amount"], 7500.0, "new rate")
+
+
+@case("QA-10", "FS-CFG-05: overlapping tariffs refused")
+def t_tariff_overlap(d: Desk):
+	expect_error(lambda: tariff(d, S["Residential"], "2026-09-01", "2026-09-30"), "already covers")
+
+
+@case("QA-11", "FS-CFG-04: progressive and whole-bill slabs")
+def t_slabs(d: Desk):
+	slabs = [{"from_units": "0", "to_units": "100", "rate": "10"},
+	         {"from_units": "100", "to_units": "200", "rate": "15"},
+	         {"from_units": "200", "to_units": "0", "rate": "20"}]
+	prog = tariff(d, S["Commercial"], "2026-07-01", "2026-12-31", method="Progressive slabs", rate="0", slabs=slabs)
+	eq(preview(d, prog["name"], 250)["amount"], 3500.0, "progressive 250 units")
+	whole = tariff(d, S["Commercial"], "2027-01-01", method="Whole-bill slabs", rate="0", slabs=slabs)
+	eq(preview(d, whole["name"], 250)["amount"], 5000.0, "whole-bill 250 units")
+
+
+@case("QA-12", "FS-CFG-04: invalid slabs and wrong-utility category refused")
+def t_bad_tariffs(d: Desk):
+	gap = [{"from_units": "0", "to_units": "100", "rate": "10"}, {"from_units": "120", "to_units": "0", "rate": "20"}]
+	expect_error(lambda: tariff(d, S["Commercial"], "2030-01-01", method="Progressive slabs", rate="0", slabs=gap,
+	                            action="Save"), "must start at 100")
+	expect_error(lambda: tariff(d, S["water_cat"], "2030-01-01", action="Save"), "belongs to Water")
+
+
+# ---------------------------------------------------------------- increment 2
+@case("QA-13", "FS-MST-02: consumer CNIC formatted, duplicates refused")
+def t_consumer(d: Desk):
+	cnic = f"35202{RUN}{random.randint(100, 999)}1"
+	c = d.save_doc({"doctype": "Consumer", "naming_series": "CON-.#####", "consumer_name": f"QA Owner {RUN}",
+	                "consumer_type": "Individual", "id_type": "CNIC", "id_number": cnic, "mobile_no": "+923001234567",
+	                "preferred_language": "Urdu", "notify_app": 1, "notify_sms": 1})
+	eq(c["id_number"], f"{cnic[:5]}-{cnic[5:12]}-{cnic[12]}", "CNIC format")
+	S["owner"] = c["name"]
+	expect_error(lambda: d.save_doc({"doctype": "Consumer", "naming_series": "CON-.#####", "consumer_name": "Dup",
+	                                 "id_type": "CNIC", "id_number": cnic}), "already belongs")
+	S["tenant"] = d.save_doc({"doctype": "Consumer", "naming_series": "CON-.#####", "consumer_name": f"QA Tenant {RUN}"})["name"]
+
+
+@case("QA-14", "FS-MST-01/03: property, owners and tenants")
+def t_property(d: Desk):
+	p = d.save_doc({"doctype": "Property", "society": S["society"], "property_no": " N  2308 ", "sector": "N",
+	                "property_type": "House", "status": "Occupied", "area": "10", "area_unit": "Marla",
+	                "occupants": [{"consumer": S["owner"], "occupant_role": "Owner", "from_date": "2020-01-01",
+	                               "share_percent": "100", "is_billed": 1, "liable_for_arrears": 1}]})
+	eq(p["name"], f"{S['society']}-N 2308", "property ID")
+	S["property"] = p
+	bad = dict(p, occupants=p["occupants"] + [{"consumer": S["tenant"], "occupant_role": "Tenant",
+	                                           "from_date": "2026-01-01", "is_billed": 1}])
+	expect_error(lambda: d.save_doc(bad), "only one occupant can be billed")
+
+
+@case("QA-15", "FS-MST-08: feeder and transformer stay inside their society")
+def t_network(d: Desk):
+	f = d.save_doc({"doctype": "Feeder", "society": S["society"], "feeder_code": "F1", "feeder_name": "Feeder 1"})
+	t = d.save_doc({"doctype": "Transformer", "society": S["society"], "transformer_code": "T1", "feeder": f["name"],
+	                "kva_rating": "200"})
+	S["transformer"] = t["name"]
+	other = d.save_doc({"doctype": "Society", "society_name": "Other", "short_name": f"qo{RUN}", "enable_electricity": 1,
+	                    "days_to_due_date": "14", "surcharge_basis": "Percentage of current bill", "surcharge_rate": "10"})
+	expect_error(lambda: d.save_doc({"doctype": "Transformer", "society": other["name"], "transformer_code": "T9",
+	                                 "feeder": f["name"]}), "belongs to society")
+
+
+def meter(d, serial, status="In Store"):
+	return d.save_doc({"doctype": "Meter", "serial_no": serial, "society": S["society"], "utility": "Electricity",
+	                   "meter_type": "Single Phase", "status": status, "digits": "5", "multiplier": "1", "registers": "1"})
+
+
+def connection(d, meters, status="Active"):
+	return d.save_doc({"doctype": "Connection", "society": S["society"], "property": S["property"]["name"],
+	                   "consumer": S["owner"], "utility": "Electricity", "consumer_category": S["Residential"],
+	                   "status": status, "phase": "Single", "sanctioned_load_kw": "5", "transformer": S["transformer"],
+	                   "meters": meters})
+
+
+@case("QA-16", "FS-MST-06: meters; Installed only through a connection")
+def t_meter(d: Desk):
+	S["m1"] = meter(d, f"QA-{RUN}-M1")["name"]
+	expect_error(lambda: meter(d, f"QA-{RUN}-MX", status="Installed"), "connection")
+
+
+@case("QA-17", "FS-MST-04/05/07: connection gets a valid reference number; meter installed")
+def t_connection(d: Desk):
+	c = connection(d, [{"meter": S["m1"], "installed_on": "2026-07-01", "start_reading": "3641"}])
+	ref = c["name"]
+	eq(len(ref), 10, "reference length")
+	eq(ref[0], "1", "electricity code")
+	eq(c["current_meter"], S["m1"], "current meter")
+	eq(c["feeder"], d.get("Transformer", S["transformer"])["feeder"], "feeder fetched from transformer")
+	m = d.get("Meter", S["m1"])
+	eq((m["status"], m["current_connection"]), ("Installed", ref), "meter status")
+	found = d.call("frappe.desk.search.search_link", doctype="Connection", txt=ref)
+	if not any(r.get("value") == ref for r in found or []):
+		raise AssertionError(f"reference {ref} not found by search: {found}")
+	S["conn"] = c
+
+
+@case("QA-18", "FS-MST-07: a meter can't be on two connections")
+def t_meter_twice(d: Desk):
+	expect_error(lambda: connection(d, [{"meter": S["m1"], "installed_on": "2026-08-01"}]), "already installed")
+
+
+@case("QA-19", "FS-MST-07: meter change")
+def t_meter_change(d: Desk):
+	m2 = meter(d, f"QA-{RUN}-M2")["name"]
+	c = d.get("Connection", S["conn"]["name"])
+	c["meters"][0].update({"removed_on": "2026-10-15", "end_reading": "3905", "removal_reason": "Faulty display"})
+	c["meters"].append({"meter": m2, "installed_on": "2026-10-15", "start_reading": "0"})
+	saved = d.save_doc(c)
+	eq(saved["current_meter"], m2, "new current meter")
+	eq(d.get("Meter", S["m1"])["status"], "Removed", "old meter status")
+	eq(d.get("Meter", m2)["status"], "Installed", "new meter status")
+
+
+@case("QA-20", "FS-MST-04: an active connection needs a meter")
+def t_active_without_meter(d: Desk):
+	expect_error(lambda: connection(d, [], status="Active"), "needs an installed meter")
+
+
+@case("QA-21", "FS-MST-05: the reference number can't be changed")
+def t_reference_permanent(d: Desk):
+	c = d.get("Connection", S["conn"]["name"])
+	c["reference_no"] = "1999999990"
+	expect_error(lambda: d.save_doc(c), "permanent")
+
+
+@case("QA-22", "Security: guests can't read billing data")
+def t_guest(d: Desk):
+	guest = requests.get(f"{URL}/api/resource/Society/{S['society']}", headers={"Host": SITE, "Accept": "application/json"})
+	if guest.status_code not in (401, 403):
+		raise AssertionError(f"guest got HTTP {guest.status_code}")
+
+
+# ---------------------------------------------------------------- runner
+def main():
+	d = Desk()
+	d.login()
+	results = []
+	for qa_id, req, fn in CASES:
+		try:
+			fn(d)
+			results.append((qa_id, req, "PASS", ""))
+		except Exception as e:
+			detail = str(e) if isinstance(e, (AssertionError, ServerError)) else traceback.format_exc(limit=2)
+			results.append((qa_id, req, "FAIL", detail.strip().replace("\n", " ")[:400]))
+	width = max(len(r[1]) for r in results)
+	for qa_id, req, status, detail in results:
+		print(f"{status}  {qa_id}  {req.ljust(width)}  {detail}")
+	failed = [r for r in results if r[2] == "FAIL"]
+	print(f"\nsite={SITE} run={RUN}  {len(results) - len(failed)} passed, {len(failed)} failed")
+	(Path(__file__).parent / "last_run.json").write_text(json.dumps(
+		{"site": SITE, "run": RUN, "results": [dict(zip(("id", "requirement", "status", "detail"), r)) for r in results]},
+		indent=1))
+	sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+	main()
