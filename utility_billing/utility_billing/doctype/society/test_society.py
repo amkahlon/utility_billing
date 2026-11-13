@@ -34,6 +34,10 @@ class IntegrationTestSociety(IntegrationTestCase):
 		self.assertEqual(doc.name, "TST-DEMO")  # short name is upper-cased and used as the ID
 		self.assertEqual(float(doc.surcharge_rate), 10.0)
 
+	def test_website_without_scheme_gets_https(self):
+		doc = society(website="www.demohousing.com").insert()
+		self.assertEqual(doc.website, "https://www.demohousing.com")
+
 	def test_surcharge_rate_range(self):
 		with self.assertRaises(frappe.ValidationError):
 			society(surcharge_rate="150").insert()

@@ -21,6 +21,7 @@ class Society(Document):
 	def validate(self):
 		# The form can send numbers as text (for example a default of "10"), so convert first.
 		self.normalise_short_name()
+		self.normalise_website()
 		if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{1,19}", self.short_name):
 			frappe.throw(_("Short Name: 2 to 20 letters, digits or hyphens, for example DHA-LHR."))
 		if not any(
@@ -38,6 +39,13 @@ class Society(Document):
 		if flt(self.surcharge_cap) < 0 or flt(self.minimum_bill) < 0:
 			frappe.throw(_("Surcharge cap and minimum bill can't be negative."))
 		self.validate_logo()
+
+	def normalise_website(self):
+		# Frappe's URL check needs a scheme; staff usually type "www.example.com".
+		site = (self.website or "").strip()
+		if site and not re.match(r"^https?://", site, re.I):
+			site = "https://" + site
+		self.website = site
 
 	def validate_logo(self):
 		if self.logo and not re.search(r"\.(png|svg|jpe?g|webp)$", self.logo.split("?")[0], re.I):
