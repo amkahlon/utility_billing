@@ -96,7 +96,7 @@ app_license = "Proprietary"
 # ------------
 
 # before_install = "utility_billing.install.before_install"
-# after_install = "utility_billing.install.after_install"
+after_install = "utility_billing.install.after_install"
 
 # Uninstallation
 # ------------

@@ -1,0 +1,55 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-11-13 19:20:12.899891",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "charge_type",
+  "calculation_basis",
+  "rate"
+ ],
+ "fields": [
+  {
+   "fieldname": "charge_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Charge Type",
+   "options": "Charge Type",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "charge_type.calculation_basis",
+   "fieldname": "calculation_basis",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Basis",
+   "read_only": 1
+  },
+  {
+   "description": "Per unit for 'Per Unit' charges, amount for 'Fixed', percent for 'Percentage of Charges'",
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate / Amount",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-13 19:20:12.899891",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Tariff Charge",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

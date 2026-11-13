@@ -1,0 +1,52 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-11-13 19:20:02.090381",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "from_units",
+  "to_units",
+  "rate"
+ ],
+ "fields": [
+  {
+   "fieldname": "from_units",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "From Units",
+   "reqd": 1
+  },
+  {
+   "description": "0 = no upper limit (last slab only)",
+   "fieldname": "to_units",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "To Units"
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate per Unit",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-13 19:20:02.090381",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Tariff Slab",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

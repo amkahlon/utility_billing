@@ -1,0 +1,400 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "field:short_name",
+ "creation": "2026-11-13 19:20:12.986988",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "profile_section",
+  "society_name",
+  "short_name",
+  "registration_no",
+  "ntn",
+  "strn_vat",
+  "cb_profile",
+  "phone",
+  "email",
+  "website",
+  "office_hours",
+  "address",
+  "branding_section",
+  "logo",
+  "brand_colour",
+  "cb_brand",
+  "letterhead_text",
+  "footer_text",
+  "supply_section",
+  "disco_name",
+  "disco_account_no",
+  "cb_supply",
+  "bulk_meter_no",
+  "sanctioned_load_kw",
+  "modules_section",
+  "enable_electricity",
+  "enable_water",
+  "enable_gas",
+  "cb_modules",
+  "enable_fixed_charges",
+  "billing_section",
+  "billing_cycle",
+  "reading_window_days",
+  "days_to_due_date",
+  "grace_days",
+  "cb_billing",
+  "minimum_bill",
+  "rounding_rule",
+  "payment_posting_order",
+  "surcharge_section",
+  "surcharge_basis",
+  "surcharge_rate",
+  "cb_surcharge",
+  "surcharge_fixed_amount",
+  "surcharge_cap",
+  "messaging_section",
+  "sms_sender",
+  "whatsapp_number",
+  "cb_msg",
+  "email_sender",
+  "bank_section",
+  "bank_accounts",
+  "offices_section",
+  "offices"
+ ],
+ "fields": [
+  {
+   "fieldname": "profile_section",
+   "fieldtype": "Section Break",
+   "label": "Profile"
+  },
+  {
+   "fieldname": "society_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Legal Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "short_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Short Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "registration_no",
+   "fieldtype": "Data",
+   "label": "Registration No"
+  },
+  {
+   "fieldname": "ntn",
+   "fieldtype": "Data",
+   "label": "NTN"
+  },
+  {
+   "fieldname": "strn_vat",
+   "fieldtype": "Data",
+   "label": "STRN / VAT No"
+  },
+  {
+   "fieldname": "cb_profile",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Phone",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "website",
+   "fieldtype": "Data",
+   "label": "Website",
+   "options": "URL"
+  },
+  {
+   "fieldname": "office_hours",
+   "fieldtype": "Data",
+   "label": "Office Hours"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "branding_section",
+   "fieldtype": "Section Break",
+   "label": "Logo and Branding"
+  },
+  {
+   "description": "PNG or SVG. Printed on bills, receipts, notices and reports.",
+   "fieldname": "logo",
+   "fieldtype": "Attach Image",
+   "label": "Logo"
+  },
+  {
+   "fieldname": "brand_colour",
+   "fieldtype": "Color",
+   "label": "Brand Colour"
+  },
+  {
+   "fieldname": "cb_brand",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "letterhead_text",
+   "fieldtype": "Small Text",
+   "label": "Letterhead Text"
+  },
+  {
+   "fieldname": "footer_text",
+   "fieldtype": "Small Text",
+   "label": "Footer Text"
+  },
+  {
+   "fieldname": "supply_section",
+   "fieldtype": "Section Break",
+   "label": "Bulk Supply"
+  },
+  {
+   "fieldname": "disco_name",
+   "fieldtype": "Data",
+   "label": "DISCO / Utility Supplier"
+  },
+  {
+   "fieldname": "disco_account_no",
+   "fieldtype": "Data",
+   "label": "DISCO Account No"
+  },
+  {
+   "fieldname": "cb_supply",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bulk_meter_no",
+   "fieldtype": "Data",
+   "label": "Bulk Meter No"
+  },
+  {
+   "fieldname": "sanctioned_load_kw",
+   "fieldtype": "Float",
+   "label": "Sanctioned Load (kW)"
+  },
+  {
+   "fieldname": "modules_section",
+   "fieldtype": "Section Break",
+   "label": "Modules"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_electricity",
+   "fieldtype": "Check",
+   "label": "Electricity"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_water",
+   "fieldtype": "Check",
+   "label": "Water"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_gas",
+   "fieldtype": "Check",
+   "label": "Gas"
+  },
+  {
+   "fieldname": "cb_modules",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_fixed_charges",
+   "fieldtype": "Check",
+   "label": "Fixed Charges (service, security, waste)"
+  },
+  {
+   "fieldname": "billing_section",
+   "fieldtype": "Section Break",
+   "label": "Billing Parameters"
+  },
+  {
+   "default": "Monthly",
+   "fieldname": "billing_cycle",
+   "fieldtype": "Select",
+   "label": "Billing Cycle",
+   "options": "Monthly\nBi-monthly\nQuarterly",
+   "reqd": 1
+  },
+  {
+   "default": "5",
+   "fieldname": "reading_window_days",
+   "fieldtype": "Int",
+   "label": "Reading Window (days)"
+  },
+  {
+   "default": "14",
+   "fieldname": "days_to_due_date",
+   "fieldtype": "Int",
+   "label": "Days from Issue to Due Date",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "grace_days",
+   "fieldtype": "Int",
+   "label": "Grace Days"
+  },
+  {
+   "fieldname": "cb_billing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "minimum_bill",
+   "fieldtype": "Currency",
+   "label": "Minimum Bill"
+  },
+  {
+   "default": "Nearest rupee",
+   "fieldname": "rounding_rule",
+   "fieldtype": "Select",
+   "label": "Bill Rounding",
+   "options": "Nearest rupee\nNo rounding\nRound up\nRound down"
+  },
+  {
+   "default": "Current bill, Arrears, Surcharge",
+   "fieldname": "payment_posting_order",
+   "fieldtype": "Select",
+   "label": "Payment Posting Order",
+   "options": "Current bill, Arrears, Surcharge\nArrears, Current bill, Surcharge\nOldest first",
+   "reqd": 1
+  },
+  {
+   "fieldname": "surcharge_section",
+   "fieldtype": "Section Break",
+   "label": "Late Payment Surcharge"
+  },
+  {
+   "default": "Percentage of current bill",
+   "fieldname": "surcharge_basis",
+   "fieldtype": "Select",
+   "label": "Surcharge Basis",
+   "options": "Percentage of current bill\nFixed amount",
+   "reqd": 1
+  },
+  {
+   "default": "10",
+   "depends_on": "eval:doc.surcharge_basis=='Percentage of current bill'",
+   "fieldname": "surcharge_rate",
+   "fieldtype": "Percent",
+   "label": "Surcharge Rate"
+  },
+  {
+   "fieldname": "cb_surcharge",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.surcharge_basis=='Fixed amount'",
+   "fieldname": "surcharge_fixed_amount",
+   "fieldtype": "Currency",
+   "label": "Surcharge Amount"
+  },
+  {
+   "description": "0 = no cap",
+   "fieldname": "surcharge_cap",
+   "fieldtype": "Currency",
+   "label": "Surcharge Cap"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "messaging_section",
+   "fieldtype": "Section Break",
+   "label": "Messaging Identity"
+  },
+  {
+   "fieldname": "sms_sender",
+   "fieldtype": "Data",
+   "label": "SMS Sender Name"
+  },
+  {
+   "fieldname": "whatsapp_number",
+   "fieldtype": "Data",
+   "label": "WhatsApp Number",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "cb_msg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "email_sender",
+   "fieldtype": "Data",
+   "label": "Email Sender",
+   "options": "Email"
+  },
+  {
+   "fieldname": "bank_section",
+   "fieldtype": "Section Break",
+   "label": "Bank and Payment Details"
+  },
+  {
+   "fieldname": "bank_accounts",
+   "fieldtype": "Table",
+   "label": "Bank Accounts",
+   "options": "Society Bank Account"
+  },
+  {
+   "fieldname": "offices_section",
+   "fieldtype": "Section Break",
+   "label": "Offices, Counters and Blocks"
+  },
+  {
+   "fieldname": "offices",
+   "fieldtype": "Table",
+   "label": "Offices",
+   "options": "Society Office"
+  }
+ ],
+ "grid_page_length": 50,
+ "image_field": "logo",
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-13 19:20:12.986988",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Society",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "society_name",
+ "track_changes": 1
+}
