@@ -30,4 +30,4 @@ Pre-commit is configured to use the following tools for checking and formatting 
 
 ### License
 
-mit
+Proprietary. Copyright (c) 2026 SoftVerx. All rights reserved. See license.txt.

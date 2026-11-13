@@ -3,7 +3,7 @@ app_title = "Utility Billing"
 app_publisher = "SoftVerx"
 app_description = "Utility billing and management for housing societies and estates"
 app_email = "dev@softverx.example"
-app_license = "mit"
+app_license = "Proprietary"
 
 # Apps
 # ------------------
