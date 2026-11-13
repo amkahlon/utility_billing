@@ -27,28 +27,52 @@ frappe.ui.form.on("Tariff", {
 	// Ask the approver for a reason before the Reject action is applied.
 	before_workflow_action(frm) {
 		if (frm.selected_workflow_action !== "Reject") return;
-		return new Promise((resolve, reject) => {
-			frappe.prompt(
+		return ask_rejection_reason(frm);
+	},
+});
+
+// Frappe freezes the screen before calling before_workflow_action, which leaves a dialog
+// greyed out underneath the freeze (found by the user on 2026-11-13). Lift the freeze while the
+// dialog is open; re-freeze only when the reason is saved and the action continues.
+function ask_rejection_reason(frm) {
+	frappe.dom.unfreeze();
+	return new Promise((resolve, reject) => {
+		let saved = false;
+		const d = new frappe.ui.Dialog({
+			title: __("Reject Tariff"),
+			fields: [
 				{
 					fieldname: "reason",
 					fieldtype: "Small Text",
 					label: __("Reason for rejecting"),
+					description: __("The submitter sees this reason and can correct and resubmit."),
 					reqd: 1,
 				},
-				({ reason }) => {
-					frappe
-						.call(
-							"utility_billing.utility_billing.doctype.tariff.tariff.set_rejection_reason",
-							{ tariff: frm.doc.name, reason }
-						)
-						.then(() => resolve(), () => reject());
-				},
-				__("Reject Tariff"),
-				__("Reject")
-			);
+			],
+			primary_action_label: __("Reject"),
+			primary_action({ reason }) {
+				frappe
+					.call({
+						method: "utility_billing.utility_billing.doctype.tariff.tariff.set_rejection_reason",
+						args: { tariff: frm.doc.name, reason },
+					})
+					.then(() => {
+						saved = true;
+						d.hide();
+						frappe.dom.freeze();
+						resolve();
+					});
+			},
 		});
-	},
-});
+		d.onhide = () => {
+			if (!saved) {
+				frm.selected_workflow_action = null;
+				reject(); // cancelled: the screen stays unfrozen and nothing changes
+			}
+		};
+		d.show();
+	});
+}
 
 function preview_charge(frm) {
 	frappe.prompt(

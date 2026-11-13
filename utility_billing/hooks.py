@@ -288,7 +288,7 @@ fixtures = [
 		]]],
 	},
 	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},
-	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit for Approval", "Approve", "Reject", "Cancel"]]]},
+	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit for Approval", "Approve", "Reject", "Withdraw", "Cancel"]]]},
 	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval"]]]},
 ]
 

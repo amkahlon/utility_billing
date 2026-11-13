@@ -33,6 +33,7 @@
   "approved_by",
   "approved_on",
   "rejection_reason",
+  "approval_log",
   "notes_section",
   "notes"
  ],
@@ -225,13 +226,22 @@
    "label": "Rejection Reason",
    "no_copy": 1,
    "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approval_log",
+   "fieldtype": "Table",
+   "label": "Approval History",
+   "no_copy": 1,
+   "options": "Approval Log",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-13 22:38:48.036831",
+ "modified": "2026-11-13 22:40:30.913702",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Tariff",

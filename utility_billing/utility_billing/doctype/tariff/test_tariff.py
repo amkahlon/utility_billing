@@ -200,3 +200,90 @@ class IntegrationTestTariffApproval(IntegrationTestCase):
 		frappe.set_user(BILLING_OFFICER)
 		with self.assertRaises(frappe.PermissionError):
 			make_tariff(self.category, "2026-07-01", submit=False)
+
+
+class IntegrationTestApprovalPractice(IntegrationTestCase):
+	"""Withdraw, approval history and notifications (best-practice review, 2026-11-13)."""
+
+	def setUp(self):
+		create_default_utilities()
+		make_society()
+		make_users()
+		self.category = make_category("TST Practice")
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+
+	def test_reject_edit_resubmit_approve_keeps_full_history(self):
+		"""The user's scenario: rejected for missing charges, maker adds them, resubmits, GM approves."""
+		ensure_charge("TST Service Charges", "Fixed")
+		ensure_charge("TST Aquifer Charges", "Fixed")
+		t = make_tariff(self.category, "2026-07-01", rate=80, submit=False)
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		reason = "service charges and aquifer charges are missing for the tariff"
+		frappe.set_user(GENERAL_MANAGER)
+		set_rejection_reason(t.name, reason)
+		frappe.set_user("Administrator")
+		act(t, "Reject", GENERAL_MANAGER)
+
+		frappe.set_user(BILLING_MANAGER)
+		t.reload()
+		t.append("charges", {"charge_type": "TST Service Charges", "rate": 1700})
+		t.append("charges", {"charge_type": "TST Aquifer Charges", "rate": 1000})
+		t.save()
+		frappe.set_user("Administrator")
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		act(t, "Approve", GENERAL_MANAGER)
+		t.reload()
+
+		self.assertEqual((t.docstatus, t.workflow_state), (1, "Approved"))
+		self.assertEqual(len(t.charges), 2)
+		steps = [(r.action, r.user, r.remarks) for r in t.approval_log]
+		self.assertEqual(
+			steps,
+			[
+				("Submit for Approval", BILLING_MANAGER, None),
+				("Reject", GENERAL_MANAGER, reason),
+				("Resubmit", BILLING_MANAGER, None),
+				("Approve", GENERAL_MANAGER, None),
+			],
+		)
+
+	def test_maker_can_withdraw_others_cannot(self):
+		t = make_tariff(self.category, "2026-07-01", submit=False)
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		with self.assertRaises(frappe.PermissionError):
+			act(t, "Withdraw", BILLING_MANAGER_2)
+		act(t, "Withdraw", BILLING_MANAGER)
+		t.reload()
+		self.assertEqual(t.workflow_state, "Draft")
+		self.assertEqual(t.approval_log[-1].action, "Withdraw")
+		frappe.set_user(BILLING_MANAGER)
+		t.reload()
+		t.flat_rate = 71  # editable again after withdrawing
+		t.save()
+
+	def test_notifications_to_approver_and_maker(self):
+		t = make_tariff(self.category, "2026-07-01", submit=False)
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		self.assertTrue(
+			frappe.db.exists("Notification Log", {"for_user": GENERAL_MANAGER, "document_name": t.name}),
+			"approver not notified",
+		)
+		frappe.set_user(GENERAL_MANAGER)
+		set_rejection_reason(t.name, "Missing charges")
+		frappe.set_user("Administrator")
+		act(t, "Reject", GENERAL_MANAGER)
+		note = frappe.db.get_value(
+			"Notification Log", {"for_user": BILLING_MANAGER, "document_name": t.name}, "subject"
+		)
+		self.assertIn("rejected", (note or "").lower())
+		self.assertIn("Missing charges", note)
+
+
+def ensure_charge(name, basis):
+	if not frappe.db.exists("Charge Type", name):
+		frappe.get_doc(
+			{"doctype": "Charge Type", "charge_name": name, "charge_group": "Society", "calculation_basis": basis}
+		).insert()

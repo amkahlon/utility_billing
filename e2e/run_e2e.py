@@ -102,19 +102,28 @@ class Desk:
 
 
 USERS: dict[str, Desk] = {}
+EMAIL: dict[str, str] = {}
 
 
 def make_user(admin: Desk, key: str, roles: list[str]):
-	"""Create a QA user for this run with a random password, and log a session in as them."""
+	"""A fixed QA user per role (Frappe allows only 60 new users per hour), given a fresh random
+	password and exactly these roles each run; then a session is logged in as them."""
 	import secrets
 
-	email = f"qa.{key}.{RUN}@example.com"
+	email = f"qa.{key}@example.com"
 	password = secrets.token_urlsafe(16) + "!9a"
-	admin.save_doc({"doctype": "User", "email": email, "first_name": f"QA {key} {RUN}", "send_welcome_email": 0,
-	                "new_password": password, "roles": [{"role": r} for r in roles]})
+	r = admin.s.get(f"{URL}/api/resource/User/{email}")
+	if r.status_code == 200:
+		user = r.json()["data"]
+		user.update({"new_password": password, "enabled": 1, "roles": [{"role": x} for x in roles]})
+		admin.save_doc(user)
+	else:
+		admin.save_doc({"doctype": "User", "email": email, "first_name": f"QA {key}", "send_welcome_email": 0,
+		                "new_password": password, "roles": [{"role": x} for x in roles]})
 	desk = Desk()
 	desk.login(email, password)
 	USERS[key] = desk
+	EMAIL[key] = email
 	return email
 
 
@@ -409,13 +418,13 @@ def t_maker_checker(d: Desk):
 	expect_error(lambda: USERS["bmgm"].workflow(t, "Approve"), "another user")
 	eq(d.get("Tariff", t["name"])["workflow_state"], "Pending Approval", "still pending")
 	approved = USERS["gm"].workflow(t, "Approve")
-	eq((approved["docstatus"], approved["approved_by"]), (1, f"qa.gm.{RUN}@example.com"), "approved by GM")
+	eq((approved["docstatus"], approved["approved_by"]), (1, EMAIL["gm"]), "approved by GM")
 
 
 @case("QA-24", "FS-CFG-06: pending is locked; reject needs a reason; maker corrects and resubmits")
 def t_reject_cycle(d: Desk):
 	t = pending_tariff("2032-01-01")
-	eq(t["requested_by"], f"qa.bm.{RUN}@example.com", "requested by")
+	eq(t["requested_by"], EMAIL["bm"], "requested by")
 	expect_error(lambda: USERS["bm"].save_doc(dict(USERS["bm"].get("Tariff", t["name"]), flat_rate="99")),
 	             "waiting for approval")
 	expect_error(lambda: USERS["gm"].workflow(t, "Reject"), "reason")
@@ -428,6 +437,29 @@ def t_reject_cycle(d: Desk):
 	again = USERS["bm"].workflow(edited, "Submit for Approval")
 	# The API leaves out empty fields, so a cleared reason is simply absent.
 	eq((again["workflow_state"], again.get("rejection_reason")), ("Pending Approval", None), "resubmitted")
+	history = [(r["action"], r.get("remarks")) for r in USERS["bm"].get("Tariff", t["name"])["approval_log"]]
+	eq(history, [("Submit for Approval", None), ("Reject", "Rate must follow the July notice"), ("Resubmit", None)],
+	   "approval history")
+	import time
+
+	for _ in range(20):  # notifications are created by a background job
+		notes = USERS["bm"].s.get(f"{URL}/api/resource/Notification Log", params={
+			"filters": json.dumps([["document_name", "=", t["name"]]]), "fields": json.dumps(["subject"])}).json()["data"]
+		if any("rejected" in n["subject"].lower() for n in notes):
+			break
+		time.sleep(1)
+	else:
+		raise AssertionError(f"maker not notified of rejection within 20 s: {notes}")
+
+
+@case("QA-28", "Best practice: the submitter can withdraw a pending item; others can't")
+def t_withdraw(d: Desk):
+	t = pending_tariff("2034-01-01")
+	expect_error(lambda: USERS["bmgm"].workflow(t, "Withdraw"), "only")
+	back = USERS["bm"].workflow(t, "Withdraw")
+	eq(back["workflow_state"], "Draft", "withdrawn to draft")
+	edited = USERS["bm"].save_doc(dict(USERS["bm"].get("Tariff", t["name"]), flat_rate="73"))
+	eq(float(edited["flat_rate"]), 73.0, "editable after withdraw")
 
 
 @case("QA-25", "FS-ACC-06: the approver's inbox lists the pending tariff")
@@ -435,7 +467,7 @@ def t_inbox(d: Desk):
 	import time
 
 	t = pending_tariff("2033-01-01")
-	gm_email = f"qa.gm.{RUN}@example.com"
+	gm_email = EMAIL["gm"]
 	for _ in range(20):  # workflow actions are created by a background job
 		r = USERS["gm"].s.get(f"{URL}/api/resource/Workflow Action", params={
 			"filters": json.dumps([["reference_name", "=", t["name"]], ["status", "=", "Open"]]),
