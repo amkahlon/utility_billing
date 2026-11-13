@@ -245,10 +245,12 @@ class IntegrationTestApprovalPractice(IntegrationTestCase):
 			[
 				("Submit for Approval", BILLING_MANAGER, None),
 				("Reject", GENERAL_MANAGER, reason),
-				("Resubmit", BILLING_MANAGER, None),
+				("Resubmit", BILLING_MANAGER, t.approval_log[2].remarks),
 				("Approve", GENERAL_MANAGER, None),
 			],
 		)
+		self.assertIn("+ Charges: TST Service Charges, Rate / Amount 1,700", t.approval_log[2].remarks)
+		self.assertIn("+ Charges: TST Aquifer Charges, Rate / Amount 1,000", t.approval_log[2].remarks)
 
 	def test_maker_can_withdraw_others_cannot(self):
 		t = make_tariff(self.category, "2026-07-01", submit=False)
@@ -287,3 +289,100 @@ def ensure_charge(name, basis):
 		frappe.get_doc(
 			{"doctype": "Charge Type", "charge_name": name, "charge_group": "Society", "calculation_basis": basis}
 		).insert()
+
+
+class IntegrationTestChangesSinceSubmission(IntegrationTestCase):
+	"""What changed since the last submission is shown to the approver (user request, 2026-11-13)."""
+
+	def setUp(self):
+		create_default_utilities()
+		make_society()
+		make_users()
+		ensure_charge("TST Service Charges", "Fixed")
+		ensure_charge("TST Aquifer Charges", "Fixed")
+		self.category = make_category("TST Changes")
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+
+	def reject(self, t, reason="Please correct the charges"):
+		frappe.set_user(GENERAL_MANAGER)
+		set_rejection_reason(t.name, reason)
+		frappe.set_user("Administrator")
+		act(t, "Reject", GENERAL_MANAGER)
+
+	def maker_edit(self, t, change):
+		frappe.set_user(BILLING_MANAGER)
+		t.reload()
+		change(t)
+		t.save()
+		frappe.set_user("Administrator")
+
+	def test_first_submission_has_no_summary(self):
+		t = make_tariff(self.category, "2026-07-01", rate=80, submit=False)
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		t.reload()
+		self.assertFalse(t.changes_since_last_submission)
+
+	def test_resubmission_lists_added_rows_and_changed_fields(self):
+		t = make_tariff(self.category, "2026-07-01", rate=80, submit=False)
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		self.reject(t)
+
+		def edit(doc):
+			doc.flat_rate = 82
+			doc.append("charges", {"charge_type": "TST Service Charges", "rate": 1700})
+
+		self.maker_edit(t, edit)
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		t.reload()
+		lines = t.changes_since_last_submission.splitlines()
+		self.assertIn("~ Rate per Unit: 80 → 82", lines)
+		self.assertIn("+ Charges: TST Service Charges, Rate / Amount 1,700", lines)
+		self.assertEqual(t.approval_log[-1].remarks, t.changes_since_last_submission)
+		note = frappe.db.get_value(
+			"Notification Log",
+			{"for_user": GENERAL_MANAGER, "document_name": t.name},
+			"subject",
+			order_by="creation desc",
+		)
+		self.assertIn("Changes since last submission", note)
+		self.assertIn("Rate per Unit: 80 → 82", note)
+
+	def test_changed_and_removed_rows(self):
+		t = make_tariff(self.category, "2026-07-01", rate=80, submit=False)
+		t.append("charges", {"charge_type": "TST Service Charges", "rate": 1700})
+		t.append("charges", {"charge_type": "TST Aquifer Charges", "rate": 1000})
+		t.save()
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		self.reject(t)
+
+		def edit(doc):
+			doc.charges[0].rate = 1800
+			doc.charges = [doc.charges[0]]  # remove aquifer
+
+		self.maker_edit(t, edit)
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		t.reload()
+		lines = t.changes_since_last_submission.splitlines()
+		self.assertIn("~ Charges: TST Service Charges, Rate / Amount 1,700 → 1,800", lines)
+		self.assertIn("- Charges: TST Aquifer Charges, Rate / Amount 1,000", lines)
+
+	def test_added_then_removed_cancels_out(self):
+		t = make_tariff(self.category, "2026-07-01", rate=80, submit=False)
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		self.reject(t)
+		self.maker_edit(t, lambda d: d.append("charges", {"charge_type": "TST Aquifer Charges", "rate": 1000}))
+		self.maker_edit(t, lambda d: setattr(d, "charges", []))
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		t.reload()
+		self.assertEqual(t.changes_since_last_submission, "No changes since the last submission.")
+
+	def test_no_change_resubmission_says_so(self):
+		t = make_tariff(self.category, "2026-07-01", rate=80, submit=False)
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		self.reject(t)
+		act(t, "Submit for Approval", BILLING_MANAGER)
+		t.reload()
+		self.assertEqual(t.changes_since_last_submission, "No changes since the last submission.")

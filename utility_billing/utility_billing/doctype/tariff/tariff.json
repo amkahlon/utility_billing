@@ -32,8 +32,12 @@
   "cb_approval",
   "approved_by",
   "approved_on",
+  "changes_since_last_submission",
   "rejection_reason",
+  "approval_history_section",
+  "approval_history_html",
   "approval_log",
+  "submitted_snapshot",
   "notes_section",
   "notes"
  ],
@@ -231,17 +235,47 @@
    "allow_on_submit": 1,
    "fieldname": "approval_log",
    "fieldtype": "Table",
-   "label": "Approval History",
+   "hidden": 1,
    "no_copy": 1,
    "options": "Approval Log",
    "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "depends_on": "eval:doc.changes_since_last_submission",
+   "description": "What the maker changed since the previous submission, so the approver sees exactly what is new.",
+   "fieldname": "changes_since_last_submission",
+   "fieldtype": "Small Text",
+   "label": "Changes Since Last Submission",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "submitted_snapshot",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Submitted Snapshot",
+   "no_copy": 1,
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_history_section",
+   "fieldtype": "Section Break",
+   "label": "Approval History"
+  },
+  {
+   "fieldname": "approval_history_html",
+   "fieldtype": "HTML",
+   "label": "Approval History View"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-13 22:40:30.913702",
+ "modified": "2026-11-13 23:03:59.851034",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Tariff",

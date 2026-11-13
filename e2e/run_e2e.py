@@ -437,9 +437,11 @@ def t_reject_cycle(d: Desk):
 	again = USERS["bm"].workflow(edited, "Submit for Approval")
 	# The API leaves out empty fields, so a cleared reason is simply absent.
 	eq((again["workflow_state"], again.get("rejection_reason")), ("Pending Approval", None), "resubmitted")
-	history = [(r["action"], r.get("remarks")) for r in USERS["bm"].get("Tariff", t["name"])["approval_log"]]
-	eq(history, [("Submit for Approval", None), ("Reject", "Rate must follow the July notice"), ("Resubmit", None)],
-	   "approval history")
+	stored = USERS["bm"].get("Tariff", t["name"])
+	history = [(r["action"], r.get("remarks")) for r in stored["approval_log"]]
+	eq(history, [("Submit for Approval", None), ("Reject", "Rate must follow the July notice"),
+	             ("Resubmit", "~ Rate per Unit: 70 → 72")], "approval history with change summary")
+	eq(stored.get("changes_since_last_submission"), "~ Rate per Unit: 70 → 72", "changes shown to the approver")
 	import time
 
 	for _ in range(20):  # notifications are created by a background job

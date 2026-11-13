@@ -9,9 +9,11 @@ States: Draft -> Pending Approval -> Approved | Rejected; Pending Approval -> Dr
 Rejected -> Pending Approval (resubmit); Approved -> Cancelled.
 """
 
+import json
+
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import cstr, flt, now_datetime
 
 DRAFT = "Draft"
 PENDING = "Pending Approval"
@@ -63,7 +65,12 @@ def validate_transition(doc):
 	if old == new:
 		return
 
+	had_previous_submission = False
 	if new == PENDING:
+		lines = changes_since_last_submission(doc)
+		had_previous_submission = lines is not None
+		doc.changes_since_last_submission = ("\n".join(lines) or NO_CHANGES) if had_previous_submission else None
+		doc.submitted_snapshot = json.dumps(snapshot(doc))
 		doc.requested_by = user
 		doc.requested_on = now_datetime()
 		doc.rejection_reason = None
@@ -81,8 +88,199 @@ def validate_transition(doc):
 				frappe.PermissionError,
 			)
 
-	log(doc, old, new, remarks=doc.rejection_reason if new == REJECTED else None)
+	remarks = None
+	if new == REJECTED:
+		remarks = doc.rejection_reason
+	elif new == PENDING and had_previous_submission:
+		remarks = doc.changes_since_last_submission
+	log(doc, old, new, remarks=remarks)
 	doc.flags.approval_change = (old, new)
+
+
+# ----- changes since the last submission -----
+# Each submission stores a snapshot of the editable content (fields and table rows) in the hidden
+# `submitted_snapshot` field; the next submission compares against it. Documents submitted before
+# snapshots existed fall back to the version history. (Version history alone isn't enough: it can be
+# switched off per DocType, and Frappe skips it in tests.)
+NO_CHANGES = "No changes since the last submission."
+APPROVAL_FIELDS = {
+	"workflow_state", "requested_by", "requested_on", "approved_by", "approved_on", "rejection_reason",
+	"approval_log", "changes_since_last_submission", "submitted_snapshot", "modified", "modified_by",
+	"docstatus", "amended_from",
+}
+
+
+def changes_since_last_submission(doc) -> list[str] | None:
+	"""Readable change lines since the previous submission; None if this is the first submission."""
+	before = doc.get("submitted_snapshot")
+	if before:
+		return diff_snapshot(doc, frappe.parse_json(before))
+	previous = last_submission_time(doc)
+	return change_summary(doc, since=previous) if previous else None
+
+
+def _content_fields(meta):
+	from frappe.model import no_value_fields, table_fields
+
+	for df in meta.fields:
+		if df.fieldname in APPROVAL_FIELDS or df.hidden or df.read_only:
+			continue
+		if df.fieldtype in table_fields:
+			yield df, True
+		elif df.fieldtype not in no_value_fields:
+			yield df, False
+
+
+def snapshot(doc) -> dict:
+	out = {"fields": {}, "tables": {}}
+	for df, is_table in _content_fields(doc.meta):
+		if is_table:
+			child = frappe.get_meta(df.options)
+			cols = [c.fieldname for c, t in _content_fields(child) if not t]
+			out["tables"][df.fieldname] = [{"name": r.name, **{c: r.get(c) for c in cols}} for r in doc.get(df.fieldname)]
+		else:
+			out["fields"][df.fieldname] = doc.get(df.fieldname)
+	return frappe.parse_json(frappe.as_json(out))
+
+
+def _same(a, b) -> bool:
+	if isinstance(a, (int, float)) or isinstance(b, (int, float)):
+		return flt(a) == flt(b)
+	return cstr(a) == cstr(b)
+
+
+def diff_snapshot(doc, before: dict) -> list[str]:
+	meta = doc.meta
+	after = snapshot(doc)
+	lines = []
+	for fieldname, new in after["fields"].items():
+		old = before.get("fields", {}).get(fieldname)
+		if not _same(old, new):
+			lines.append(f"~ {_label(meta, fieldname)}: {_fmt(old)} → {_fmt(new)}")
+	for table, rows in after["tables"].items():
+		child = frappe.get_meta(meta.get_field(table).options)
+		old_rows = {r["name"]: r for r in before.get("tables", {}).get(table, [])}
+		new_rows = {r["name"]: r for r in rows}
+		for name, row in new_rows.items():
+			if name not in old_rows:
+				lines.append(f"+ {_label(meta, table)}: {_row_text(meta, table, row)}")
+		for name, row in old_rows.items():
+			if name not in new_rows:
+				lines.append(f"- {_label(meta, table)}: {_row_text(meta, table, row)}")
+		for name in new_rows.keys() & old_rows.keys():
+			old, new = old_rows[name], new_rows[name]
+			changed = [(f, old.get(f), new.get(f)) for f in new if f != "name" and not _same(old.get(f), new.get(f))]
+			if changed:
+				details = "; ".join(f"{_label(child, f)} {_fmt(o)} → {_fmt(n)}" for f, o, n in changed)
+				lines.append(f"~ {_label(meta, table)}: {_row_name(child, new) or name}, {details}")
+	return lines
+
+
+def last_submission_time(doc):
+	"""When this document last went to Pending Approval (from its version history), or None."""
+	for v in frappe.get_all(
+		"Version",
+		filters={"ref_doctype": doc.doctype, "docname": doc.name},
+		fields=["data", "creation"],
+		order_by="creation desc",
+	):
+		for change in json.loads(v.data).get("changed", []):
+			if change[0] == "workflow_state" and change[2] == PENDING:
+				return v.creation
+	return None
+
+
+def change_summary(doc, since, until=None) -> list[str]:
+	"""Net content changes saved between `since` and `until`, as readable lines:
+	"+ Charges: Service Charges, Rate / Amount 1,700" / "- ..." / "~ Rate per Unit: 80 → 75"."""
+	filters = [["ref_doctype", "=", doc.doctype], ["docname", "=", doc.name], ["creation", ">", since]]
+	if until:
+		filters.append(["creation", "<=", until])
+	versions = frappe.get_all("Version", filters=filters, fields=["data"], order_by="creation asc")
+	meta = frappe.get_meta(doc.doctype)
+	fields, added, removed, row_changed = {}, {}, {}, {}
+	for v in versions:
+		data = json.loads(v.data)
+		for fieldname, old, new in data.get("changed", []):
+			if fieldname in APPROVAL_FIELDS or meta.get_field(fieldname) is None or meta.get_field(fieldname).hidden:
+				continue
+			if fieldname in fields:
+				fields[fieldname][1] = new
+			else:
+				fields[fieldname] = [old, new]
+		for table, row in data.get("added", []):
+			if table not in APPROVAL_FIELDS:
+				added[(table, row.get("name"))] = dict(row)
+		for table, row in data.get("removed", []):
+			key = (table, row.get("name"))
+			if table in APPROVAL_FIELDS:
+				continue
+			if key in added:
+				added.pop(key)  # added and removed again: no net change
+			else:
+				removed[key] = row
+		for table, _idx, rowname, changes in data.get("row_changed", []):
+			if table in APPROVAL_FIELDS:
+				continue
+			key = (table, rowname)
+			if key in added:
+				for fieldname, _old, new in changes:
+					added[key][fieldname] = new
+				continue
+			per_row = row_changed.setdefault(key, {})
+			for fieldname, old, new in changes:
+				if fieldname in per_row:
+					per_row[fieldname][1] = new
+				else:
+					per_row[fieldname] = [old, new]
+
+	lines = []
+	for fieldname, (old, new) in fields.items():
+		if cstr(old) != cstr(new):
+			lines.append(f"~ {_label(meta, fieldname)}: {_fmt(old)} → {_fmt(new)}")
+	for (table, _name), row in added.items():
+		lines.append(f"+ {_label(meta, table)}: {_row_text(meta, table, row)}")
+	for (table, _name), row in removed.items():
+		lines.append(f"- {_label(meta, table)}: {_row_text(meta, table, row)}")
+	for (table, rowname), changes in row_changed.items():
+		real = [(f, o, n) for f, (o, n) in changes.items() if cstr(o) != cstr(n)]
+		if not real:
+			continue
+		child = frappe.get_meta(meta.get_field(table).options)
+		current = next((r for r in doc.get(table) or [] if r.name == rowname), None)
+		row_label = _row_name(child, current.as_dict() if current else {}) or rowname
+		details = "; ".join(f"{_label(child, f)} {_fmt(o)} → {_fmt(n)}" for f, o, n in real)
+		lines.append(f"~ {_label(meta, table)}: {row_label}, {details}")
+	return lines
+
+
+def _label(meta, fieldname):
+	df = meta.get_field(fieldname)
+	return _(df.label) if df and df.label else fieldname
+
+
+def _fmt(value):
+	if value in (None, ""):
+		return "(blank)"
+	if isinstance(value, (int, float)):
+		return f"{value:,.2f}".rstrip("0").rstrip(".")
+	return cstr(value)
+
+
+def _row_name(child_meta, row):
+	for df in child_meta.fields:
+		if df.in_list_view and df.fieldtype in ("Link", "Data", "Select") and row.get(df.fieldname):
+			return cstr(row.get(df.fieldname))
+	return ""
+
+
+def _row_text(meta, table, row):
+	child = frappe.get_meta(meta.get_field(table).options)
+	parts = [_row_name(child, row) or "row"]
+	for df in child.fields:
+		if df.in_list_view and df.fieldtype in ("Currency", "Float", "Int", "Percent") and row.get(df.fieldname) is not None:
+			parts.append(f"{_(df.label)} {_fmt(flt(row.get(df.fieldname)))}")
+	return ", ".join(parts)
 
 
 def log(doc, old, new, remarks=None):
@@ -122,6 +320,10 @@ def notify(doc, approver_role: str):
 		enabled = set(frappe.get_all("User", filters={"enabled": 1}, pluck="name"))
 		users = [u for u in users_with_role(approver_role) if u in enabled and u != actor]
 		subject = _("{0} {1} is waiting for your approval").format(label, frappe.bold(title))
+		if doc.get("changes_since_last_submission"):  # set only when there was a previous submission
+			changes = doc.changes_since_last_submission.splitlines()
+			shown = "; ".join(changes[:3]) + (f" (+{len(changes) - 3} more)" if len(changes) > 3 else "")
+			subject += ". " + _("Changes since last submission: {0}").format(shown)
 	elif new in (APPROVED, REJECTED, CANCELLED) and doc.get("requested_by"):
 		users = [doc.requested_by] if doc.requested_by != actor else []
 		subject = {
