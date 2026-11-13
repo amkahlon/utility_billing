@@ -1,0 +1,260 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "field:cycle_name",
+ "creation": "2026-11-13 23:24:54.206815",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "cycle_name",
+  "society",
+  "utility",
+  "billing_month",
+  "cb1",
+  "reading_from",
+  "reading_to",
+  "status",
+  "summary_section",
+  "total_readings",
+  "pending_readings",
+  "flagged_readings",
+  "cb2",
+  "valid_readings",
+  "estimated_readings",
+  "total_units",
+  "close_section",
+  "closed_by",
+  "closed_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "cycle_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Cycle",
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1
+  },
+  {
+   "default": "Electricity",
+   "fieldname": "utility",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Utility",
+   "options": "Utility Type",
+   "reqd": 1
+  },
+  {
+   "description": "Any date in the month; stored as the 1st",
+   "fieldname": "billing_month",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Billing Month",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reading_from",
+   "fieldtype": "Date",
+   "label": "Reading Window From"
+  },
+  {
+   "fieldname": "reading_to",
+   "fieldtype": "Date",
+   "label": "Reading Window To"
+  },
+  {
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Open\nClosed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Progress"
+  },
+  {
+   "fieldname": "total_readings",
+   "fieldtype": "Int",
+   "label": "Meters",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pending_readings",
+   "fieldtype": "Int",
+   "label": "Pending",
+   "read_only": 1
+  },
+  {
+   "fieldname": "flagged_readings",
+   "fieldtype": "Int",
+   "label": "Flagged for Review",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "valid_readings",
+   "fieldtype": "Int",
+   "label": "Valid or Approved",
+   "read_only": 1
+  },
+  {
+   "fieldname": "estimated_readings",
+   "fieldtype": "Int",
+   "label": "Estimated",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_units",
+   "fieldtype": "Float",
+   "label": "Total Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "close_section",
+   "fieldtype": "Section Break",
+   "label": "Closing"
+  },
+  {
+   "fieldname": "closed_by",
+   "fieldtype": "Link",
+   "label": "Closed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Datetime",
+   "label": "Closed On",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-13 23:24:54.206815",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Reading Cycle",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "cycle_name",
+ "track_changes": 1
+}

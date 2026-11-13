@@ -1,0 +1,406 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-11-13 23:25:02.611667",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "reading_cycle",
+  "connection",
+  "consumer_name",
+  "property",
+  "cb1",
+  "society",
+  "billing_month",
+  "meter",
+  "status",
+  "reading_section",
+  "previous_reading",
+  "previous_reading_date",
+  "present_reading",
+  "reading_date",
+  "cb2",
+  "exception_code",
+  "source",
+  "photo",
+  "result_section",
+  "units",
+  "consumption_type",
+  "checks",
+  "cb3",
+  "raw_units",
+  "estimated_since_units",
+  "old_meter_units",
+  "expected_average",
+  "expected_low",
+  "expected_high",
+  "multiplier",
+  "digits",
+  "review_section",
+  "review_note",
+  "corrected_from",
+  "correction_reason",
+  "cb4",
+  "reviewed_by",
+  "reviewed_on"
+ ],
+ "fields": [
+  {
+   "default": "RDG-.YYYY.-.######",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "RDG-.YYYY.-.######"
+  },
+  {
+   "fieldname": "reading_cycle",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Reading Cycle",
+   "options": "Reading Cycle",
+   "reqd": 1
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Connection",
+   "options": "Connection",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "connection.consumer_name",
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "label": "Consumer",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "connection.property",
+   "fieldname": "property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "Property",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "reading_cycle.society",
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "reading_cycle.billing_month",
+   "fieldname": "billing_month",
+   "fieldtype": "Date",
+   "label": "Billing Month",
+   "read_only": 1
+  },
+  {
+   "fieldname": "meter",
+   "fieldtype": "Link",
+   "label": "Meter",
+   "options": "Meter",
+   "read_only": 1
+  },
+  {
+   "default": "Pending",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Pending\nValid\nFlagged\nApproved\nRe-read Requested\nEstimated",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reading_section",
+   "fieldtype": "Section Break",
+   "label": "Reading"
+  },
+  {
+   "fieldname": "previous_reading",
+   "fieldtype": "Float",
+   "label": "Previous Reading",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_reading_date",
+   "fieldtype": "Date",
+   "label": "Previous Reading Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "present_reading",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Present Reading"
+  },
+  {
+   "fieldname": "reading_date",
+   "fieldtype": "Date",
+   "label": "Reading Date"
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "exception_code",
+   "fieldtype": "Link",
+   "label": "Exception (meter not read)",
+   "options": "Reading Exception Code"
+  },
+  {
+   "default": "Office",
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Source",
+   "options": "Office\nImport\nMobile"
+  },
+  {
+   "fieldname": "photo",
+   "fieldtype": "Attach Image",
+   "label": "Photo"
+  },
+  {
+   "fieldname": "result_section",
+   "fieldtype": "Section Break",
+   "label": "Result"
+  },
+  {
+   "fieldname": "units",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Billable Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consumption_type",
+   "fieldtype": "Select",
+   "label": "Consumption Type",
+   "options": "\nActual\nEstimated",
+   "read_only": 1
+  },
+  {
+   "fieldname": "checks",
+   "fieldtype": "Small Text",
+   "label": "Checks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "raw_units",
+   "fieldtype": "Float",
+   "label": "Units Since Last Actual Reading",
+   "read_only": 1
+  },
+  {
+   "description": "Deducted on the first actual reading after estimates (true-up)",
+   "fieldname": "estimated_since_units",
+   "fieldtype": "Float",
+   "label": "Already Billed as Estimates",
+   "read_only": 1
+  },
+  {
+   "fieldname": "old_meter_units",
+   "fieldtype": "Float",
+   "label": "Units on Replaced Meter",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expected_average",
+   "fieldtype": "Float",
+   "label": "Expected Units (average)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expected_low",
+   "fieldtype": "Float",
+   "label": "Expected From",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expected_high",
+   "fieldtype": "Float",
+   "label": "Expected To",
+   "read_only": 1
+  },
+  {
+   "fieldname": "multiplier",
+   "fieldtype": "Float",
+   "label": "Multiplier",
+   "read_only": 1
+  },
+  {
+   "fieldname": "digits",
+   "fieldtype": "Int",
+   "label": "Dial Digits",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "review_section",
+   "fieldtype": "Section Break",
+   "label": "Review"
+  },
+  {
+   "fieldname": "review_note",
+   "fieldtype": "Small Text",
+   "label": "Review Note",
+   "read_only": 1
+  },
+  {
+   "fieldname": "corrected_from",
+   "fieldtype": "Float",
+   "label": "Corrected From (original reading)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "correction_reason",
+   "fieldtype": "Small Text",
+   "label": "Correction Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Reviewed On",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-13 23:25:02.611667",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Meter Reading",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "connection,meter,consumer_name",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "consumer_name",
+ "track_changes": 1
+}

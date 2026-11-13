@@ -53,6 +53,10 @@
   "cb_surcharge",
   "surcharge_fixed_amount",
   "surcharge_cap",
+  "reading_section",
+  "reading_tolerance_percent",
+  "cb_reading",
+  "estimation_method",
   "messaging_section",
   "sms_sender",
   "whatsapp_number",
@@ -364,13 +368,36 @@
    "fieldtype": "Table",
    "label": "Offices",
    "options": "Society Office"
+  },
+  {
+   "fieldname": "reading_section",
+   "fieldtype": "Section Break",
+   "label": "Meter Readings"
+  },
+  {
+   "default": "50",
+   "description": "A reading more than this % above or below the expected units is flagged for review",
+   "fieldname": "reading_tolerance_percent",
+   "fieldtype": "Percent",
+   "label": "Expected-Range Tolerance"
+  },
+  {
+   "fieldname": "cb_reading",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Average of last 3 months",
+   "fieldname": "estimation_method",
+   "fieldtype": "Select",
+   "label": "Estimation Method",
+   "options": "Average of last 3 months\nAverage of last 6 months\nSame month last year"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-13 22:38:47.113642",
+ "modified": "2026-11-13 23:25:03.038225",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",
