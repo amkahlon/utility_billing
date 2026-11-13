@@ -386,3 +386,40 @@ class IntegrationTestChangesSinceSubmission(IntegrationTestCase):
 		act(t, "Submit for Approval", BILLING_MANAGER)
 		t.reload()
 		self.assertEqual(t.changes_since_last_submission, "No changes since the last submission.")
+
+
+class IntegrationTestOverlapCheckedEarly(IntegrationTestCase):
+	"""Overlaps are caught at Submit for Approval, not only at approval (user's request, 2026-11-13)."""
+
+	def setUp(self):
+		create_default_utilities()
+		make_society()
+		make_users()
+		self.category = make_category("TST Overlap Early")
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+
+	def test_overlapping_draft_saves_but_cannot_be_submitted(self):
+		make_tariff(self.category, "2026-07-01", rate=80)  # approved, open-ended
+		draft = make_tariff(self.category, "2026-07-01", rate=85, submit=False)  # saving is allowed (warning only)
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			act(draft, "Submit for Approval", BILLING_MANAGER)
+		self.assertIn("already approved", str(ctx.exception))
+		draft.reload()
+		self.assertEqual(draft.workflow_state, "Draft")  # never reached the approver
+
+	def test_later_start_date_is_a_new_version_not_an_overlap(self):
+		old = make_tariff(self.category, "2026-07-01", rate=80)
+		new = make_tariff(self.category, "2026-12-01", rate=82)
+		self.assertEqual(new.workflow_state, "Approved")
+		self.assertEqual(str(frappe.db.get_value("Tariff", old.name, "effective_to")), "2026-11-30")
+
+	def test_second_pending_submission_for_same_period_blocked(self):
+		first = make_tariff(self.category, "2026-07-01", submit=False)
+		act(first, "Submit for Approval", BILLING_MANAGER)
+		second = make_tariff(self.category, "2026-07-01", rate=90, submit=False)
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			act(second, "Submit for Approval", BILLING_MANAGER_2)
+		self.assertIn("already waiting for approval", str(ctx.exception))

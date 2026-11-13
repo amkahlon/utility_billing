@@ -37,7 +37,29 @@ class Tariff(Document):
 		self.validate_pricing()
 		self.validate_charges()
 		self.set_title()
+		self.check_overlap_early()
 		self.validate_approval()
+
+	def check_overlap_early(self):
+		"""Validate early and late (user's request, 2026-11-13): warn while editing a draft, block at
+		Submit for Approval (against approved AND pending tariffs), and check again at approval."""
+		if not workflow_active():
+			return
+		before = None if self.is_new() else self.get_doc_before_save()
+		old = before.get("workflow_state") if before else None
+		submitting = self.workflow_state == PENDING and old != PENDING
+		_predecessor, conflict = self.overlap_status(include_pending=True)
+		if not conflict:
+			return
+		message = self.overlap_message(conflict)
+		if submitting:
+			frappe.throw(message, title=_("Overlapping tariff"))
+		elif self.workflow_state in (approval.DRAFT, REJECTED, None, ""):
+			frappe.msgprint(
+				message + "<br><br>" + _("You can save this draft, but it can't be submitted for approval until this is resolved."),
+				title=_("Overlapping tariff"),
+				indicator="orange",
+			)
 
 	def before_submit(self):
 		if workflow_active() and self.workflow_state != APPROVED:
@@ -107,39 +129,59 @@ class Tariff(Document):
 		self.tariff_title = tariff_title(self.consumer_category, self.effective_from)
 
 	def find_overlap_or_predecessor(self):
-		"""Refuse overlapping approved tariffs, except an open-ended older version, which is returned
-		so on_submit can close it the day before this one starts."""
+		"""At approval (final check): refuse overlapping approved tariffs, except an open-ended older
+		version, which is returned so on_submit can close it the day before this one starts."""
+		predecessor, conflict = self.overlap_status(include_pending=False)
+		if conflict:
+			frappe.throw(self.overlap_message(conflict), title=_("Overlapping tariff"))
+		return predecessor
+
+	def overlap_status(self, include_pending: bool):
+		"""(predecessor, conflict) for this tariff's period. `predecessor` is an approved open-ended
+		tariff that starts earlier (it will be closed automatically); `conflict` is any other approved
+		tariff, or with include_pending any tariff pending approval, covering part of the period."""
+		if not (self.society and self.utility and self.consumer_category and self.effective_from):
+			return None, None
 		start = getdate(self.effective_from)
 		end = getdate(self.effective_to) if self.effective_to else OPEN_END
-		others = frappe.get_all(
-			"Tariff",
-			filters={
-				"docstatus": 1,
-				"society": self.society,
-				"utility": self.utility,
-				"consumer_category": self.consumer_category,
-				"name": ["!=", self.name],
-			},
-			fields=["name", "effective_from", "effective_to"],
-		)
+		base = {
+			"society": self.society,
+			"utility": self.utility,
+			"consumer_category": self.consumer_category,
+			"name": ["!=", self.name or ""],
+		}
+		fields = ["name", "effective_from", "effective_to", "flat_rate", "pricing_method", "workflow_state", "docstatus"]
+		others = frappe.get_all("Tariff", filters={**base, "docstatus": 1}, fields=fields)
+		if include_pending:
+			others += frappe.get_all("Tariff", filters={**base, "docstatus": 0, "workflow_state": PENDING}, fields=fields)
 		predecessor = None
 		for o in others:
 			o_start = getdate(o.effective_from)
 			o_end = getdate(o.effective_to) if o.effective_to else OPEN_END
 			if o_start > end or o_end < start:
 				continue
-			if not o.effective_to and o_start < start and predecessor is None:
+			if o.docstatus == 1 and not o.effective_to and o_start < start and predecessor is None:
 				predecessor = o.name
 				continue
-			frappe.throw(
-				_("Tariff {0} ({1} to {2}) already covers part of this period.").format(
-					o.name,
-					formatdate(o_start),
-					formatdate(o.effective_to) if o.effective_to else _("open-ended"),
-				),
-				title=_("Overlapping tariff"),
-			)
-		return predecessor
+			return predecessor, o
+		return predecessor, None
+
+	def overlap_message(self, o) -> str:
+		category = frappe.db.get_value("Consumer Category", self.consumer_category, "category_name") or self.consumer_category
+		period = _("{0} to {1}").format(
+			formatdate(o.effective_from), formatdate(o.effective_to) if o.effective_to else _("open-ended")
+		)
+		rate = _("Rs {0} per unit").format(o.flat_rate) if o.pricing_method == FLAT else _(o.pricing_method)
+		if o.docstatus == 0:
+			return _(
+				"Tariff {0} for {1} ({2}, {3}) is already waiting for approval for this period. "
+				"Only one tariff per category and period can be pending; ask for it to be decided or withdrawn first."
+			).format(o.name, category, rate, period)
+		return _(
+			"Tariff {0} for {1} ({2}, {3}) is already approved and covers part of this period.<br><br>"
+			"To change it, either set Effective From to a date after {4}: {0} will then end the day before "
+			"and this becomes the new version; or ask the General Manager to cancel {0} and amend it."
+		).format(o.name, category, rate, period, formatdate(o.effective_from))
 
 	# ----- calculation -----
 	def calculate_energy(self, units):

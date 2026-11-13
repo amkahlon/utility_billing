@@ -272,9 +272,9 @@ def t_tariff_version(d: Desk):
 	eq(preview(d, v2["name"], 100)["amount"], 7500.0, "new rate")
 
 
-@case("QA-10", "FS-CFG-05: overlapping tariffs refused")
+@case("QA-10", "FS-CFG-05: overlapping tariffs refused at Submit for Approval")
 def t_tariff_overlap(d: Desk):
-	expect_error(lambda: tariff(d, S["Residential"], "2026-09-01", "2026-09-30"), "already covers")
+	expect_error(lambda: tariff(d, S["Residential"], "2026-09-01", "2026-09-30"), "already approved")
 
 
 @case("QA-11", "FS-CFG-04: progressive and whole-bill slabs")
