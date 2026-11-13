@@ -1,0 +1,177 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-11-13 21:45:30.567078",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "consumer_name",
+  "consumer_type",
+  "id_type",
+  "id_number",
+  "cb_contact",
+  "mobile_no",
+  "phone",
+  "email",
+  "address",
+  "preferences_section",
+  "preferred_language",
+  "cb_pref",
+  "notify_app",
+  "notify_sms",
+  "notify_email",
+  "status_section",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "default": "CON-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "CON-.#####"
+  },
+  {
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "label": "Name",
+   "reqd": 1
+  },
+  {
+   "default": "Individual",
+   "fieldname": "consumer_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Type",
+   "options": "Individual\nCompany",
+   "reqd": 1
+  },
+  {
+   "default": "CNIC",
+   "fieldname": "id_type",
+   "fieldtype": "Select",
+   "label": "ID Type",
+   "options": "CNIC\nIqama\nQID\nPassport\nCompany Registration"
+  },
+  {
+   "fieldname": "id_number",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "label": "ID Number"
+  },
+  {
+   "fieldname": "cb_contact",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "mobile_no",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "label": "Mobile",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Other Phone",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Small Text",
+   "label": "Postal Address"
+  },
+  {
+   "fieldname": "preferences_section",
+   "fieldtype": "Section Break",
+   "label": "Preferences"
+  },
+  {
+   "default": "English",
+   "fieldname": "preferred_language",
+   "fieldtype": "Select",
+   "label": "Language",
+   "options": "English\nUrdu\nArabic"
+  },
+  {
+   "fieldname": "cb_pref",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "notify_app",
+   "fieldtype": "Check",
+   "label": "App Notifications"
+  },
+  {
+   "default": "1",
+   "fieldname": "notify_sms",
+   "fieldtype": "Check",
+   "label": "SMS"
+  },
+  {
+   "default": "0",
+   "fieldname": "notify_email",
+   "fieldtype": "Check",
+   "label": "Email"
+  },
+  {
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Active"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-13 21:45:30.567078",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Consumer",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "mobile_no,id_number",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "consumer_name",
+ "track_changes": 1
+}

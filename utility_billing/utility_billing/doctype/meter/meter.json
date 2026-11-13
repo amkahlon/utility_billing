@@ -1,0 +1,154 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "field:serial_no",
+ "creation": "2026-11-13 21:45:31.227470",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "serial_no",
+  "society",
+  "utility",
+  "make",
+  "meter_type",
+  "cb_meter",
+  "status",
+  "current_connection",
+  "register_section",
+  "digits",
+  "multiplier",
+  "cb_reg",
+  "registers",
+  "seal_no"
+ ],
+ "fields": [
+  {
+   "fieldname": "serial_no",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "label": "Serial No",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1
+  },
+  {
+   "default": "Electricity",
+   "fieldname": "utility",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Utility",
+   "options": "Utility Type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "make",
+   "fieldtype": "Data",
+   "label": "Make"
+  },
+  {
+   "default": "Single Phase",
+   "fieldname": "meter_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Type",
+   "options": "Single Phase\nThree Phase\nTOU\nNet Metering\nPrepaid\nBulk / Check Meter",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cb_meter",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "In Store",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "In Store\nInstalled\nDefective\nRemoved",
+   "reqd": 1
+  },
+  {
+   "fieldname": "register_section",
+   "fieldtype": "Section Break",
+   "label": "Registers"
+  },
+  {
+   "default": "5",
+   "description": "Used to detect roll-over",
+   "fieldname": "digits",
+   "fieldtype": "Int",
+   "label": "Dial Digits"
+  },
+  {
+   "default": "1",
+   "fieldname": "multiplier",
+   "fieldtype": "Float",
+   "label": "Multiplier"
+  },
+  {
+   "fieldname": "cb_reg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "More than 1 for TOU (peak and off-peak)",
+   "fieldname": "registers",
+   "fieldtype": "Int",
+   "label": "Registers"
+  },
+  {
+   "fieldname": "seal_no",
+   "fieldtype": "Data",
+   "label": "Seal No"
+  },
+  {
+   "fieldname": "current_connection",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Installed on Connection",
+   "options": "Connection",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-13 21:45:31.558142",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Meter",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

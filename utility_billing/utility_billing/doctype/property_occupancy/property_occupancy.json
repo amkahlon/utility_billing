@@ -1,0 +1,93 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-11-13 21:45:20.110400",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "consumer",
+  "consumer_name",
+  "occupant_role",
+  "from_date",
+  "to_date",
+  "share_percent",
+  "is_billed",
+  "liable_for_arrears"
+ ],
+ "fields": [
+  {
+   "fetch_from": "consumer.consumer_name",
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "occupant_role",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Role",
+   "options": "Owner\nTenant",
+   "reqd": 1
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "From",
+   "reqd": 1
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "To"
+  },
+  {
+   "depends_on": "eval:doc.occupant_role=='Owner'",
+   "fieldname": "share_percent",
+   "fieldtype": "Percent",
+   "label": "Ownership Share"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_billed",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Billed"
+  },
+  {
+   "default": "0",
+   "fieldname": "liable_for_arrears",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Liable for Arrears"
+  },
+  {
+   "fieldname": "consumer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Consumer",
+   "options": "Consumer",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-13 21:45:44.710563",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Property Occupancy",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

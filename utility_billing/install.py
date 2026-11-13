@@ -3,10 +3,11 @@
 
 import frappe
 
+# name, unit of measure, reference code (first digit of consumer reference numbers)
 UTILITIES = [
-	("Electricity", "kWh"),
-	("Water", "m³"),
-	("Gas", "m³"),
+	("Electricity", "kWh", 1),
+	("Water", "m³", 2),
+	("Gas", "m³", 3),
 ]
 
 
@@ -15,8 +16,16 @@ def after_install():
 
 
 def create_default_utilities():
-	for name, uom in UTILITIES:
+	for name, uom, code in UTILITIES:
 		if not frappe.db.exists("Utility Type", name):
 			frappe.get_doc(
-				{"doctype": "Utility Type", "utility_name": name, "unit_of_measure": uom, "is_metered": 1}
+				{
+					"doctype": "Utility Type",
+					"utility_name": name,
+					"unit_of_measure": uom,
+					"is_metered": 1,
+					"reference_code": code,
+				}
 			).insert(ignore_permissions=True)
+		elif not frappe.db.get_value("Utility Type", name, "reference_code"):
+			frappe.db.set_value("Utility Type", name, "reference_code", code)

@@ -11,7 +11,8 @@
   "utility_name",
   "unit_of_measure",
   "is_metered",
-  "enabled"
+  "enabled",
+  "reference_code"
  ],
  "fields": [
   {
@@ -41,12 +42,18 @@
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enabled"
+  },
+  {
+   "description": "First digit of consumer reference numbers (1 = electricity)",
+   "fieldname": "reference_code",
+   "fieldtype": "Int",
+   "label": "Reference Code"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-13 19:20:12.122665",
+ "modified": "2026-11-13 21:45:19.701975",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Type",

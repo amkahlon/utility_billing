@@ -1,0 +1,218 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "field:reference_no",
+ "creation": "2026-11-13 21:45:31.357513",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "reference_no",
+  "connection_title",
+  "society",
+  "property",
+  "consumer",
+  "consumer_name",
+  "cb_conn",
+  "utility",
+  "consumer_category",
+  "status",
+  "connection_date",
+  "supply_section",
+  "sanctioned_load_kw",
+  "phase",
+  "cb_supply",
+  "transformer",
+  "feeder",
+  "route",
+  "security_deposit",
+  "meters_section",
+  "current_meter",
+  "meters"
+ ],
+ "fields": [
+  {
+   "description": "Assigned on first save: utility code + serial + check digit",
+   "fieldname": "reference_no",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "label": "Reference No",
+   "no_copy": 1,
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "connection_title",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Title",
+   "read_only": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1
+  },
+  {
+   "fieldname": "property",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Property",
+   "options": "Property",
+   "reqd": 1
+  },
+  {
+   "fieldname": "consumer",
+   "fieldtype": "Link",
+   "label": "Billed Consumer",
+   "options": "Consumer",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "consumer.consumer_name",
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Consumer Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_conn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Electricity",
+   "fieldname": "utility",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Utility",
+   "options": "Utility Type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "consumer_category",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Consumer Category",
+   "options": "Consumer Category",
+   "reqd": 1
+  },
+  {
+   "default": "Applied",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Applied\nActive\nDisconnected\nClosed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "connection_date",
+   "fieldtype": "Date",
+   "label": "Connection Date"
+  },
+  {
+   "fieldname": "supply_section",
+   "fieldtype": "Section Break",
+   "label": "Supply"
+  },
+  {
+   "fieldname": "sanctioned_load_kw",
+   "fieldtype": "Float",
+   "label": "Sanctioned Load (kW)"
+  },
+  {
+   "default": "Single",
+   "fieldname": "phase",
+   "fieldtype": "Select",
+   "label": "Phase",
+   "options": "Single\nThree"
+  },
+  {
+   "fieldname": "cb_supply",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "transformer",
+   "fieldtype": "Link",
+   "label": "Transformer",
+   "options": "Transformer"
+  },
+  {
+   "fetch_from": "transformer.feeder",
+   "fieldname": "feeder",
+   "fieldtype": "Link",
+   "label": "Feeder",
+   "options": "Feeder",
+   "read_only": 1
+  },
+  {
+   "fieldname": "route",
+   "fieldtype": "Data",
+   "label": "Reading Route"
+  },
+  {
+   "fieldname": "security_deposit",
+   "fieldtype": "Currency",
+   "label": "Security Deposit"
+  },
+  {
+   "fieldname": "meters_section",
+   "fieldtype": "Section Break",
+   "label": "Meters"
+  },
+  {
+   "fieldname": "current_meter",
+   "fieldtype": "Link",
+   "label": "Current Meter",
+   "options": "Meter",
+   "read_only": 1
+  },
+  {
+   "fieldname": "meters",
+   "fieldtype": "Table",
+   "label": "Meter History",
+   "options": "Connection Meter"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-13 21:45:31.357513",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Connection",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "property,consumer_name",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "connection_title",
+ "track_changes": 1
+}
