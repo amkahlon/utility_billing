@@ -47,9 +47,23 @@ def assert_not_maker(doc, user: str):
 		)
 
 
+def reset_for_new_document(doc):
+	"""A new or amended document starts its own approval round: the original keeps its history
+	(found 2026-11-13: an amended tariff inherited the original's "Cancel" row)."""
+	doc.approval_log = []
+	for field in ("requested_by", "requested_on", "approved_by", "approved_on", "rejection_reason",
+	              "changes_since_last_submission", "submitted_snapshot"):
+		doc.set(field, None)
+	if doc.meta.get_field("workflow_state"):
+		doc.workflow_state = DRAFT
+
+
 def validate_transition(doc):
 	"""Call from validate(). Enforces the rules and records the step in the approval history."""
-	if not workflow_active(doc.doctype) or doc.is_new():
+	if not workflow_active(doc.doctype):
+		return
+	if doc.is_new():
+		reset_for_new_document(doc)
 		return
 	before = doc.get_doc_before_save()
 	old = before.get("workflow_state") if before else None

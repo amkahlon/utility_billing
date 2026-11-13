@@ -423,3 +423,39 @@ class IntegrationTestOverlapCheckedEarly(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError) as ctx:
 			act(second, "Submit for Approval", BILLING_MANAGER_2)
 		self.assertIn("already waiting for approval", str(ctx.exception))
+
+
+class IntegrationTestAmendment(IntegrationTestCase):
+	"""Cancel and amend: the amended tariff starts a fresh approval round."""
+
+	def setUp(self):
+		create_default_utilities()
+		make_society()
+		make_users()
+		self.category = make_category("TST Amend")
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+
+	def test_amended_tariff_has_fresh_history_and_replaces_original(self):
+		original = make_tariff(self.category, "2026-07-01", rate=80)
+		act(original, "Cancel", GENERAL_MANAGER)
+		original.reload()
+		self.assertEqual((original.docstatus, original.workflow_state), (2, "Cancelled"))
+		self.assertEqual(original.approval_log[-1].action, "Cancel")
+
+		frappe.set_user(BILLING_MANAGER)
+		amended = frappe.copy_doc(original)
+		amended.amended_from = original.name
+		amended.docstatus = 0  # as the desk's Amend button does
+		amended.flat_rate = 82
+		amended.insert()
+		frappe.set_user("Administrator")
+		self.assertEqual(amended.name, f"{original.name}-1")
+		self.assertEqual(amended.workflow_state, "Draft")
+		self.assertEqual(len(amended.approval_log), 0)
+		self.assertFalse(amended.approved_by or amended.requested_by)
+
+		approve(amended)  # no overlap: the original is cancelled
+		self.assertEqual([r.action for r in amended.approval_log], ["Submit for Approval", "Approve"])
