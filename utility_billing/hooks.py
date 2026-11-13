@@ -11,15 +11,14 @@ app_license = "Proprietary"
 # required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "utility_billing",
-# 		"logo": "/assets/utility_billing/logo.png",
-# 		"title": "Utility Billing",
-# 		"route": "/utility_billing",
-# 		"has_permission": "utility_billing.api.permission.has_app_permission",
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "utility_billing",
+		"logo": "/assets/utility_billing/images/utility-billing-logo.svg",
+		"title": "Utility Billing",
+		"route": "/desk/utility-billing/society",
+	}
+]
 
 # The dock, the rail down the left of the desk, is a document rather than a hook. Author it in
 # Manage Dock on a developer-mode site and press Export to App, and it is written to
