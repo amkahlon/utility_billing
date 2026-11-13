@@ -35,6 +35,17 @@ class IntegrationTestPermissions(IntegrationTestCase):
 					self.assertEqual(bool(p.delete), p.role == "System Manager", f"{dt}/{p.role} delete")
 					self.assertEqual(bool(p.submit), p.role in SUBMITTERS.get(dt, set()), f"{dt}/{p.role} submit")
 
+	def test_pending_approval_is_read_only_for_business_roles(self):
+		"""Found by the user on 2026-11-13: the General Manager could edit a pending tariff in the form
+		(the server refused the save). A workflow state's allow_edit only controls the form, so pending
+		states must not be editable by any business role."""
+		business_roles = READ_ONLY | {"Society Admin", "Billing Manager", "General Manager", "Billing Officer"}
+		for wf in frappe.get_all("Workflow", filters={"document_type": ["in", list(EDITORS)]}, pluck="name"):
+			for s in frappe.get_doc("Workflow", wf).states:
+				if s.state == "Pending Approval":
+					with self.subTest(workflow=wf):
+						self.assertNotIn(s.allow_edit, business_roles)
+
 	def test_tariff_creation_only_by_billing_manager(self):
 		# The approver (General Manager) can submit but not create, keeping maker and checker apart.
 		gm = next(p for p in frappe.get_meta("Tariff").permissions if p.role == "General Manager")

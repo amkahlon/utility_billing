@@ -5,7 +5,7 @@
   "document_type": "Tariff",
   "enable_action_confirmation": 0,
   "is_active": 1,
-  "modified": "2026-11-13 22:05:50.685835",
+  "modified": "2026-11-13 22:33:29.536690",
   "name": "Tariff Approval",
   "override_status": 0,
   "send_email_alert": 0,
@@ -25,7 +25,7 @@
     "workflow_builder_id": null
    },
    {
-    "allow_edit": "General Manager",
+    "allow_edit": "System Manager",
     "avoid_status_override": 0,
     "doc_status": "0",
     "evaluate_as_expression": 0,
