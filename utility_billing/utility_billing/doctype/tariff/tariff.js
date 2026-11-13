@@ -16,6 +16,37 @@ frappe.ui.form.on("Tariff", {
 		if (frm.doc.docstatus === 1) {
 			frm.add_custom_button(__("Preview Charge"), () => preview_charge(frm));
 		}
+		if (frm.doc.workflow_state === "Rejected" && frm.doc.rejection_reason) {
+			frm.dashboard.set_headline_alert(
+				`${__("Rejected")}: ${frappe.utils.escape_html(frm.doc.rejection_reason)}`,
+				"red"
+			);
+		}
+	},
+
+	// Ask the approver for a reason before the Reject action is applied.
+	before_workflow_action(frm) {
+		if (frm.selected_workflow_action !== "Reject") return;
+		return new Promise((resolve, reject) => {
+			frappe.prompt(
+				{
+					fieldname: "reason",
+					fieldtype: "Small Text",
+					label: __("Reason for rejecting"),
+					reqd: 1,
+				},
+				({ reason }) => {
+					frappe
+						.call(
+							"utility_billing.utility_billing.doctype.tariff.tariff.set_rejection_reason",
+							{ tariff: frm.doc.name, reason }
+						)
+						.then(() => resolve(), () => reject());
+				},
+				__("Reject Tariff"),
+				__("Reject")
+			);
+		});
 	},
 });
 

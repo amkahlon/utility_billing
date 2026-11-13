@@ -1,18 +1,31 @@
 # Copyright (c) 2026, SoftVerx. All rights reserved. See license.txt.
 """Tariff: energy pricing for one society, utility and consumer category over a period.
 
-Submitted = approved (FS-CFG-06). A submitted tariff is locked (FS-CFG-08); a change is a new
-tariff with a later effective date, which closes the previous open-ended version automatically.
+Approval (FS-CFG-06, FS-ACC-04/05): the "Tariff Approval" workflow moves a tariff
+Draft -> Pending Approval (Billing Manager) -> Approved (General Manager, submits it) or Rejected.
+Maker-checker is enforced here on the server for every user, Administrator included: whoever
+submitted the tariff for approval, or created it, can't approve or reject it.
+
+An approved tariff is locked (FS-CFG-08); a change is a new tariff with a later effective date,
+which closes the previous open-ended version automatically.
 """
 
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import add_days, flt, formatdate, getdate
+from frappe.utils import add_days, flt, formatdate, getdate, now_datetime
 
 from utility_billing.utility_billing.tariff_engine import FLAT, calculate_energy, slab_errors
 
 OPEN_END = getdate("9999-12-31")
+PENDING = "Pending Approval"
+APPROVED = "Approved"
+REJECTED = "Rejected"
+WORKFLOW = "Tariff Approval"
+
+
+def workflow_active() -> bool:
+	return bool(frappe.db.get_value("Workflow", {"document_type": "Tariff", "is_active": 1}, "name"))
 
 
 class Tariff(Document):
@@ -22,9 +35,37 @@ class Tariff(Document):
 		self.validate_pricing()
 		self.validate_charges()
 		self.set_title()
+		self.validate_approval()
 
 	def before_submit(self):
+		if workflow_active() and self.workflow_state != APPROVED:
+			frappe.throw(_("A tariff is approved through the Tariff Approval workflow, not submitted directly."))
 		self._predecessor = self.find_overlap_or_predecessor()
+
+	# ----- approval (maker-checker) -----
+	def validate_approval(self):
+		if not workflow_active() or self.is_new():
+			return
+		before = self.get_doc_before_save()
+		old = before.get("workflow_state") if before else None
+		new = self.workflow_state
+		user = frappe.session.user
+		if old == PENDING and new == PENDING:
+			frappe.throw(
+				_("This tariff is waiting for approval and can't be changed. The approver can reject it so it can be edited."),
+				title=_("Pending approval"),
+			)
+		if new == PENDING and old != PENDING:
+			self.requested_by = user
+			self.requested_on = now_datetime()
+			self.rejection_reason = None
+		if old == PENDING and new in (APPROVED, REJECTED):
+			assert_not_maker(self, user)
+			if new == APPROVED:
+				self.approved_by = user
+				self.approved_on = now_datetime()
+			elif not (self.rejection_reason or "").strip():
+				frappe.throw(_("Give a reason for rejecting this tariff."))
 
 	def on_submit(self):
 		prev = getattr(self, "_predecessor", None)
@@ -117,6 +158,32 @@ class Tariff(Document):
 			slabs=self.slabs,
 			minimum_charge=self.minimum_charge,
 		)
+
+
+def assert_not_maker(doc, user: str):
+	"""FS-ACC-05: the maker can't approve or reject their own transaction, at any level."""
+	if user in {doc.get("requested_by"), doc.owner}:
+		frappe.throw(
+			_("You submitted or created this tariff, so another user must approve or reject it (maker-checker)."),
+			frappe.PermissionError,
+			title=_("Not allowed"),
+		)
+
+
+@frappe.whitelist()
+def set_rejection_reason(tariff: str, reason: str):
+	"""Store the approver's reason just before the Reject action is applied."""
+	doc = frappe.get_doc("Tariff", tariff)
+	if doc.workflow_state != PENDING:
+		frappe.throw(_("Only a tariff that is pending approval can be rejected."))
+	if "General Manager" not in frappe.get_roles():
+		frappe.throw(_("Only a General Manager can reject a tariff."), frappe.PermissionError)
+	assert_not_maker(doc, frappe.session.user)
+	reason = (reason or "").strip()
+	if len(reason) < 5:
+		frappe.throw(_("Write a reason of at least 5 characters."))
+	doc.db_set("rejection_reason", reason, update_modified=False)
+	doc.add_comment("Comment", _("Rejected: {0}").format(reason))
 
 
 def tariff_title(consumer_category: str, effective_from) -> str:

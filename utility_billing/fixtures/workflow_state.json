@@ -1,0 +1,47 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "ok-sign",
+  "modified": "2026-11-13 18:00:05.154233",
+  "name": "Approved",
+  "style": "Success",
+  "workflow_state_name": "Approved"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "remove",
+  "modified": "2026-11-13 18:00:05.156136",
+  "name": "Rejected",
+  "style": "Danger",
+  "workflow_state_name": "Rejected"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": null,
+  "modified": "2026-11-13 22:05:50.642154",
+  "name": "Draft",
+  "style": "",
+  "workflow_state_name": "Draft"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": null,
+  "modified": "2026-11-13 22:05:50.651849",
+  "name": "Pending Approval",
+  "style": "Warning",
+  "workflow_state_name": "Pending Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": null,
+  "modified": "2026-11-13 22:05:50.655219",
+  "name": "Cancelled",
+  "style": "Inverse",
+  "workflow_state_name": "Cancelled"
+ }
+]

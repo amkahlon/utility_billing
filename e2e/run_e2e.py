@@ -88,6 +88,35 @@ class Desk:
 		saved = data["docs"][0]
 		return saved
 
+	def workflow(self, doc: dict, action: str) -> dict:
+		"""Apply a workflow action, as the desk's action menu does."""
+		fresh = self.get(doc["doctype"], doc["name"])
+		r = self.s.post(
+			f"{URL}/api/method/frappe.model.workflow.apply_workflow",
+			data={"doc": json.dumps(fresh), "action": action},
+		)
+		data = r.json()
+		if r.status_code != 200:
+			raise ServerError(r.status_code, _message(data))
+		return data["message"]
+
+
+USERS: dict[str, Desk] = {}
+
+
+def make_user(admin: Desk, key: str, roles: list[str]):
+	"""Create a QA user for this run with a random password, and log a session in as them."""
+	import secrets
+
+	email = f"qa.{key}.{RUN}@example.com"
+	password = secrets.token_urlsafe(16) + "!9a"
+	admin.save_doc({"doctype": "User", "email": email, "first_name": f"QA {key} {RUN}", "send_welcome_email": 0,
+	                "new_password": password, "roles": [{"role": r} for r in roles]})
+	desk = Desk()
+	desk.login(email, password)
+	USERS[key] = desk
+	return email
+
 
 def _enc(v):
 	return json.dumps(v) if isinstance(v, (dict, list)) else v
@@ -195,13 +224,16 @@ def t_charges(d: Desk):
 
 
 def tariff(d, category, start, end=None, method="Flat rate", rate="70", slabs=None, charges=None, action="Submit"):
+	"""Billing Manager creates the tariff; with action="Submit" it goes through the approval workflow
+	(Billing Manager submits for approval, General Manager approves)."""
 	doc = {"doctype": "Tariff", "naming_series": "TRF-.YYYY.-.####", "society": S["society"], "utility": "Electricity",
 	       "consumer_category": category, "effective_from": start, "effective_to": end,
 	       "pricing_method": method, "flat_rate": rate, "minimum_charge": "0",
 	       "slabs": slabs or [], "charges": charges or []}
-	saved = d.save_doc(doc)
+	saved = USERS["bm"].save_doc(doc)
 	if action == "Submit":
-		saved = d.save_doc({**saved, "docstatus": 0}, action="Submit")
+		saved = USERS["bm"].workflow(saved, "Submit for Approval")
+		saved = USERS["gm"].workflow(saved, "Approve")
 	return saved
 
 
@@ -364,10 +396,92 @@ def t_guest(d: Desk):
 		raise AssertionError(f"guest got HTTP {guest.status_code}")
 
 
+# ---------------------------------------------------------------- increment 3: roles and maker-checker
+def pending_tariff(start):
+	t = tariff(None, S["Residential"], start, f"{start[:4]}-12-31", action="Save")
+	return USERS["bm"].workflow(t, "Submit for Approval")
+
+
+@case("QA-23", "FS-ACC-05: whoever submitted for approval can't approve, even with the approver role")
+def t_maker_checker(d: Desk):
+	t = tariff(None, S["Residential"], "2031-01-01", "2031-12-31", action="Save")
+	t = USERS["bmgm"].workflow(t, "Submit for Approval")
+	expect_error(lambda: USERS["bmgm"].workflow(t, "Approve"), "another user")
+	eq(d.get("Tariff", t["name"])["workflow_state"], "Pending Approval", "still pending")
+	approved = USERS["gm"].workflow(t, "Approve")
+	eq((approved["docstatus"], approved["approved_by"]), (1, f"qa.gm.{RUN}@example.com"), "approved by GM")
+
+
+@case("QA-24", "FS-CFG-06: pending is locked; reject needs a reason; maker corrects and resubmits")
+def t_reject_cycle(d: Desk):
+	t = pending_tariff("2032-01-01")
+	eq(t["requested_by"], f"qa.bm.{RUN}@example.com", "requested by")
+	expect_error(lambda: USERS["bm"].save_doc(dict(USERS["bm"].get("Tariff", t["name"]), flat_rate="99")),
+	             "waiting for approval")
+	expect_error(lambda: USERS["gm"].workflow(t, "Reject"), "reason")
+	USERS["gm"].call("utility_billing.utility_billing.doctype.tariff.tariff.set_rejection_reason",
+	                 tariff=t["name"], reason="Rate must follow the July notice")
+	rejected = USERS["gm"].workflow(t, "Reject")
+	eq((rejected["workflow_state"], rejected["rejection_reason"]), ("Rejected", "Rate must follow the July notice"),
+	   "rejected with reason")
+	edited = USERS["bm"].save_doc(dict(USERS["bm"].get("Tariff", t["name"]), flat_rate="72"))
+	again = USERS["bm"].workflow(edited, "Submit for Approval")
+	# The API leaves out empty fields, so a cleared reason is simply absent.
+	eq((again["workflow_state"], again.get("rejection_reason")), ("Pending Approval", None), "resubmitted")
+
+
+@case("QA-25", "FS-ACC-06: the approver's inbox lists the pending tariff")
+def t_inbox(d: Desk):
+	import time
+
+	t = pending_tariff("2033-01-01")
+	gm_email = f"qa.gm.{RUN}@example.com"
+	for _ in range(20):  # workflow actions are created by a background job
+		r = USERS["gm"].s.get(f"{URL}/api/resource/Workflow Action", params={
+			"filters": json.dumps([["reference_name", "=", t["name"]], ["status", "=", "Open"]]),
+			"fields": json.dumps(["name", "reference_name"])})
+		if r.status_code == 200 and r.json().get("data"):
+			return
+		time.sleep(1)
+	raise AssertionError(f"no open Workflow Action for {t['name']} visible to {gm_email}")
+
+
+@case("QA-26", "FS-ACC-03: roles only get the actions they need")
+def t_role_rights(d: Desk):
+	expect_error(lambda: USERS["bo"].save_doc({
+		"doctype": "Tariff", "naming_series": "TRF-.YYYY.-.####", "society": S["society"], "utility": "Electricity",
+		"consumer_category": S["Residential"], "effective_from": "2040-01-01", "pricing_method": "Flat rate",
+		"flat_rate": "1"}))
+	consumer = USERS["cashier"].get("Consumer", S["owner"])  # cashier can read consumers
+	expect_error(lambda: USERS["cashier"].save_doc(dict(consumer, mobile_no="+923000000000")))
+	expect_error(lambda: USERS["gm"].save_doc({
+		"doctype": "Tariff", "naming_series": "TRF-.YYYY.-.####", "society": S["society"], "utility": "Electricity",
+		"consumer_category": S["Residential"], "effective_from": "2041-01-01", "pricing_method": "Flat rate",
+		"flat_rate": "1"}))  # the approver can't create (keeps maker and checker apart)
+
+
+@case("QA-27", "FS-ACC-08: approval steps are in the audit trail")
+def t_audit(d: Desk):
+	name = S["tariff_v1"]["name"]
+	r = d.s.get(f"{URL}/api/resource/Version", params={
+		"filters": json.dumps([["ref_doctype", "=", "Tariff"], ["docname", "=", name]]),
+		"fields": json.dumps(["name", "owner", "data"]), "limit_page_length": 50})
+	versions = r.json()["data"]
+	text = " ".join(v["data"] for v in versions)
+	for word in ("Pending Approval", "Approved"):
+		if word not in text:
+			raise AssertionError(f"'{word}' missing from {len(versions)} versions of {name}")
+
+
 # ---------------------------------------------------------------- runner
 def main():
 	d = Desk()
 	d.login()
+	make_user(d, "bm", ["Billing Manager"])
+	make_user(d, "gm", ["General Manager"])
+	make_user(d, "bmgm", ["Billing Manager", "General Manager"])
+	make_user(d, "bo", ["Billing Officer"])
+	make_user(d, "cashier", ["Cashier"])
 	results = []
 	for qa_id, req, fn in CASES:
 		try:

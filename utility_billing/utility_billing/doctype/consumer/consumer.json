@@ -145,7 +145,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-13 21:45:30.567078",
+ "modified": "2026-11-13 22:38:48.221904",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Consumer",
@@ -156,13 +156,88 @@
    "delete": 1,
    "email": 1,
    "export": 1,
-   "import": 1,
    "print": 1,
    "read": 1,
    "report": 1,
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
   }
  ],
  "row_format": "Dynamic",

@@ -278,3 +278,17 @@ after_install = "utility_billing.install.after_install"
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+# Fixtures: roles and approval workflows shipped with the app (synced on bench migrate)
+fixtures = [
+	{
+		"dt": "Role",
+		"filters": [["role_name", "in", [
+			"Society Admin", "Billing Manager", "General Manager", "Billing Officer", "Meter Reader",
+			"Cashier", "Recovery Officer", "Accounts Officer", "Management", "Billing Auditor",
+		]]],
+	},
+	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},
+	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit for Approval", "Approve", "Reject", "Cancel"]]]},
+	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval"]]]},
+]
+

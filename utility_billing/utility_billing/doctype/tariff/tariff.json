@@ -10,6 +10,7 @@
  "field_order": [
   "naming_series",
   "tariff_title",
+  "workflow_state",
   "society",
   "utility",
   "consumer_category",
@@ -25,6 +26,13 @@
   "slabs",
   "charges_section",
   "charges",
+  "approval_section",
+  "requested_by",
+  "requested_on",
+  "cb_approval",
+  "approved_by",
+  "approved_on",
+  "rejection_reason",
   "notes_section",
   "notes"
  ],
@@ -157,13 +165,73 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Approval Status",
+   "no_copy": 1,
+   "options": "Workflow State",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "Approval"
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Submitted for Approval By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requested_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_approval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.rejection_reason",
+   "fieldname": "rejection_reason",
+   "fieldtype": "Small Text",
+   "label": "Rejection Reason",
+   "no_copy": 1,
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-13 19:20:13.139406",
+ "modified": "2026-11-13 22:38:48.036831",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Tariff",
@@ -183,6 +251,82 @@
    "share": 1,
    "submit": 1,
    "write": 1
+  },
+  {
+   "amend": 1,
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
   }
  ],
  "row_format": "Dynamic",
