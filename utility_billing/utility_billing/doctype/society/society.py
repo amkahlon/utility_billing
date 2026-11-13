@@ -7,24 +7,35 @@ import re
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import cint, flt
 
 
 class Society(Document):
-	def validate(self):
+	def before_insert(self):
+		# The ID comes from short_name and is set before validate(), so normalise it here.
+		self.normalise_short_name()
+
+	def normalise_short_name(self):
 		self.short_name = (self.short_name or "").strip().upper()
+
+	def validate(self):
+		# The form can send numbers as text (for example a default of "10"), so convert first.
+		self.normalise_short_name()
 		if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{1,19}", self.short_name):
 			frappe.throw(_("Short Name: 2 to 20 letters, digits or hyphens, for example DHA-LHR."))
-		if not (self.enable_electricity or self.enable_water or self.enable_gas or self.enable_fixed_charges):
+		if not any(
+			cint(v) for v in (self.enable_electricity, self.enable_water, self.enable_gas, self.enable_fixed_charges)
+		):
 			frappe.throw(_("Turn on at least one module."))
-		if (self.days_to_due_date or 0) < 1:
+		if cint(self.days_to_due_date) < 1:
 			frappe.throw(_("Days from Issue to Due Date must be at least 1."))
-		if (self.grace_days or 0) < 0 or (self.reading_window_days or 0) < 0:
+		if cint(self.grace_days) < 0 or cint(self.reading_window_days) < 0:
 			frappe.throw(_("Grace days and reading window can't be negative."))
-		if self.surcharge_basis == "Percentage of current bill" and not 0 <= (self.surcharge_rate or 0) <= 100:
+		if self.surcharge_basis == "Percentage of current bill" and not 0 <= flt(self.surcharge_rate) <= 100:
 			frappe.throw(_("Surcharge Rate must be between 0 and 100%."))
-		if self.surcharge_basis == "Fixed amount" and (self.surcharge_fixed_amount or 0) <= 0:
+		if self.surcharge_basis == "Fixed amount" and flt(self.surcharge_fixed_amount) <= 0:
 			frappe.throw(_("Enter the fixed Surcharge Amount."))
-		if (self.surcharge_cap or 0) < 0 or (self.minimum_bill or 0) < 0:
+		if flt(self.surcharge_cap) < 0 or flt(self.minimum_bill) < 0:
 			frappe.throw(_("Surcharge cap and minimum bill can't be negative."))
 		self.validate_logo()
 

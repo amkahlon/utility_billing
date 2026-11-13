@@ -8,7 +8,7 @@ tariff with a later effective date, which closes the previous open-ended version
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import add_days, formatdate, getdate
+from frappe.utils import add_days, flt, formatdate, getdate
 
 from utility_billing.utility_billing.tariff_engine import FLAT, calculate_energy, slab_errors
 
@@ -51,14 +51,14 @@ class Tariff(Document):
 
 	def validate_pricing(self):
 		if self.pricing_method == FLAT:
-			if (self.flat_rate or 0) <= 0:
+			if flt(self.flat_rate) <= 0:
 				frappe.throw(_("Enter a Rate per Unit greater than 0."))
 			self.slabs = []
 		else:
 			errors = slab_errors(self.slabs)
 			if errors:
 				frappe.throw("<br>".join(errors), title=_("Slab table is not valid"))
-		if (self.minimum_charge or 0) < 0:
+		if flt(self.minimum_charge) < 0:
 			frappe.throw(_("Minimum Charge can't be negative."))
 
 	def validate_charges(self):
@@ -67,7 +67,7 @@ class Tariff(Document):
 			if row.charge_type in seen:
 				frappe.throw(_("Row {0}: {1} is listed twice.").format(row.idx, row.charge_type))
 			seen.add(row.charge_type)
-			if (row.rate or 0) < 0:
+			if flt(row.rate) < 0:
 				frappe.throw(_("Row {0}: rate can't be negative.").format(row.idx))
 
 	def set_title(self):
