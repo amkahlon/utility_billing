@@ -16,7 +16,7 @@ add_to_apps_screen = [
 		"name": "utility_billing",
 		"logo": "/assets/utility_billing/images/utility-billing-logo.svg",
 		"title": "Utility Billing",
-		"route": "/desk/utility-billing/society",
+		"route": "/desk/ub-dashboard",
 	}
 ]
 
@@ -35,6 +35,7 @@ add_to_apps_screen = [
 # include js, css files in header of desk.html
 # app_include_css = "/assets/utility_billing/css/utility_billing.css"
 # The ?v= number makes browsers fetch the file again: raise it whenever approval.js changes.
+app_include_css = "/assets/utility_billing/css/ub_theme.css?v=2"
 app_include_js = "/assets/utility_billing/js/approval.js?v=4"
 
 # include js, css files in header of web template

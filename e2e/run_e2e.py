@@ -1131,6 +1131,35 @@ def t_notifications(d: Desk):
 	eq([n["read"] for n in notes_of(USERS["bm"], adj["name"])], [1], "opening it marks it read")
 
 
+# ---------------------------------------------------------------- modern UI: home dashboard and theme
+@case("QA-65", "Modern UI: dashboard data for Management over HTTP; cashier refused; theme, font and page are served")
+def t_modern_dashboard(d: Desk):
+	call = "utility_billing.utility_billing.dashboard.get_dashboard"
+	res = USERS["mgmt"].call(call, society=S["society"], month="2026-11-01")
+	eq(len(res["kpis"]), 8, "eight cards")
+	cards = {k["label"]: k for k in res["kpis"]}
+	eq((cards["Billed this cycle"]["value"], cards["Units billed"]["value"], cards["Units billed"]["note"]),
+	   ("Rs 22,700", "300 kWh", "1 connection billed"), "November figures")
+	eq((cards["Line losses (AT&C)"]["value"], cards["Open service requests"]["value"]), ("—", "—"), "unavailable cards say so")
+	eq([s["state"] for s in res["steps"]][:3], ["done", "done", "done"], "readings, review and bill run are done")
+	eq(len(res["series"]), 12, "12 months")
+	if not res["channels"] or res["channels"][0]["name"] != "Cash":
+		raise AssertionError(f"collections by channel: {res['channels']}")
+	eq(res["society"], S["society"], "society")
+	expect_error(lambda: USERS["cashier"].call(call, society=S["society"]))
+	expect_error(lambda: USERS["reader"].call(call, society=S["society"]))
+	css = d.s.get(f"{URL}/assets/utility_billing/css/ub_theme.css")
+	if css.status_code != 200 or "--ub-navy" not in css.text or ".ub-kpi" not in css.text:
+		raise AssertionError("theme stylesheet isn't served")
+	font = d.s.get(f"{URL}/assets/utility_billing/fonts/Inter-latin.woff2")
+	if font.status_code != 200 or font.content[:4] != b"wOF2":
+		raise AssertionError("the Inter font isn't served")
+	desk = d.s.get(f"{URL}/desk", headers={"Accept": "text/html"})
+	if "ub_theme.css" not in desk.text:
+		raise AssertionError("the desk doesn't load the theme")
+	eq(d.get("Page", "ub-dashboard")["title"], "Dashboard", "dashboard page")
+
+
 # ---------------------------------------------------------------- runner
 def main():
 	d = Desk()
