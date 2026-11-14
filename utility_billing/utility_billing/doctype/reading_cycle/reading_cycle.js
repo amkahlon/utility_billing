@@ -4,6 +4,10 @@ const RDG = "utility_billing.utility_billing.readings";
 
 frappe.ui.form.on("Reading Cycle", {
 	refresh(frm) {
+		if (frm.doc.status === "Closed") {
+			frm.disable_form(); // closed cycles are locked; the server refuses changes too
+			frm.dashboard.set_headline_alert(__("Closed: readings in this cycle can't change."), "gray");
+		}
 		if (frm.is_new() || frm.doc.status !== "Open") return;
 		frm.add_custom_button(__("Create Reading Sheet"), () =>
 			frappe.call({ method: `${RDG}.create_reading_sheet`, args: { cycle: frm.doc.name }, freeze: true }).then(({ message: r }) => {

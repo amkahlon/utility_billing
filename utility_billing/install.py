@@ -11,8 +11,34 @@ UTILITIES = [
 ]
 
 
+# Why a meter couldn't be read (FS-RDG-06): code, description, billing treatment
+EXCEPTION_CODES = [
+	("Defective", "Meter is faulty or not recording", "Estimate"),
+	("Burnt", "Meter is burnt", "Estimate"),
+	("Stuck", "Dial or register is stuck", "Estimate"),
+	("Display Off", "Display is blank or unreadable", "Estimate"),
+	("Reversed", "Meter runs backwards", "Estimate"),
+	("Tampered", "Signs of tampering; refer to revenue protection", "Estimate"),
+	("No Access", "Reader couldn't reach the meter", "Estimate"),
+	("Locked", "Premises or meter box locked", "Estimate"),
+	("Meter Missing", "No meter found at the premises", "Estimate"),
+	("Vacant", "Premises vacant and supply unused", "Bill zero"),
+	("Other", "Other reason; explain in the review note", "Estimate"),
+]
+
+
 def after_install():
 	create_default_utilities()
+	create_default_exception_codes()
+
+
+def create_default_exception_codes():
+	for code, description, treatment in EXCEPTION_CODES:
+		if not frappe.db.exists("Reading Exception Code", code):
+			frappe.get_doc(
+				{"doctype": "Reading Exception Code", "code": code, "description": description,
+				 "billing_treatment": treatment, "enabled": 1}
+			).insert(ignore_permissions=True)
 
 
 def create_default_utilities():

@@ -9,8 +9,23 @@ frappe.ui.form.on("Meter Reading", {
 		if (frm.doc.checks && color) {
 			frm.dashboard.set_headline_alert(frappe.utils.escape_html(frm.doc.checks).replace(/\n/g, "<br>"), color);
 		}
+		if (frm.is_new()) return;
+		// Readings in a closed cycle are locked: read-only form and no review actions.
+		frappe.db.get_value("Reading Cycle", frm.doc.reading_cycle, "status").then(({ message }) => {
+			if (message && message.status === "Closed") {
+				frm.disable_form();
+			} else {
+				add_review_buttons(frm);
+			}
+		});
+	},
+});
+
+function add_review_buttons(frm) {
+	{
+		const s = frm.doc.status;
 		const reviewer = frappe.user.has_role(["Billing Officer", "Billing Manager", "System Manager"]);
-		if (!reviewer || frm.is_new()) return;
+		if (!reviewer) return;
 		if (s === "Flagged") {
 			frm.add_custom_button(__("Approve as Read"), () =>
 				ask(__("Approve reading"), "note", __("Why is this reading correct?"), (v) =>
@@ -42,8 +57,8 @@ frappe.ui.form.on("Meter Reading", {
 				__("Review")
 			);
 		}
-	},
-});
+	}
+}
 
 function ask(title, fieldname, label, then) {
 	frappe.prompt({ fieldname, fieldtype: "Small Text", label, reqd: 1 }, then, title, __("Save"));
