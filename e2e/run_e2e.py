@@ -55,7 +55,7 @@ class Desk:
 		r = self.s.post(f"{URL}/api/method/{method}", data={k: _enc(v) for k, v in params.items()})
 		data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
 		if r.status_code != 200:
-			raise ServerError(r.status_code, _message(data) or r.text[:300])
+			raise ServerError(r.status_code, f"{_message(data) or r.text[:300]} [{method}]")
 		return data.get("message")
 
 	def save(self, doc: dict, action="Save") -> dict:
@@ -69,7 +69,7 @@ class Desk:
 	def get(self, doctype, name) -> dict:
 		r = self.s.get(f"{URL}/api/resource/{doctype}/{requests.utils.quote(name)}")
 		if r.status_code != 200:
-			raise ServerError(r.status_code, r.text[:300])
+			raise ServerError(r.status_code, f"{r.text[:300]} [get {doctype} {name}]")
 		return r.json()["data"]
 
 	def save_doc(self, doc: dict, action="Save") -> dict:
@@ -85,7 +85,7 @@ class Desk:
 		)
 		data = r.json()
 		if r.status_code != 200:
-			raise ServerError(r.status_code, _message(data))
+			raise ServerError(r.status_code, f"{_message(data)} [save {doc.get('doctype')} {doc.get('name', '')}]")
 		saved = data["docs"][0]
 		return saved
 
@@ -1157,6 +1157,13 @@ def t_modern_dashboard(d: Desk):
 	desk = d.s.get(f"{URL}/desk", headers={"Accept": "text/html"})
 	if "ub_theme.css" not in desk.text:
 		raise AssertionError("the desk doesn't load the theme")
+	# Opening the desk gives this session a CSRF token, and from then on Frappe wants it on every POST, as it does from a browser
+	# (found in increment 11: later POSTs by this session were refused with "Invalid Request"). Send it the way the browser does.
+	import re
+
+	token = re.search(r'csrf_token\W+([0-9a-f]{20,})', desk.text)
+	if token:
+		d.s.headers["X-Frappe-CSRF-Token"] = token.group(1)
 	eq(d.get("Page", "ub-dashboard")["title"], "Dashboard", "dashboard page")
 
 
@@ -1211,6 +1218,92 @@ def t_losses(d: Desk):
 		expect_error(lambda desk=desk, name=name: run_report(desk, name, month="2026-11-01"))
 
 
+@case("QA-67", "FS-REC-04/05/06/07/08/15: stage rules saved from the form; recovery run, notices, print, case with a promise, order approval, target")
+def t_recovery(d: Desk):
+	R = "utility_billing.utility_billing.recovery."
+	rec, bm, cashier = USERS["rec"], USERS["bm"], USERS["cashier"]
+	soc = d.get("Society", S["society"])
+	soc.update({"defaulter_min_amount": "1000", "defaulter_min_days": "30", "recovery_stages": [
+		{"stage": "Reminder", "days_overdue": "30", "channel": "Print", "message": "Dear {consumer}, {owed} is overdue ({days} days)."},
+		{"stage": "Disconnection Order", "days_overdue": "60", "channel": "Print", "message": "Disconnect {reference}."}]})
+	saved = d.save_doc(soc)
+	eq([(r["stage"], int(r["days_overdue"])) for r in saved["recovery_stages"]], [("Reminder", 30), ("Disconnection Order", 60)], "stages saved")
+	bad = d.get("Society", S["society"])
+	bad["recovery_stages"] = [{"stage": "Reminder", "days_overdue": "40", "channel": "Print"}, {"stage": "Notice", "days_overdue": "40", "channel": "Print"}]
+	expect_error(lambda: d.save_doc(bad), "after the stage before")
+
+	as_of = "2027-03-01"
+	page = rec.call(R + "get_recovery", society=S["society"], as_of=as_of)
+	eq((page["cards"]["defaulters"], page["cards"]["defaulter_amount"], page["rows"][0]["connection"], page["rows"][0]["next_stage"]),
+	   (1, 2000.0, S["conn"]["name"], "Reminder"), "page data")
+	expect_error(lambda: cashier.call(R + "get_recovery", society=S["society"], as_of=as_of))
+	expect_error(lambda: cashier.call(R + "new_run", society=S["society"], as_of=as_of))
+
+	run_name = rec.call(R + "new_run", society=S["society"], as_of=as_of)
+	run = rec.get("Recovery Run", run_name)
+	eq((run["status"], run["accounts_due"], run["items"][0]["stage"], run["items"][0]["channel"]), ("Draft", 1, "Reminder", "Print"), "draft run")
+	n = doc_method(rec, run, "issue")
+	run = rec.get("Recovery Run", run_name)
+	eq((run["status"], run["notices_issued"]), ("Issued", 1), "issued")
+	notice = rec.get("Recovery Notice", run["items"][0]["notice"])
+	eq((notice["stage"], notice["status"], float(notice["owed"]), int(notice["oldest_days"]) >= 60), ("Reminder", "Issued", 2000.0, True), "notice")
+	if "Rs 2,000" not in notice["message"]:
+		raise AssertionError(f"notice text: {notice['message']}")
+	_reader, text = _notice_pdf(rec, run_name)
+	for word in ("Payment Reminder", "Rs 2,000"):
+		if word not in text:
+			raise AssertionError(f"{word!r} missing from the notice PDF")
+	expect_error(lambda: doc_method(rec, run, "issue"))  # already issued
+
+	run2 = rec.call(R + "new_run", society=S["society"], as_of=as_of)
+	doc_method(rec, rec.get("Recovery Run", run2), "issue")
+	order = rec.get("Recovery Run", run2)["items"][0]["notice"]
+	eq(rec.get("Recovery Notice", order)["status"], "Awaiting Approval", "disconnection order waits")
+	expect_error(lambda: rec.call(R + "approve_order", name=order))  # the officer isn't an approver
+	eq(bm.call(R + "approve_order", name=order), order, "approved by a Billing Manager")
+	eq(rec.get("Recovery Notice", order)["approved_by"], EMAIL["bm"], "approver recorded")
+	dlist = rows_of(run_report(USERS["gm"], "Disconnection List"))
+	eq((dlist[0]["connection"], dlist[0]["status"], float(dlist[0]["owed"])), (S["conn"]["name"], "Issued", 2000.0), "disconnection list")
+
+	assigned = rec.call(R + "assign", society=S["society"], connections=[S["conn"]["name"]], user=EMAIL["rec"])
+	eq(assigned, {"opened": 1, "reassigned": 0}, "case opened")
+	case_name = rec.call(R + "case_of", connection=S["conn"]["name"])
+	c = rec.get("Recovery Case", case_name)
+	c["followups"] = [{"followup_date": as_of, "kind": "Promise to Pay", "promise_date": "2027-03-10", "promise_amount": "2000", "outcome": "Will pay on the 10th"}]
+	saved = rec.save_doc(c)
+	eq((saved["status"], saved["promise_date"], saved["followups"][0]["done_by"]), ("Promise to Pay", "2027-03-10", EMAIL["rec"]), "promise recorded")
+	held = rec.call(R + "get_recovery", society=S["society"], as_of=as_of)["rows"][0]
+	eq((held["hold"], held["next_stage"], held["promise"]), ("Promise to pay not yet due", None, "Promised"), "promise holds recovery")
+	broken = rec.call(R + "get_recovery", society=S["society"], as_of="2027-03-12")["rows"][0]
+	eq(broken["promise"], "Broken", "promise broken after the date")
+
+	bm.save_doc({"doctype": "Recovery Target", "society": S["society"], "month": "2027-03-20", "target_amount": "5000"})
+	tgt = rows_of(run_report(USERS["gm"], "Recovery against Target", year=2027))
+	eq([float(r["target"]) for r in tgt if r["month"] == "Mar 2027"], [5000.0], "target in the report")
+	notices = rows_of(run_report(USERS["bm"], "Recovery Notices Register", from_date="2027-03-01", to_date="2027-03-31"))
+	eq(sorted(r["stage"] for r in notices), ["Disconnection Order", "Reminder"], "notices register")
+	expect_error(lambda: run_report(cashier, "Recovery Notices Register", from_date="2027-03-01", to_date="2027-03-31"))
+
+
+def doc_method(desk, doc: dict, method: str):
+	"""Call a whitelisted document method the way the form's custom buttons do (frm.call)."""
+	r = desk.s.post(f"{URL}/api/method/run_doc_method", data={"docs": json.dumps(doc), "method": method})
+	data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+	if r.status_code != 200:
+		raise ServerError(r.status_code, f"{_message(data) or r.text[:300]} [{method}]")
+	return data.get("message")
+
+
+def _notice_pdf(desk, run):
+	from pypdf import PdfReader
+
+	r = desk.s.get(f"{URL}/api/method/utility_billing.utility_billing.recovery.download_notices", params={"run": run})
+	if r.status_code != 200 or not r.content.startswith(b"%PDF"):
+		raise ServerError(r.status_code, r.text[:300])
+	reader = PdfReader(io.BytesIO(r.content))
+	return reader, " ".join(" ".join(p.extract_text() for p in reader.pages).split())
+
+
 # ---------------------------------------------------------------- runner
 def main():
 	d = Desk()
@@ -1224,6 +1317,7 @@ def main():
 	make_user(d, "ao", ["Accounts Officer"])
 	make_user(d, "mgmt", ["Management"])
 	make_user(d, "auditor", ["Billing Auditor"])
+	make_user(d, "rec", ["Recovery Officer"])
 	results = []
 	for qa_id, req, fn in CASES:
 		try:

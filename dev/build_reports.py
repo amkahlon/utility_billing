@@ -110,6 +110,8 @@ GROUPS = [
 	("Billing", [("DocType", "Bill Run"), ("DocType", "Utility Bill"), ("DocType", "Tariff Adjustment")]),
 	("Payments", [("DocType", "Cashier Day"), ("DocType", "Payment Receipt"), ("DocType", "Fee Charge"),
 	              ("DocType", "Account Adjustment"), ("DocType", "Customer Ledger Entry")]),
+	("Recovery", [("Page", "ub-recovery", "Defaulters and Recovery"), ("DocType", "Recovery Case"), ("DocType", "Recovery Run"),
+	              ("DocType", "Recovery Notice"), ("DocType", "Recovery Target")]),
 	("Accounting", [("DocType", "GL Journal"), ("DocType", "Receivables Reconciliation"), ("DocType", "Ledger Account"),
 	                ("DocType", "Journal Export Layout")]),
 	("Meters and Network", [("DocType", "Meter"), ("DocType", "Transformer"), ("DocType", "Feeder"), ("DocType", "DISCO Bill")]),
@@ -130,8 +132,8 @@ def build_sidebar():
 		if section == "Reports":
 			links = [("Report", s["name"]) for s in mis.REPORTS.values()]
 		doc.append("items", {"type": "Section Break", "label": section, "collapsible": 1})
-		for link_type, name in links:
-			doc.append("items", {"type": "Link", "label": name, "link_type": link_type, "link_to": name, "child": 1})
+		for link_type, name, *label in links:
+			doc.append("items", {"type": "Link", "label": label[0] if label else name, "link_type": link_type, "link_to": name, "child": 1})
 	for n, i in enumerate(doc.items, start=1):
 		i.idx = n
 	doc.save()

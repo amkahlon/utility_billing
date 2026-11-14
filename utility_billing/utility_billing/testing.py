@@ -14,6 +14,7 @@ CASHIER_2 = "tst.cashier2@example.com"
 ACCOUNTS_OFFICER = "tst.accounts.officer@example.com"
 MANAGEMENT = "tst.management@example.com"
 AUDITOR = "tst.auditor@example.com"
+RECOVERY_OFFICER = "tst.recovery.officer@example.com"
 
 USERS = {
 	BILLING_MANAGER: ["Billing Manager"],
@@ -26,6 +27,7 @@ USERS = {
 	ACCOUNTS_OFFICER: ["Accounts Officer"],
 	MANAGEMENT: ["Management"],
 	AUDITOR: ["Billing Auditor"],
+	RECOVERY_OFFICER: ["Recovery Officer"],
 }
 
 

@@ -1,0 +1,48 @@
+{#- Recovery notice: reminder, notice, final notice, disconnection order (FS-REC-05, 06). Tables only (wkhtmltopdf). -#}
+{%- set c = soc.colour -%}
+<style>
+	.rn { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10.5pt; color: #1d2329; position: relative; line-height: 1.45; }
+	.rn table { border-collapse: collapse; width: 100%; }
+	.rn td, .rn th { padding: 0; vertical-align: top; }
+	.rn .name { font-size: 15pt; font-weight: 700; color: {{ c }}; }
+	.rn .muted { color: #5b6670; }
+	.rn .small { font-size: 8.5pt; }
+	.rn .right { text-align: right; }
+	.rn .strong { font-weight: 700; }
+	.rn .band td { background: {{ c }}; color: #fff; font-weight: 700; font-size: 13pt; padding: 2mm 4mm; }
+	.rn .kv td { padding: 1.4mm 2mm; border-bottom: 1px solid #edf0f2; }
+	.rn .kv td.k { color: #5b6670; width: 32%; }
+	.rn .amount td { background: #fdf0ee; padding: 3mm 4mm; font-size: 15pt; font-weight: 700; color: #912018; }
+	.rn .wm { position: absolute; top: 70mm; left: 0; width: 100%; text-align: center; font-size: 46pt; font-weight: 700;
+		color: rgba(180, 35, 24, .13); -webkit-transform: rotate(-22deg); transform: rotate(-22deg); }
+	.rn .sp { height: 5mm; }
+	.rn .sig { border-top: 1px solid #1d2329; width: 55mm; padding-top: 1mm; font-size: 8.5pt; }
+</style>
+<div class="rn">
+{%- if watermark %}<div class="wm">{{ watermark | e }}</div>{% endif %}
+<table><tr>
+	{%- if soc.logo %}<td style="width: 20mm;"><img src="{{ soc.logo }}" style="width: 17mm; height: 17mm;"></td>{% endif %}
+	<td>
+		<div class="name">{{ soc.name | e }}</div>
+		{%- for l in soc.letterhead %}<div class="small muted">{{ l | e }}</div>{% else %}<div class="small muted">{{ (soc.address or "") | e }}</div>{% endfor %}
+	</td>
+	<td class="right small muted" style="width: 45mm;">{{ _("Notice No") }}<br><span class="strong">{{ n.name | e }}</span><br>{{ date(n.issue_date) }}</td>
+</tr></table>
+<div class="sp"></div>
+<table class="band"><tr><td>{{ title | e }}</td></tr></table>
+<div class="sp"></div>
+<table class="kv">
+	<tr><td class="k">{{ _("Consumer") }}</td><td class="strong">{{ (n.consumer_name or "") | e }}</td></tr>
+	<tr><td class="k">{{ _("Reference No") }}</td><td class="strong">{{ reference | e }}</td></tr>
+	{%- if property.get("property_no") %}<tr><td class="k">{{ _("Property") }}</td><td>{{ property.get("property_no") | e }}{% if property.get("block") %}, {{ property.get("block") | e }}{% endif %}</td></tr>{% endif %}
+	<tr><td class="k">{{ _("Overdue for") }}</td><td>{{ n.oldest_days }} {{ _("days") }}</td></tr>
+</table>
+<div class="sp"></div>
+<table class="amount"><tr><td>{{ _("Amount owed") }}</td><td class="right">Rs {{ money(n.owed) }}</td></tr></table>
+<div class="sp"></div>
+<p>{{ (n.message or "") | e }}</p>
+<div class="sp"></div>
+<p class="small muted">{{ _("If you have already paid, please show this notice with your receipt at the society office.") }}</p>
+<div class="sp"></div><div class="sp"></div>
+<table><tr><td class="sig">{{ _("Authorised signatory") }}</td><td></td></tr></table>
+</div>

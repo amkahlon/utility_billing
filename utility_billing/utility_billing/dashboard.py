@@ -157,7 +157,7 @@ def attention_of(society, month, as_of):
 	count, amount = defaulter_stats(society, as_of)
 	if count:
 		add("red", _("{0} accounts are 60+ days overdue").format(f"{count:,}"), _("{0} outstanding").format(rs(amount)),
-		    ["query-report", "Defaulters"], {"society": society, "min_days": 60})
+		    ["ub-recovery"], {"society": society})
 	estimated = mis.REPORTS["estimated_bills"]["fn"](frappe._dict({"society": society, "month": str(month), "repeat_only": 1}))["data"]
 	if estimated:
 		add("amber", _("{0} consumers billed on estimates 2+ months running").format(len(estimated)), _("They need a real reading"),
@@ -166,6 +166,10 @@ def attention_of(society, month, as_of):
 	if closed:
 		add("blue", _("{0} cashier days are waiting for approval").format(closed), _("Closed with a cash count"), ["List", "Cashier Day"],
 		    {"society": society, "status": "Closed"})
+	orders = frappe.db.count("Recovery Notice", {"society": society, "status": "Awaiting Approval"})
+	if orders:
+		add("amber", _("{0} disconnection orders are waiting for approval").format(orders), _("A second user must approve each order"),
+		    ["List", "Recovery Notice"], {"society": society, "status": "Awaiting Approval"})
 	items.sort(key=lambda i: SEVERITY[i["tone"]])
 	return items[:6]
 

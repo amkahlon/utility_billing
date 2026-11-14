@@ -9,6 +9,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt
 
+from utility_billing.utility_billing import recovery_engine
+
 
 class Society(Document):
 	def before_insert(self):
@@ -43,7 +45,15 @@ class Society(Document):
 		watch, high = flt(self.loss_watch_percent), flt(self.loss_high_percent)
 		if not 0 < watch < high <= 100:
 			frappe.throw(_("Line loss alert levels: Watch must be above 0 and below High loss, and High loss at most 100%."))
+		self.validate_recovery_rules()
 		self.validate_logo()
+
+	def validate_recovery_rules(self):
+		if flt(self.defaulter_min_amount) < 0 or cint(self.defaulter_min_days) < 0:
+			frappe.throw(_("Defaulter amount and days can't be negative."))
+		problem = recovery_engine.check_rules([(r.stage, r.days_overdue, r.channel) for r in self.recovery_stages])
+		if problem:
+			frappe.throw(_("Recovery stages: {0}").format(problem))
 
 	def normalise_website(self):
 		# Frappe's URL check needs a scheme; staff usually type "www.example.com".

@@ -207,3 +207,8 @@ body[data-path="login"] .btn-default, body[data-path="login"] .btn-login-option 
 body[data-path="login"] .login-content .text-muted, body[data-path="login"] a { color: #1D4ED8; }
 body[data-path="login"] .navbar { display: none; }
 body[data-path="login"] .web-footer, body[data-path="login"] footer { color: #94A3B8; }
+
+/* Recovery page: progress bar */
+.ub-bar { height: 10px; border-radius: 999px; background: var(--ub-slate-soft); overflow: hidden; margin: 10px 0 6px; }
+.ub-bar i { display: block; height: 100%; border-radius: 999px; background: var(--ub-blue); transition: width .3s ease; }
+.ub-bar i.ok { background: var(--ub-green); }
