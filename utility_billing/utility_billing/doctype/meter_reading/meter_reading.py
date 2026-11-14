@@ -30,6 +30,26 @@ class MeterReading(Document):
 		if self.is_new() or not self.meter:
 			self.load_context()
 		self.evaluate()
+		self.check_mdi()
+
+	def check_mdi(self):
+		"""The maximum demand (MDI) read from the meter: never negative; above the sanctioned load it is noted for a load extension."""
+		if flt(self.mdi_kw) < 0:
+			frappe.throw(_("The maximum demand can't be negative."))
+		sanctioned = flt(frappe.db.get_value("Connection", self.connection, "sanctioned_load_kw"))
+		prefix = _("Maximum demand")
+		lines = [x for x in (self.checks or "").split("\n") if x and not x.startswith(prefix)]  # an earlier note is replaced
+		if flt(self.mdi_kw) and sanctioned and flt(self.mdi_kw) > sanctioned:
+			lines.append(_("{0} {1} kW is above the sanctioned load of {2} kW.").format(prefix, flt(self.mdi_kw), sanctioned))
+		self.checks = "\n".join(lines) or None
+
+	def on_update(self):
+		"""Keep the connection's connected load (last MDI read) up to date."""
+		if flt(self.mdi_kw) and self.reading_date:
+			last = frappe.db.get_value("Connection", self.connection, "last_mdi_date")
+			if not last or getdate(self.reading_date) >= getdate(last):
+				frappe.db.set_value("Connection", self.connection, {"last_mdi_kw": flt(self.mdi_kw), "last_mdi_date": self.reading_date},
+				                    update_modified=False)
 
 	def check_connection(self, cycle):
 		conn = frappe.db.get_value("Connection", self.connection, ["society", "utility"], as_dict=True)

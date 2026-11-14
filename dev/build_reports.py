@@ -121,10 +121,10 @@ GROUPS = [
 	              ("DocType", "Recovery Notice"), ("DocType", "Recovery Target")]),
 	("Period Control", [("DocType", "Billing Period"), ("DocType", "Year End Close"), ("DocType", "Run Snapshot")]),
 	("Accounting", [("DocType", "GL Journal"), ("DocType", "Receivables Reconciliation"), ("DocType", "Ledger Account"),
-	                ("DocType", "Journal Export Layout")]),
+	                ("DocType", "Journal Export Layout"), ("DocType", "Revenue Target")]),
 	("Meters and Network", [("DocType", "Meter"), ("DocType", "Grid Station"), ("DocType", "Feeder"), ("DocType", "Line Section"),
 	                        ("DocType", "Transformer"), ("DocType", "Common Area Facility"), ("DocType", "Network Asset"), ("DocType", "DISCO Bill")]),
-	("Reports", []),  # filled from the registry
+	("Reports", []),  # filled from the registry (scheduled report e-mails, FS-RPT-44, are parked by the user)
 	("Setup", [("DocType", "Society"), ("DocType", "Tariff"), ("DocType", "Charge Type"), ("DocType", "Tax"), ("DocType", "Consumer Category"),
 	           ("DocType", "Fee Type"), ("DocType", "Cash Counter"), ("DocType", "Reason Code"),
 	           ("DocType", "Reading Exception Code"), ("DocType", "Connection Flag Type"), ("DocType", "Utility Type"), ("DocType", "KPI Definition")]),

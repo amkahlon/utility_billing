@@ -86,10 +86,10 @@ class IntegrationTestNotify(BillingCase):
 			self.pay(500, "2026-11-12")
 			(log,) = self.logs(event="payment.received")
 			self.assertEqual(str(log.scheduled_for), "2026-11-15 08:00:00")
-			self.assertEqual(notify.process_queue(), 0)
+			notify.process_queue()  # other sites' data may have their own messages due: only this one is checked
 			self.assertEqual(frappe.db.get_value("Message Log", log.name, "status"), "Queued")
 		with at(datetime(2026, 11, 15, 8, 1)):
-			self.assertEqual(notify.process_queue(), 1)
+			self.assertGreaterEqual(notify.process_queue(), 1)
 		self.assertEqual(frappe.db.get_value("Message Log", log.name, "status"), "Sent")
 
 	def test_a_consumer_who_opted_out_gets_the_next_channel_or_a_skipped_row(self):

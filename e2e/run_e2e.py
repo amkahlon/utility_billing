@@ -1086,7 +1086,7 @@ def t_other_reports(d: Desk):
 	run_report(USERS["reader"], "Reading Exceptions", reading_cycle=S["cycle"])
 	run_report(bm, "Estimated Bills", month="2026-11-01")
 	meters = run_report(bm, "Meter Register")
-	if not rows_of(meters) or len(meters["report_summary"]) != 4:
+	if not rows_of(meters) or len(meters["report_summary"]) != 6:  # four statuses, changed and under test (increment 20)
 		raise AssertionError("meter register is empty or has no status counts")
 	census = rows_of(run_report(bm, "Consumer Census"))
 	if census[-1]["total"] < 1:
@@ -1785,6 +1785,32 @@ def t_access(d: Desk):
 	made = d.call(f"{P}.templates.new_society", society_name=f"Template Society {RUN}", short_name=f"TP{RUN}")
 	eq((made["society"], len(made["to_do"])), (f"TP{RUN}", 5), "society from template")
 	expect_error(lambda: bo.call(f"{P}.templates.new_society", society_name="No", short_name=f"NO{RUN}"))
+
+
+@case("QA-76", "FS-RPT-03/12/22/25/28/36/38/43: the remaining reports run for their roles; revenue target and channel fees")
+def t_reports_more(d: Desk):
+	gm, ao, bo, aud = USERS["gm"], USERS["ao"], USERS["bo"], USERS["auditor"]
+	soc = S["society"]
+	wide = {"society": soc, "from_date": "2026-01-01", "to_date": "2030-12-31"}
+	ao.save_doc({"doctype": "Revenue Target", "society": soc, "target_year": "2026",
+	             "months": [{"month": "2026-11-01", "billed": "25000", "collected": "20000"}]})
+	s = d.get("Society", soc)
+	s["channel_fees"] = [{"mode": "Bank Transfer", "fee_percent": "1.5", "fixed_fee": "0", "cap": "100"}]
+	d.save_doc(s)
+	for user, name, filters in ((gm, "Installment Plans", {"society": soc}), (gm, "Consumer Movement", wide), (gm, "Disconnections and Reconnections", wide),
+	                            (bo, "No-Dues Certificates Issued", wide), (bo, "Detection Bills and Abnormal Consumption", {"society": soc, "month": "2026-11-01"}),
+	                            (ao, "Channel Fees and Commissions", wide), (ao, "Revenue against Target", {"society": soc, "year": "2026"}),
+	                            (aud, "Consumption Analytics", {"society": soc, "month": "2026-11-01", "show": "Seasonality"})):
+		run_report(user, name, **filters)
+	rows = rows_of(run_report(gm, "Disconnections and Reconnections", **wide))
+	eq(any(r.get("kind") == "Disconnection" for r in rows), True, "the QA-74 disconnection is listed")
+	fees = rows_of(run_report(ao, "Channel Fees and Commissions", **wide))
+	bank = next((r for r in fees if r.get("mode") == "Bank Transfer"), None)
+	if not bank or not float(bank["fees"]):
+		raise AssertionError(f"no channel fee worked out: {fees}")
+	budget = rows_of(run_report(ao, "Revenue against Target", society=soc, year="2026"))
+	eq(any(float(r.get("budget_billed") or 0) == 25000 for r in budget), True, "target month shown")
+	expect_error(lambda: run_report(USERS["reader"], "Channel Fees and Commissions", **wide))
 
 
 def _notice_pdf(desk, run):

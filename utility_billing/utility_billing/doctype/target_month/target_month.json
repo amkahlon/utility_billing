@@ -1,0 +1,57 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 15:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "month",
+  "utility",
+  "billed",
+  "collected"
+ ],
+ "fields": [
+  {
+   "fieldname": "month",
+   "fieldtype": "Date",
+   "label": "Month",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "utility",
+   "fieldtype": "Link",
+   "label": "Utility",
+   "options": "Utility Type",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "billed",
+   "fieldtype": "Currency",
+   "label": "Billing Target",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "collected",
+   "fieldtype": "Currency",
+   "label": "Collection Target",
+   "in_list_view": 1,
+   "columns": 2
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 15:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Target Month",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50,
+ "search_fields": ""
+}

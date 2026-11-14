@@ -524,6 +524,16 @@ def surcharge_register(f):
 		order by e.posting_date, e.seq""", {"s": s, "a": a, "b": b})
 	label = {"Surcharge": _("Levied"), "Credit Note": _("Waived"), "Reversal": _("Reversed (paid in time)")}
 	data = [dict(r, kind=label[r.entry_type], amount=flt(r.amount)) for r in rows]
+	# due date extensions granted in the period: the surcharge moves with the new due date (FS-WF-03)
+	for x in sql("""select date(x.creation) posting_date, x.connection, x.consumer_name, x.name voucher_no, x.granted_by approved_by, x.reason_code,
+	                       b.surcharge_amount, x.old_due_date, x.new_due_date
+	                from `tabDue Date Extension` x left join `tabUtility Bill` b on b.name = x.bill
+	                where x.society = %(s)s and date(x.creation) between %(a)s and %(b)s order by x.creation""", {"s": s, "a": a, "b": b}):
+		data.append({"posting_date": x.posting_date, "kind": _("Extended"), "connection": x.connection, "consumer_name": x.consumer_name,
+		             "amount": 0, "voucher_no": x.voucher_no, "approved_by": x.approved_by, "reason_code": x.reason_code,
+		             "remarks": _("Due date {0} → {1}; surcharge of Rs {2} not due before then").format(
+		                 formatdate(x.old_due_date), formatdate(x.new_due_date), f"{flt(x.surcharge_amount):,.0f}")})
+	data.sort(key=lambda r: str(r.get("posting_date") or ""))
 	if data:
 		by = defaultdict(float)
 		for r in data:
@@ -536,7 +546,7 @@ def surcharge_register(f):
 	                    col("Amount", "amount", "Currency", 100), col("Document", "voucher_no", width=140),
 	                    col("Approved By", "approved_by", "Link", 150, "User"), col("Reason", "reason_code", width=100),
 	                    col("Note", "remarks", width=260)], "data": data,
-	        "message": _("Extensions of the due date are not built yet, so none appear here.")}
+	        "message": _("Levied, waived (credit notes), reversed (paid in time) and extended (due date extensions, with the surcharge that moved).")}
 
 
 # ================================================================ 9. reading completion (RPT-13)
@@ -654,18 +664,28 @@ def meter_register(f):
 		where m.society = %(s)s {cond} order by m.status, m.serial_no""", {"s": s, "st": f.get("status")})
 	today = getdate(nowdate())
 	counts = defaultdict(int)
+	# meters under testing: an open meter-test request on the account that carries them (FS-WF-32)
+	testing = {x.m for x in sql("""select c.current_meter m from `tabService Request` r join `tabConnection` c on c.name = r.connection
+	                              where r.society = %(s)s and r.kind = 'Meter test' and r.status in ('Open', 'In Progress')""", {"s": s})}
+	changed = {x.meter: x.removed_on for x in sql("""select cm.meter, max(cm.removed_on) removed_on from `tabConnection Meter` cm
+	                    join `tabConnection` c on c.name = cm.parent where c.society = %(s)s and cm.removed_on is not null group by cm.meter""", {"s": s})}
 	for r in rows:
 		counts[r.status] += 1
 		r["age_months"] = max(round((today - getdate(r.installed_on)).days / 30.4), 0) if r.installed_on and r.status != "In Store" else None
-	order = ("In Store", "Installed", "Defective", "Removed")
+		r["under_test"] = 1 if r.name in testing else 0
+		r["changed_on"] = changed.get(r.name)
+	counts["Under test"] = sum(r["under_test"] for r in rows)
+	counts["Changed"] = sum(1 for r in rows if r["changed_on"])
+	order = ("In Store", "Installed", "Defective", "Removed", "Changed", "Under test")
 	summary = [{"value": counts[k], "label": _(k), "datatype": "Int",
-	            "indicator": "Red" if k == "Defective" else "Blue"} for k in order]
+	            "indicator": "Red" if k in ("Defective", "Under test") else "Blue"} for k in order]
 	return {"columns": [col("Meter", "name", "Link", 120, "Meter"), col("Serial No", "serial_no", width=120), col("Make", "make", width=100),
 	                    col("Type", "meter_type", width=110), col("Status", "status", width=90),
 	                    col("Account", "connection", "Link", 110, "Connection"), col("Consumer", "consumer_name", width=160),
-	                    col("Installed On", "installed_on", "Date", 100), col("Age (months)", "age_months", "Int", 100)],
+	                    col("Installed On", "installed_on", "Date", 100), col("Age (months)", "age_months", "Int", 100),
+	                    col("Last Taken Off", "changed_on", "Date", 110), col("Under Test", "under_test", "Check", 90)],
 	        "data": rows, "summary": summary,
-	        "message": _("Meters under testing aren't a separate status yet; the age of a defective meter is the time since it was installed.")}
+	        "message": _("Under test: an open meter-test request on the account. Last taken off: when the meter was last removed in a meter change. The age of a defective meter is the time since it was installed.")}
 
 
 # ================================================================ 13. collections (RPT-17)
@@ -1441,17 +1461,23 @@ def consumer_census(f):
 	s = society_of(f)
 	rows = sql(f"""select ifnull(cc.category_name, c.consumer_category) category, {BLOCK} block,
 			sum(c.status = 'Active') active, sum(c.status = 'Applied') applied, sum(c.status = 'Disconnected') disconnected,
-			sum(c.status = 'Closed') closed, count(*) total, sum(case when c.status = 'Active' then c.sanctioned_load_kw else 0 end) load_kw
+			sum(c.status = 'Closed') closed, count(*) total, sum(case when c.status = 'Active' then c.sanctioned_load_kw else 0 end) load_kw,
+			sum(case when c.status = 'Active' then c.last_mdi_kw else 0 end) mdi_kw,
+			sum(c.status = 'Active' and c.last_mdi_kw > 0) mdi_read,
+			sum(c.status = 'Active' and c.last_mdi_kw > c.sanctioned_load_kw and c.sanctioned_load_kw > 0) over_load
 		from `tabConnection` c left join `tabProperty` p on p.name = c.property left join `tabConsumer Category` cc on cc.name = c.consumer_category
 		where c.society = %(s)s and (%(u)s = '' or c.utility = %(u)s) group by 1, 2 order by 1, 2""", {"s": s, "u": f.get("utility") or ""})
 	data = [{"category": r.category, "block": r.block, "active": cint(r.active), "applied": cint(r.applied),
-	         "disconnected": cint(r.disconnected), "closed": cint(r.closed), "total": cint(r.total), "load_kw": flt(r.load_kw)} for r in rows]
+	         "disconnected": cint(r.disconnected), "closed": cint(r.closed), "total": cint(r.total), "load_kw": flt(r.load_kw),
+	         "mdi_kw": flt(r.mdi_kw), "mdi_read": cint(r.mdi_read), "over_load": cint(r.over_load)} for r in rows]
 	if data:
-		data.append(total_row("category", _("Total"), data, ("active", "applied", "disconnected", "closed", "total", "load_kw")))
+		data.append(total_row("category", _("Total"), data, ("active", "applied", "disconnected", "closed", "total", "load_kw", "mdi_kw", "mdi_read", "over_load")))
 	return {"columns": [col("Category", "category", width=160), col("Block", "block", width=100), col("Active", "active", "Int", 80),
 	                    col("Applied", "applied", "Int", 80), col("Disconnected", "disconnected", "Int", 100), col("Closed", "closed", "Int", 80),
-	                    col("Total", "total", "Int", 80), col("Sanctioned Load of Active (kW)", "load_kw", "Float", 170)], "data": data,
-	        "message": _("Connected load isn't recorded separately yet, so only the sanctioned load is shown.")}
+	                    col("Total", "total", "Int", 80), col("Sanctioned Load of Active (kW)", "load_kw", "Float", 170),
+	                    col("Connected Load (MDI, kW)", "mdi_kw", "Float", 160), col("With an MDI Reading", "mdi_read", "Int", 140),
+	                    col("Above Sanctioned Load", "over_load", "Int", 150)], "data": data,
+	        "message": _("Connected load is the maximum demand (MDI) read from each meter at its last reading that had one; accounts above their sanctioned load are candidates for a load extension.")}
 
 
 # ================================================================ 20. pending approvals (RPT-41)
@@ -1592,20 +1618,33 @@ def transformer_loading_report(f):
 	L = _losses()
 	s = society_of(f)
 	rows = sql("""select t.name, t.transformer_code, t.feeder, t.kva_rating, t.location, sum(c.status = 'Active') connections,
-			sum(case when c.status = 'Active' then c.sanctioned_load_kw else 0 end) kw
+			sum(case when c.status = 'Active' then c.sanctioned_load_kw else 0 end) kw,
+			sum(case when c.status = 'Active' then c.last_mdi_kw else 0 end) mdi_kw
 		from `tabTransformer` t left join `tabConnection` c on c.transformer = t.name
 		where t.society = %(s)s and t.enabled = 1 group by t.name order by t.transformer_code""", {"s": s})
+	month = month_start(f.get("month") or nowdate())
+	hours = ((get_last_day(month) - month).days + 1) * 24
+	measured = {r.transformer: flt(r.kwh) for r in sql(
+		"""select i.transformer, sum(i.input_kwh) kwh from `tabDISCO Input Row` i join `tabDISCO Bill` d on d.name = i.parent
+		where d.society = %(s)s and d.billing_month = %(m)s and ifnull(i.transformer, '') != '' group by i.transformer""", {"s": s, "m": month})}
 	data = []
 	for r in rows:
 		pct_ = L.transformer_loading(r.kw, r.kva_rating)
+		kwh = measured.get(r.name)
+		avg_kw = round(kwh / hours, 2) if kwh else None  # the average load the month's input units mean (FS-RPT-33)
 		data.append({"transformer": r.name, "feeder": r.feeder, "location": r.location, "kva": flt(r.kva_rating), "connections": cint(r.connections),
-		             "kw": flt(r.kw), "loading": pct_, "status": L.loading_status(pct_) if pct_ is not None else _("No rating")})
+		             "kw": flt(r.kw), "loading": pct_, "status": L.loading_status(pct_) if pct_ is not None else _("No rating"),
+		             "input_kwh": kwh, "avg_kw": avg_kw, "measured_loading": L.transformer_loading(avg_kw, r.kva_rating) if avg_kw else None,
+		             "mdi_kw": flt(r.mdi_kw), "mdi_loading": L.transformer_loading(r.mdi_kw, r.kva_rating) if flt(r.mdi_kw) else None})
 	data.sort(key=lambda r: -(r["loading"] or 0))
 	return {"columns": [col("Transformer", "transformer", "Link", 150, "Transformer"), col("Feeder", "feeder", "Link", 140, "Feeder"),
 	                    col("Location", "location", width=150), col("Rating (kVA)", "kva", "Float", 100), col("Active Connections", "connections", "Int", 120),
-	                    col("Sanctioned Load (kW)", "kw", "Float", 140), col("Loading %", "loading", "Percent", 100), col("Status", "status", width=110)],
+	                    col("Sanctioned Load (kW)", "kw", "Float", 140), col("Loading %", "loading", "Percent", 100), col("Status", "status", width=110),
+	                    col("Input kWh (month)", "input_kwh", "Float", 130), col("Average Load (kW)", "avg_kw", "Float", 130),
+	                    col("Measured Loading %", "measured_loading", "Percent", 140), col("Sum of MDI (kW)", "mdi_kw", "Float", 120),
+	                    col("MDI Loading %", "mdi_loading", "Percent", 110)],
 	        "data": data,
-	        "message": _("Loading = sanctioned load of the active connections ÷ (kVA rating × 0.9 power factor). It is an upper bound: metered peak load isn't recorded. Heavy from 80%, overloaded above 100%.")}
+	        "message": _("Loading = sanctioned load of the active connections ÷ (kVA rating × 0.9 power factor), an upper bound. Measured loading = the month's input units into the transformer (DISCO bill) ÷ the hours of the month: an average. MDI loading = the maximum demands read from the meters on it, added up: the peak if they all came at once. Heavy from 80%, overloaded above 100%.")}
 
 
 @report("disco_reconciliation", "DISCO Bill vs Resident Billing", FINANCE,
@@ -1705,3 +1744,7 @@ def version_summary(doctype, raw) -> str:
 def _short(v):
 	v = "" if v is None else str(v)
 	return v if len(v) <= 40 else v[:37] + "…"
+
+
+# more reports registered in the same registry (increment 20)
+from utility_billing.utility_billing import mis_more  # noqa: E402, F401

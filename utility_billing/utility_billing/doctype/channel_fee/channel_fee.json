@@ -1,0 +1,57 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 15:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "mode",
+  "fee_percent",
+  "fixed_fee",
+  "cap"
+ ],
+ "fields": [
+  {
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Paid By",
+   "options": "Cash\nCheque\nPay Order\nCard\nBank Transfer\n1Link\nKuickpay",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "fee_percent",
+   "fieldtype": "Percent",
+   "label": "Fee (%)",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "fixed_fee",
+   "fieldtype": "Currency",
+   "label": "Fixed Fee per Payment",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "cap",
+   "fieldtype": "Currency",
+   "label": "Most per Payment",
+   "in_list_view": 1,
+   "columns": 2,
+   "description": "0 = no cap."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 15:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Channel Fee",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}
