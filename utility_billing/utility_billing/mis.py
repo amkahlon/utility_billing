@@ -921,6 +921,103 @@ def recovery_notices(f):
 	        "message": _("Reconnections are recorded with the work-order workflow, which comes later.")}
 
 
+# ================================================================ 17c. messages, settlement, suspense, refunds (increment 12)
+PAY_ROLES = FINANCE + ["Society Admin"]
+
+
+@report("message_cost", "Message Cost by Channel", PAY_ROLES,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="from_date", label="From", fieldtype="Date", default="@month_start"),
+         dict(fieldname="to_date", label="To", fieldtype="Date", default="@today")],
+        "Messages and their cost per channel: how many went out, were delivered, failed or wait.", ref_doctype="Message Log")
+def message_cost(f):
+	s = society_of(f)
+	start, end = period(f, get_first_day(nowdate()))
+	rows = sql("""select channel, count(*) total, sum(status in ('Sent', 'Delivered', 'Read')) sent, sum(status in ('Delivered', 'Read')) delivered,
+	                    sum(status = 'Read') is_read, sum(status = 'Failed') failed, sum(status = 'Skipped') skipped, sum(status = 'Queued') waiting,
+	                    sum(parts) parts, sum(cost) cost from `tabMessage Log`
+	             where society = %(s)s and date(creation) between %(a)s and %(b)s group by channel order by channel""", {"s": s, "a": start, "b": end})
+	data = [{"channel": r.channel, "total": cint(r.total), "sent": cint(r.sent), "delivered": cint(r.delivered), "read": cint(r.is_read),
+	         "failed": cint(r.failed), "skipped": cint(r.skipped), "waiting": cint(r.waiting), "parts": cint(r.parts), "cost": round(flt(r.cost), 2)} for r in rows]
+	if data:
+		data.append(total_row("channel", _("Total"), data, ("total", "sent", "delivered", "read", "failed", "skipped", "waiting", "parts", "cost")))
+	wa = frappe.db.get_value("Society", s, "whatsapp_enabled")
+	return {"columns": [col("Channel", "channel", width=110), col("Messages", "total", "Int", 100), col("Sent", "sent", "Int", 80),
+	                    col("Delivered", "delivered", "Int", 90), col("Read", "read", "Int", 70), col("Failed", "failed", "Int", 80),
+	                    col("Skipped", "skipped", "Int", 80), col("Waiting", "waiting", "Int", 80), col("SMS Parts", "parts", "Int", 90),
+	                    col("Cost (Rs)", "cost", "Currency", 110)], "data": data,
+	        "message": _("WhatsApp is {0} for this society. Skipped = the consumer accepts none of the rule's channels. Waiting = no provider set up yet, or held by quiet hours or a retry.").format(_("on") if cint(wa) else _("switched off"))}
+
+
+@report("settlement_exceptions", "Settlement Exceptions", PAY_ROLES,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="from_date", label="From", fieldtype="Date", default="@month_start"),
+         dict(fieldname="to_date", label="To", fieldtype="Date", default="@today"),
+         dict(fieldname="open_only", label="Open Items Only", fieldtype="Check", default=1)],
+        "Rows of bank and channel settlement files that don't match the recorded payments, and what was done about them.", ref_doctype="Settlement File")
+def settlement_exceptions(f):
+	s = society_of(f)
+	start, end = period(f, get_first_day(nowdate()))
+	data = [dict(r) for r in sql(
+		"""select sf.name file, sf.file_date, sf.mode, sf.status file_status, r.txn_id, r.reference_no, r.paid_on, r.amount, r.recorded_amount,
+		          r.result, r.action_taken, r.remarks, r.receipt, r.suspense
+		   from `tabSettlement Row` r join `tabSettlement File` sf on sf.name = r.parent
+		   where sf.society = %(s)s and sf.file_date between %(a)s and %(b)s and r.result != 'Matched'
+		     and (%(open)s = 0 or (ifnull(r.action_taken, '') = '' and ifnull(r.remarks, '') = ''))
+		   order by sf.file_date, sf.name, r.idx""", {"s": s, "a": start, "b": end, "open": cint(f.get("open_only", 1))})]
+	for r in data:
+		r["difference"] = round(flt(r["amount"]) - flt(r["recorded_amount"]), 2) if r["result"] in ("Amount differs",) else None
+	return {"columns": [col("File", "file", "Link", 130, "Settlement File"), col("File Date", "file_date", "Date", 100), col("Channel", "mode", width=100),
+	                    col("Transaction ID", "txn_id", width=150), col("Reference No", "reference_no", width=120), col("Amount in File", "amount", "Currency", 120),
+	                    col("Recorded", "recorded_amount", "Currency", 110), col("Difference", "difference", "Currency", 100), col("Result", "result", width=170),
+	                    col("Action", "action_taken", width=90), col("Remarks", "remarks", width=200), col("Receipt", "receipt", "Link", 130, "Payment Receipt"),
+	                    col("Suspense", "suspense", "Link", 130, "Suspense Payment")], "data": data,
+	        "message": _("A row stays open until it has an action (posted or held in suspense) or a remark. A file can be closed only when none are open.")}
+
+
+@report("suspense_payments", "Suspense Payments", PAY_ROLES,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="as_of", label="As Of", fieldtype="Date", default="@today"),
+         dict(fieldname="status", label="Status", fieldtype="Select", options="Held\nMatched\nReturned to Payer\nAll", default="Held")],
+        "Payments received with a wrong or missing reference number, oldest first, until they are matched or returned.", ref_doctype="Suspense Payment")
+def suspense_payments(f):
+	s, as_of = society_of(f), getdate(f.get("as_of") or nowdate())
+	status = f.get("status") or "Held"
+	data = [dict(r) for r in sql(
+		"""select name, payment_date, mode, channel_txn_id, reference_text, amount, status, matched_connection, payment_receipt, settlement_file
+		   from `tabSuspense Payment` where society = %(s)s and (%(st)s = 'All' or status = %(st)s) order by payment_date, name""", {"s": s, "st": status})]
+	for r in data:
+		r["age"] = max((as_of - getdate(r["payment_date"])).days, 0)
+	if data:
+		data.append(total_row("name", _("Total"), data, ("amount",)))
+	return {"columns": [col("Suspense", "name", "Link", 130, "Suspense Payment"), col("Paid On", "payment_date", "Date", 100), col("Age (days)", "age", "Int", 90),
+	                    col("Paid By", "mode", width=100), col("Transaction ID", "channel_txn_id", width=150), col("Reference Given", "reference_text", width=140),
+	                    col("Amount", "amount", "Currency", 110), col("Status", "status", width=120), col("Matched To", "matched_connection", "Link", 110, "Connection"),
+	                    col("Receipt", "payment_receipt", "Link", 130, "Payment Receipt"), col("File", "settlement_file", "Link", 130, "Settlement File")], "data": data}
+
+
+@report("refunds_register", "Refunds Register", PAY_ROLES,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="from_date", label="From", fieldtype="Date", default="@month_start"),
+         dict(fieldname="to_date", label="To", fieldtype="Date", default="@today")],
+        "Refunds of credit balances with their reason, payment details and approval.", ref_doctype="Refund")
+def refunds_register(f):
+	s = society_of(f)
+	start, end = period(f, get_first_day(nowdate()))
+	data = [dict(r) for r in sql(
+		"""select rf.name, date(rf.creation) created, rf.connection, rf.consumer_name, rf.amount, rf.reason_code, rf.refund_mode, rf.payee_name,
+		          rf.instrument_no, rf.workflow_state, rf.requested_by, rf.approved_by, rf.posting_date
+		   from `tabRefund` rf where rf.society = %(s)s and rf.docstatus < 2 and date(rf.creation) between %(a)s and %(b)s order by rf.creation""",
+		{"s": s, "a": start, "b": end})]
+	if data:
+		data.append(total_row("name", _("Total"), data, ("amount",)))
+	return {"columns": [col("Refund", "name", "Link", 130, "Refund"), col("Created", "created", "Date", 100), col("Account", "connection", "Link", 110, "Connection"),
+	                    col("Consumer", "consumer_name", width=160), col("Amount", "amount", "Currency", 110), col("Reason", "reason_code", "Link", 120, "Reason Code"),
+	                    col("Paid By", "refund_mode", width=100), col("Payee", "payee_name", width=140), col("Cheque / Account", "instrument_no", width=130),
+	                    col("Status", "workflow_state", width=130), col("Requested By", "requested_by", "Link", 150, "User"),
+	                    col("Approved By", "approved_by", "Link", 150, "User"), col("Posted On", "posting_date", "Date", 100)], "data": data}
+
+
 # ================================================================ 18. credit balances (RPT-26)
 @report("credit_balances", "Credit Balances and Advance Payments", RECOVERY, AGE_FILTERS[:1] + AGE_FILTERS[2:],
         "Accounts holding credit: money paid in advance or in excess.", ref_doctype="Customer Ledger Entry")
@@ -965,12 +1062,12 @@ def consumer_census(f):
 
 # ================================================================ 20. pending approvals (RPT-41)
 PENDING = (("Tariff", "tariff_title", "General Manager"), ("Tariff Adjustment", "adjustment_title", "General Manager"),
-           ("Bill Run", "run_title", "Billing Manager"), ("Account Adjustment", "adjustment_title", "General Manager"))
+           ("Bill Run", "run_title", "Billing Manager"), ("Account Adjustment", "adjustment_title", "General Manager"), ("Refund", "refund_title", "General Manager"))
 
 
 @report("pending_approvals", "Pending Approvals", APPROVERS,
         [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
-         dict(fieldname="transaction", label="Transaction", fieldtype="Select", options="\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment"),
+         dict(fieldname="transaction", label="Transaction", fieldtype="Select", options="\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund"),
          dict(fieldname="older_than", label="Waiting More Than (days)", fieldtype="Int", default="0")],
         "Everything waiting for approval, by type and how long it has waited.", ref_doctype="Tariff")
 def pending_approvals(f):
@@ -1142,7 +1239,7 @@ def disco_reconciliation(f):
 
 
 # ================================================================ 21. audit log (RPT-42)
-AUDITED = ("Society", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Fee Type", "Charge Type", "Consumer Category",
+AUDITED = ("Society", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Refund", "Settlement File", "Suspense Payment", "Notification Template", "Messaging Provider", "Fee Type", "Charge Type", "Consumer Category",
            "Cash Counter", "Reason Code", "Ledger Account", "Journal Export Layout", "Consumer", "Property", "Connection", "Meter",
            "Reading Cycle", "Meter Reading", "Cashier Day", "KPI Definition")
 

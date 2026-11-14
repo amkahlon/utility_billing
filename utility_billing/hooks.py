@@ -110,11 +110,19 @@ jinja = {"methods": [
 ]}
 
 # Late payment surcharge the day after the due date + grace days (FS-REC-03)
-scheduler_events = {"daily": [
-	"utility_billing.utility_billing.account.apply_surcharges",
-	# Summary journals up to yesterday and a receivables reconciliation (FS-GL-02, 04)
-	"utility_billing.utility_billing.gl.daily",
-]}
+scheduler_events = {
+	"all": [
+		# Send the messages that are due: retries, and those held by quiet hours (FS-NTF-01, 02, 04)
+		"utility_billing.utility_billing.notify.process_queue",
+	],
+	"daily": [
+		"utility_billing.utility_billing.account.apply_surcharges",
+		# Summary journals up to yesterday and a receivables reconciliation (FS-GL-02, 04)
+		"utility_billing.utility_billing.gl.daily",
+		# Reminders before the due date and overdue notices (FS-NTF-01)
+		"utility_billing.utility_billing.notify.daily",
+	],
+}
 
 # Uninstallation
 # ------------
@@ -308,7 +316,7 @@ fixtures = [
 	},
 	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},
 	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit for Approval", "Approve", "Reject", "Withdraw", "Cancel"]]]},
-	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval", "Account Adjustment Approval"]]]},
+	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval", "Account Adjustment Approval", "Refund Approval"]]]},
 	{"dt": "Property Setter", "filters": [["name", "in", ["Utility Bill-main-default_print_format", "Payment Receipt-main-default_print_format"]]]},
 ]
 

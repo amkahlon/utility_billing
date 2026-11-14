@@ -19,7 +19,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, formatdate, getdate, now_datetime, nowdate
 
-from utility_billing.utility_billing import dashboard, mis
+from utility_billing.utility_billing import dashboard, mis, notify
 from utility_billing.utility_billing import recovery_engine as engine
 
 RUNNERS = ["Recovery Officer", "Billing Manager", "General Manager", "Society Admin"]
@@ -192,6 +192,8 @@ def issue_run(run):
 		n.insert(ignore_permissions=True)
 		item.notice = n.name
 		issued += 1
+		if status == "Queued":
+			notify.send_recovery_notice(n)  # SMS and WhatsApp go through the message queue (FS-REC-06, NTF)
 		if case:
 			frappe.db.set_value("Recovery Case", case.name, {"last_stage": item.stage, "last_stage_date": as_of}, update_modified=False)
 	run.notices_issued = issued
@@ -208,8 +210,10 @@ def approve_disconnection(name):
 	run_by = frappe.db.get_value("Recovery Run", n.recovery_run, "issued_by") if n.recovery_run else None
 	if frappe.session.user in {n.owner, run_by}:
 		frappe.throw(_("You issued this order, so another user must approve it (maker-checker)."), frappe.PermissionError)
-	n.status, n.approved_by, n.approved_on = "Issued", frappe.session.user, now_datetime()
+	n.status, n.approved_by, n.approved_on = ("Queued" if n.channel in ("SMS", "WhatsApp") else "Issued"), frappe.session.user, now_datetime()
 	n.save(ignore_permissions=True)
+	if n.status == "Queued":
+		notify.send_recovery_notice(n)
 	return n
 
 

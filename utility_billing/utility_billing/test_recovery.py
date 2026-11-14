@@ -22,6 +22,8 @@ STAGES = [("Reminder", 15, "Print"), ("Notice", 30, "SMS"), ("Final Notice", 45,
 class IntegrationTestRecovery(BillingCase):
 	def setUp(self):
 		super().setUp()
+		# an SMS notice needs a number to go to, or it fails visibly instead of waiting in the queue
+		frappe.db.set_value("Consumer", frappe.db.get_value("Connection", self.conn, "consumer"), "mobile_no", "0300-1234567")
 		self.set_rules(10_000, 60)
 		self.october_posted()
 

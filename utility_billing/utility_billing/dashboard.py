@@ -170,6 +170,18 @@ def attention_of(society, month, as_of):
 	if orders:
 		add("amber", _("{0} disconnection orders are waiting for approval").format(orders), _("A second user must approve each order"),
 		    ["List", "Recovery Notice"], {"society": society, "status": "Awaiting Approval"})
+	held = frappe.db.count("Suspense Payment", {"society": society, "status": "Held"})
+	if held:
+		add("amber", _("{0} payments are held in suspense").format(held), _("Money received with no matching account"), ["List", "Suspense Payment"],
+		    {"society": society, "status": "Held"})
+	failed = frappe.db.count("Message Log", {"society": society, "status": "Failed", "creation": [">=", add_days(as_of, -7)]})
+	if failed:
+		add("amber", _("{0} messages failed in the last 7 days").format(failed), _("Check the Messaging Provider and the consumers' numbers"),
+		    ["List", "Message Log"], {"society": society, "status": "Failed"})
+	unmatched = frappe.db.count("Settlement File", {"society": society, "status": "Matched"})
+	if unmatched:
+		add("blue", _("{0} settlement files are waiting to be closed").format(unmatched), _("Rows to post or explain"), ["List", "Settlement File"],
+		    {"society": society, "status": "Matched"})
 	items.sort(key=lambda i: SEVERITY[i["tone"]])
 	return items[:6]
 

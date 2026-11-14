@@ -13,7 +13,7 @@ frappe.query_reports["Pending Approvals"] = {
   "fieldname": "transaction",
   "label": "Transaction",
   "fieldtype": "Select",
-  "options": "\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment"
+  "options": "\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund"
  },
  {
   "fieldname": "older_than",

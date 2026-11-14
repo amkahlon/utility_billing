@@ -248,6 +248,17 @@ def post_note(note):
 	return post(note.connection, note.note_type, deltas, "Account Adjustment", note.name, nowdate(), note.remarks)
 
 
+def post_refund(refund):
+	"""A refund of credit: the credit balance goes down, money goes out (FS-PAY-16)."""
+	lock(refund.connection)
+	try:
+		deltas = engine.refund(balances(refund.connection), refund.amount)
+	except ValueError as e:
+		frappe.throw(_("Refund refused: {0}").format(e))
+	return post(refund.connection, "Refund", deltas, "Refund", refund.name, nowdate(),
+	            _("Refund to {0} by {1}").format(refund.payee_name, _(refund.refund_mode)))
+
+
 def check_reason(reason_code, used_for):
 	if not reason_code:
 		frappe.throw(_("Choose a reason."))

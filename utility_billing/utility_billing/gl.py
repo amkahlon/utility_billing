@@ -88,6 +88,10 @@ def lines_for(entry_name):
 		fee_type = frappe.db.get_value("Fee Charge", e.voucher_no, "fee_type")
 		acct = frappe.db.get_value("Fee Type", fee_type, "income_account") or soc.other
 		return [(rec, amount, 0), (need(acct, _("fee {0} (Fee Type → Income Account)").format(fee_type)), 0, amount)]
+	if e.entry_type == "Refund":
+		mode = frappe.db.get_value("Refund", e.voucher_no, "refund_mode")
+		paid_from = need(soc.payments.get(mode), _("{0} payments (Society {1} → Accounting)").format(_(mode), e.society))
+		return [(rec, amount, 0), (paid_from, 0, amount)]  # receivables debited (credit used up), cash or bank credited
 	if e.entry_type in ("Credit Note", "Debit Note"):
 		adj = need(soc.adjustments, _("credit and debit notes (Society {0} → Bill Adjustments and Waivers)").format(e.society))
 		return [(rec, amount, 0), (adj, 0, amount)] if amount >= 0 else [(adj, -amount, 0), (rec, 0, -amount)]

@@ -42,6 +42,8 @@ REASON_CODES = [
 	("CONS-REQ", "Disconnected at the consumer's request", "Disconnection"),
 	("SAFETY", "Disconnected for safety", "Disconnection"),
 	("IRRECOV", "Irrecoverable after recovery steps", "Write-off"),
+	("REFUND-CLOSE", "Credit refunded on closing the account", "Refund"),
+	("REFUND-EXCESS", "Excess payment refunded", "Refund"),
 ]
 
 

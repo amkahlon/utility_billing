@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 14:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "txn_id",
+  "reference_no",
+  "paid_on",
+  "amount",
+  "fee",
+  "result",
+  "receipt",
+  "recorded_amount",
+  "action_taken",
+  "suspense",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "txn_id",
+   "fieldtype": "Data",
+   "label": "Transaction ID",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "reference_no",
+   "fieldtype": "Data",
+   "label": "Reference No",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "paid_on",
+   "fieldtype": "Date",
+   "label": "Paid On",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "fee",
+   "fieldtype": "Currency",
+   "label": "Fee",
+   "columns": 1
+  },
+  {
+   "fieldname": "result",
+   "fieldtype": "Select",
+   "label": "Result",
+   "options": "Matched\nAmount differs\nNot recorded\nRecorded but reversed\nDuplicate in file\nMissing from file",
+   "in_list_view": 1,
+   "columns": 2,
+   "read_only": 1
+  },
+  {
+   "fieldname": "receipt",
+   "fieldtype": "Link",
+   "label": "Payment Receipt",
+   "options": "Payment Receipt",
+   "read_only": 1
+  },
+  {
+   "fieldname": "recorded_amount",
+   "fieldtype": "Currency",
+   "label": "Recorded Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "action_taken",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "\nPosted\nSuspense\nIgnored",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "suspense",
+   "fieldtype": "Link",
+   "label": "Suspense Payment",
+   "options": "Suspense Payment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Data",
+   "label": "Remarks"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Settlement Row",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

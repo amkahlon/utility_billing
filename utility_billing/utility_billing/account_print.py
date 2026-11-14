@@ -13,7 +13,7 @@ RECEIPT_PDF = {"page-size": "A5", "margin-top": "6mm", "margin-bottom": "6mm", "
 STATEMENT_PDF = {"page-size": "A4", "margin-top": "8mm", "margin-bottom": "10mm", "margin-left": "8mm",
                  "margin-right": "8mm", "encoding": "UTF-8"}
 ENTRY_LABELS = {"Bill": "Bill", "Surcharge": "Late payment surcharge", "Payment": "Payment", "Fee": "Fee",
-                "Credit Note": "Credit note", "Debit Note": "Debit note", "Reversal": "Reversal"}
+                "Credit Note": "Credit note", "Debit Note": "Debit note", "Refund": "Refund", "Reversal": "Reversal"}
 
 
 def society_header(society):
