@@ -120,7 +120,13 @@
   "cheque_dishonour_fee",
   "cash_only_after_dishonour",
   "prorata_section",
-  "prorate_part_months"
+  "prorate_part_months",
+  "arrangements_section",
+  "max_installments",
+  "min_down_payment_percent",
+  "cb_arr",
+  "write_off_account",
+  "approval_levels"
  ],
  "fields": [
   {
@@ -774,13 +780,50 @@
    "label": "Bill Fixed Charges for Part Months Only",
    "default": "1",
    "description": "A connection that starts or is disconnected during the month pays its fixed and per-area charges for the days it was connected."
+  },
+  {
+   "fieldname": "arrangements_section",
+   "fieldtype": "Section Break",
+   "label": "Payment arrangements and approvals",
+   "collapsible": 1,
+   "description": "Installment rules, the write-off account and who approves what by amount (FS-CFG-18, FS-ACC-04, FS-WF-04, 05, 14)."
+  },
+  {
+   "fieldname": "max_installments",
+   "fieldtype": "Int",
+   "label": "Most Installments in a Plan",
+   "default": "6"
+  },
+  {
+   "fieldname": "min_down_payment_percent",
+   "fieldtype": "Percent",
+   "label": "Least Down Payment (%)",
+   "default": "10"
+  },
+  {
+   "fieldname": "cb_arr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "write_off_account",
+   "fieldtype": "Link",
+   "label": "Write-off Expense Account",
+   "options": "Ledger Account",
+   "description": "Where written-off receivables are booked (bad debts)."
+  },
+  {
+   "fieldname": "approval_levels",
+   "fieldtype": "Table",
+   "label": "Approval Levels by Amount",
+   "options": "Approval Level",
+   "description": "For each transaction, who approves up to which amount. With none set: a General Manager approves adjustments, refunds, bulk adjustments and write-offs; a Billing Manager approves installment plans."
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 18:00:00.000000",
+ "modified": "2026-11-14 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

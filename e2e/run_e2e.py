@@ -161,7 +161,8 @@ def expect_error(fn, contains=""):
 		if contains and contains.lower() not in e.message.lower():
 			raise AssertionError(f"error raised, but message was: {e.message}") from None
 		return e.message
-	raise AssertionError("expected the server to refuse this, but it was accepted")
+	import sys
+	raise AssertionError(f"expected the server to refuse this, but it was accepted (line {sys._getframe(1).f_lineno})")
 
 
 def eq(actual, expected, what=""):
@@ -1530,6 +1531,69 @@ def t_taxes_and_previews(d: Desk):
 	owner = d.get("Consumer", S["owner"])
 	owner.update({"tax_status": "Non-filer"})
 	eq(d.save_doc(owner)["tax_status"], "Non-filer", "consumer tax status saved")
+
+
+@case("QA-71", "FS-WF-04/05/14, FS-ACC-04, FS-BIL-14: approval levels by amount, installment plan with down payment, write-off with board resolution")
+def t_arrangements(d: Desk):
+	from datetime import date, timedelta
+
+	bo, bm, gm, ao, cashier = USERS["bo"], USERS["bm"], USERS["gm"], USERS["ao"], USERS["cashier"]
+	conn = S["conn"]["name"]
+	today = date.today()
+	soc = d.get("Society", S["society"])
+	soc["approval_levels"] = [{"transaction": "Write Off", "up_to_amount": "1000", "approver_role": "Billing Manager"},
+	                          {"transaction": "Write Off", "up_to_amount": "0", "approver_role": "General Manager"}]
+	d.save_doc(soc)
+
+	# arrears to work on: a bulk debit on the Arrears balance, approved by a General Manager
+	ba = bm.save_doc({"doctype": "Bulk Adjustment", "society": S["society"], "audience": "Whole society", "note_type": "Debit Note", "bucket": "Arrears",
+	                  "amount": "30000", "reason_code": "BULK-CORRECTION", "remarks": "Arrears for the plan and write-off cases"})
+	bm.workflow(ba, "Submit for Approval")
+	gm.workflow(ba, "Approve")
+	owed = lambda: (lambda b: float(b["arrears"]) + float(b["surcharge"]) + float(b["fees"]))(  # noqa: E731
+		d.call("utility_billing.utility_billing.account.account_summary", connection=conn)["balances"])
+	if owed() < 20000:
+		raise AssertionError(f"expected arrears after the bulk debit, got {owed()}")
+
+	# installment plan: terms checked, down payment before approval, approved by a Billing Manager
+	first = (today.replace(day=1) + timedelta(days=32)).replace(day=1).isoformat()
+	plan = {"doctype": "Installment Plan", "connection": conn, "amount_to_split": "5000", "down_payment": "4900", "installments": "2", "first_month": first,
+	        "remarks": "Agreed with the consumer"}
+	expect_error(lambda: bo.save_doc(dict(plan, down_payment="100", installments="5")), "at least 10%")
+	expect_error(lambda: bo.save_doc(dict(plan, installments="9", down_payment="500")), "2 to 6")
+	saved = bo.save_doc(dict(plan))
+	eq((float(saved["installment_amount"]), [float(r["amount"]) for r in saved["schedule"]]), (50.0, [50.0] * 2), "schedule")
+	bo.workflow(saved, "Submit for Approval")
+	# (the refusal without a down payment is covered by the integration tests: payments from earlier cases today would count here)
+	ao.save_doc({"doctype": "Payment Receipt", "payment_channel": "Bank / Channel", "reference_no": conn, "amount": "4900", "mode": "Bank Transfer",
+	             "payment_date": today.isoformat(), "channel_txn_id": f"DP-{RUN}"}, action="Submit")
+	expect_error(lambda: bo.workflow(saved, "Approve"))  # the maker can't approve their own plan
+	bm.workflow(saved, "Approve")
+	active = d.get("Installment Plan", saved["name"])
+	eq((active["docstatus"], active["plan_status"]), (1, "Active"), "plan active")
+
+	# write-off: the amount decides who approves (up to 1,000 a Billing Manager, above that a General Manager)
+	wo = {"doctype": "Write Off", "connection": conn, "amount": "500", "reason_code": "IRRECOV", "resolution_no": f"BR-{RUN}",
+	      "resolution_date": today.isoformat(), "remarks": "Three notices and two visits; the consumer has left"}
+	expect_error(lambda: cashier.save_doc(dict(wo)))
+	small = ao.save_doc(dict(wo))
+	ao.workflow(small, "Submit for Approval")
+	bm.workflow(small, "Approve")
+	eq(d.get("Write Off", small["name"])["docstatus"], 1, "a small write-off approved by a Billing Manager")
+	before = owed()
+	big = ao.save_doc(dict(wo, amount="5000"))
+	ao.workflow(big, "Submit for Approval")
+	expect_error(lambda: bm.workflow(big, "Approve"), "General Manager")
+	gm.workflow(big, "Approve")
+	entry = d.get("Customer Ledger Entry", d.get("Write Off", big["name"])["ledger_entry"])
+	eq((entry["entry_type"], float(entry["amount"])), ("Write-off", -5000.0), "write-off entry")
+	eq(owed(), before - 5000, "arrears after the write-off")
+	expect_error(lambda: ao.save_doc(dict(wo, amount="99999999")), "most that can be written off")
+	expect_error(lambda: ao.save_doc(dict(wo, resolution_no="")))
+
+	reg = rows_of(run_report(gm, "Corrections Register", from_date="2026-01-01", to_date="2030-12-31"))
+	if not {"Installment plan", "Write-off"} <= {r["kind"] for r in reg}:
+		raise AssertionError("corrections register lacks plans and write-offs")
 
 
 def _notice_pdf(desk, run):

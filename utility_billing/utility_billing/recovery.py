@@ -79,6 +79,7 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 	as_of = getdate(as_of or nowdate())
 	rules = rules_of(society)
 	cases, hist = open_cases(society), notice_history(society)
+	plan_accounts = set(frappe.get_all("Installment Plan", filters={"society": society, "docstatus": 1, "plan_status": "Active"}, pluck="connection"))
 	disputed = frappe.db.sql("""select connection, sum(disputed_amount) a from `tabBill Dispute` where society = %s and status = 'Open' group by connection""",
 	                         society, as_dict=True)
 	disputed = {d.connection: flt(d.a) for d in disputed}  # money in dispute is left out of recovery (FS-WF-10)
@@ -95,6 +96,8 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 		done = [s for s, d in hist.get(r.connection, []) if d >= since]
 		case = cases.get(r.connection)
 		hold = engine.on_hold(case.status, case.promise_date, as_of) if case else None
+		if not hold and r.connection in plan_accounts:
+			hold = "Installment plan active"
 		nxt = None if hold else engine.next_stage(rules.stages, oldest, done)
 		rows.append({
 			"connection": r.connection, "consumer_name": r.consumer_name, "property_no": r.property_no, "block": r.block,

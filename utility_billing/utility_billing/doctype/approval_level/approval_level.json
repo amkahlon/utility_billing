@@ -1,0 +1,51 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 20:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "transaction",
+  "up_to_amount",
+  "approver_role"
+ ],
+ "fields": [
+  {
+   "fieldname": "transaction",
+   "fieldtype": "Select",
+   "label": "Transaction",
+   "options": "Account Adjustment\nRefund\nBulk Adjustment\nWrite Off\nInstallment Plan",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "up_to_amount",
+   "fieldtype": "Currency",
+   "label": "Up To (Rs)",
+   "in_list_view": 1,
+   "columns": 3,
+   "description": "Leave 0 for no limit (the top level)."
+  },
+  {
+   "fieldname": "approver_role",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "Role",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Approval Level",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

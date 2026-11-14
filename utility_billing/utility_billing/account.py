@@ -262,6 +262,17 @@ def post_refund(refund):
 	            _("Refund to {0} by {1}").format(refund.payee_name, _(refund.refund_mode)))
 
 
+def post_write_off(wo):
+	"""Write off arrears, surcharge and fees the society can't recover (FS-REC-09, FS-WF-14)."""
+	lock(wo.connection)
+	try:
+		deltas = engine.write_off(balances(wo.connection), wo.amount)
+	except ValueError as e:
+		frappe.throw(_("Write-off refused: {0}").format(e))
+	return post(wo.connection, "Write-off", deltas, "Write Off", wo.name, nowdate(),
+	            _("Written off by board resolution {0}").format(wo.resolution_no))
+
+
 def check_reason(reason_code, used_for):
 	if not reason_code:
 		frappe.throw(_("Choose a reason."))
@@ -314,7 +325,7 @@ def enquiry(reference_no: str):
 	conn = frappe.db.get_value("Connection", connection, ["consumer_name", "society", "status"], as_dict=True)
 	bill = frappe.db.get_value(
 		"Utility Bill", {"connection": connection, "docstatus": 1},
-		["name", "billing_month", "due_date", "extended_due_date", "payable_within_due", "payable_after_due", "surcharge_status"],
+		["name", "billing_month", "due_date", "extended_due_date", "payable_within_due", "payable_after_due", "surcharge_status", "issue_date", "installment_due"],
 		order_by="billing_month desc, creation desc", as_dict=True,
 	)
 	bal = balances(connection)
@@ -328,8 +339,18 @@ def enquiry(reference_no: str):
 		"payable_after_due": flt(bill.payable_after_due) if bill else 0,
 		"balance": owed, "balances": {b: flt(v) for b, v in bal.items()},
 		# What to collect today: the whole balance (which already includes any posted surcharge).
-		"amount_due": max(owed, 0),
+		"amount_due": _amount_due(connection, bill, owed),
 	}
+
+
+def _amount_due(connection, bill, owed) -> float:
+	"""What to collect today: the whole balance, or under an installment plan the latest bill's payable amount less what has been
+	paid since it was issued (the rest of the arrears isn't due yet)."""
+	if bill and flt(bill.installment_due):
+		paid = flt(frappe.db.sql("""select -sum(amount) from `tabCustomer Ledger Entry` where connection = %s and entry_type = 'Payment'
+		                            and ifnull(reversed_by, '') = '' and posting_date >= %s""", (connection, bill.issue_date))[0][0])
+		return max(min(flt(owed), flt(bill.payable_within_due) - paid), 0)
+	return max(owed, 0)
 
 
 def statement(connection, from_date=None, to_date=None):

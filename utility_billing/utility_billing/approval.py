@@ -47,6 +47,46 @@ def assert_not_maker(doc, user: str):
 		)
 
 
+# ----- approval levels by amount (FS-ACC-04, FS-WF-04) -----
+# For these documents the Society's "Approval Levels by Amount" table says who approves up to which amount. With no rows for a
+# document type the default approver applies, so nothing changes until a society sets levels.
+AMOUNT_FIELD = {"Account Adjustment": "amount", "Refund": "amount", "Bulk Adjustment": "total_amount", "Write Off": "amount", "Installment Plan": "amount_to_split"}
+DEFAULT_APPROVER = {"Account Adjustment": "General Manager", "Refund": "General Manager", "Bulk Adjustment": "General Manager",
+                    "Write Off": "General Manager", "Installment Plan": "Billing Manager"}
+
+
+def required_roles(doc) -> list[str] | None:
+	"""Roles that may approve this document, the lowest level that covers its amount first, then every higher level. None for
+	documents that aren't amount-led."""
+	field = AMOUNT_FIELD.get(doc.doctype)
+	if not field:
+		return None
+	amount = flt(doc.get(field))
+	levels = []
+	if doc.get("society"):
+		levels = [r for r in frappe.get_cached_doc("Society", doc.society).get("approval_levels") or [] if r.transaction == doc.doctype]
+	if not levels:
+		return [DEFAULT_APPROVER[doc.doctype]]
+	levels.sort(key=lambda r: (flt(r.up_to_amount) == 0, flt(r.up_to_amount)))  # a level with no limit is the top
+	for i, r in enumerate(levels):
+		if flt(r.up_to_amount) == 0 or amount <= flt(r.up_to_amount):
+			return [x.approver_role for x in levels[i:]]
+	return [levels[-1].approver_role]
+
+
+def assert_level(doc, user: str):
+	"""The approver must hold the role the amount needs, or a higher level's (Administrator always may)."""
+	roles = required_roles(doc)
+	if roles is None or user == "Administrator":
+		return
+	if not set(frappe.get_roles(user)) & set(roles):
+		frappe.throw(
+			_("A {0} of Rs {1} needs approval by {2}{3}.").format(
+				_(doc.doctype).lower(), f"{flt(doc.get(AMOUNT_FIELD[doc.doctype])):,.0f}", roles[0],
+				_(" or a higher level") if len(roles) > 1 else ""),
+			frappe.PermissionError, title=_("Not allowed"))
+
+
 def reset_for_new_document(doc):
 	"""A new or amended document starts its own approval round: the original keeps its history
 	(found 2026-11-13: an amended tariff inherited the original's "Cancel" row)."""
@@ -90,6 +130,7 @@ def validate_transition(doc):
 		doc.rejection_reason = None
 	elif old == PENDING and new in (APPROVED, REJECTED):
 		assert_not_maker(doc, user)
+		assert_level(doc, user)
 		if new == APPROVED:
 			doc.approved_by = user
 			doc.approved_on = now_datetime()
@@ -348,7 +389,8 @@ def notify(doc, approver_role: str):
 	label = _(doc.doctype)
 	if new == PENDING:
 		enabled = set(frappe.get_all("User", filters={"enabled": 1}, pluck="name"))
-		users = [u for u in users_with_role(approver_role) if u in enabled and u != actor]
+		role = (required_roles(doc) or [approver_role])[0]  # the level the amount needs
+		users = [u for u in users_with_role(role) if u in enabled and u != actor]
 		subject = _("{0} {1} is waiting for your approval").format(label, frappe.bold(title))
 		if doc.get("changes_since_last_submission"):  # set only when there was a previous submission
 			changes = doc.changes_since_last_submission.splitlines()

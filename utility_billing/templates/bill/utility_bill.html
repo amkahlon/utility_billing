@@ -132,7 +132,12 @@
 			</tr>
 			{%- endfor %}
 			<tr class="tot"><td colspan="3" class="strong">{{ _("Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>
+			{%- if bill.installment_due %}
+			<tr><td colspan="3">{{ _("Arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
+			<tr><td colspan="3">{{ _("Installment due with this bill") }} ({{ _("No") }} {{ bill.installment_no }})</td><td class="right">{{ money(bill.installment_due) }}</td></tr>
+			{%- else %}
 			<tr><td colspan="3">{{ _("Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
+			{%- endif %}
 		</table>
 		<table class="pay" style="margin-top: 1.5mm;">
 			<tr class="within"><td>{{ _("Payable within due date") }} <span style="font-weight: 400; font-size: 8pt;">({{ due_date }})</span></td><td class="right">Rs {{ money(bill.payable_within_due) }}</td></tr>

@@ -15,7 +15,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, formatdate, get_first_day, get_last_day, getdate, now_datetime, nowdate
 
-from utility_billing.utility_billing import account, bill_print, billing, notify, reading_engine
+from utility_billing.utility_billing import account, bill_print, billing, notify, plans, reading_engine
 from utility_billing.utility_billing import account_engine as engine
 
 HANDLERS = ["Billing Manager", "General Manager", "Billing Officer", "Society Admin"]
@@ -113,7 +113,9 @@ def revise_bill(rev):
 	old.cancel()
 	run = frappe.get_doc("Bill Run", old.bill_run)
 	data = billing.build_bill(run, old.connection, override={"units": units, "category": category, "arrears": flt(old.arrears),
-	                                                         "revises": old.name, "revision_no": cint(old.revision_no or 1) + 1})
+	                                                         "revises": old.name, "revision_no": cint(old.revision_no or 1) + 1,
+	                                                         "installment": flt(old.installment_due) or None, "installment_plan": old.installment_plan,
+	                                                         "installment_no": old.installment_no})
 	new = frappe.get_doc(data)
 	new.flags.from_bill_run = new.flags.ignore_permissions = new.flags.ignore_links = True  # it points to the version it replaces
 	new.insert()
@@ -121,6 +123,7 @@ def revise_bill(rev):
 	new.print_snapshot = json.dumps(bill_print.build_snapshot(new))
 	new.submit()
 	account.post_bill(new)
+	plans.mark_billed(new)
 	frappe.db.set_value("Utility Bill", old.name, "superseded_by", new.name, update_modified=False)
 	rev.db_set("revised_bill", new.name)
 	notify.bill_revised(new)

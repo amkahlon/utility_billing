@@ -33,7 +33,8 @@ EDITORS = {
 	"Customer Ledger Entry": {"System Manager"},
 	"Payment Receipt": {"System Manager", "Cashier", "Accounts Officer"},
 	"Fee Charge": {"System Manager", "Cashier", "Billing Officer", "Billing Manager"},
-	"Account Adjustment": {"System Manager", "Billing Officer", "Billing Manager", "General Manager"},
+	# Management holds write only so that it can Approve or Reject through the workflow when the level table names it.
+	"Account Adjustment": {"System Manager", "Billing Officer", "Billing Manager", "General Manager", "Management"},
 	# Increment 8: accounting
 	"Ledger Account": {"System Manager", "Accounts Officer", "Society Admin"},
 	"Journal Export Layout": {"System Manager", "Accounts Officer", "Society Admin"},
@@ -52,7 +53,8 @@ SUBMITTERS = {
 	"Utility Bill": set(),  # posted and cancelled only by its bill run, never by a user
 	"Payment Receipt": {"System Manager", "Cashier", "Accounts Officer"},  # reversals: account.reverse_document
 	"Fee Charge": {"System Manager", "Cashier", "Billing Officer", "Billing Manager"},
-	"Account Adjustment": {"System Manager", "General Manager"},
+	# Approval levels by amount (increment 15): who may approve is decided per document by the Society's level table.
+	"Account Adjustment": {"System Manager", "General Manager", "Billing Manager", "Management"},
 }
 
 
