@@ -876,6 +876,106 @@ def get_pdf_at(desk, method, **params):
 	return reader, " ".join(" ".join(p.extract_text() for p in reader.pages).split())
 
 
+# ---------------------------------------------------------------- increment 8: accounting journals, export, reconciliation
+GLM = "utility_billing.utility_billing.gl"
+
+
+def acct(code):
+	return f"Q{RUN}-{code}"
+
+
+@case("QA-53", "FS-GL-01, CFG-03, CFG-39: chart of accounts, charge type and society mappings, operating model")
+def t_accounts(d: Desk):
+	for code, name, kind in (("1200", "Customer receivables", "Receivable"), ("1010", "Cash in hand", "Cash"),
+	                         ("1020", "MBL current account", "Bank"), ("4100", "Electricity revenue", "Income"),
+	                         ("4110", "FPA recovered", "Income"), ("4120", "Service charges", "Income"),
+	                         ("4900", "Surcharge income", "Income"), ("4990", "Other billing income", "Income"),
+	                         ("5100", "Bill adjustments and waivers", "Expense")):
+		USERS["ao"].save_doc({"doctype": "Ledger Account", "account_code": acct(code), "account_name": name, "account_type": kind})
+	expect_error(lambda: USERS["cashier"].save_doc({"doctype": "Ledger Account", "account_code": acct("9999"),
+	                                                "account_name": "x", "account_type": "Other"}))
+	for ct, code in ((f"Energy {RUN}", "4100"), (f"FPA {RUN}", "4110"), (S["Service"], "4120")):
+		d.save_doc(dict(d.get("Charge Type", ct), account_code=acct(code)))
+	expect_error(lambda: d.save_doc(dict(d.get("Charge Type", S["Service"]), account_code="NO-SUCH-ACCOUNT")))
+	soc = d.get("Society", S["society"])
+	soc = d.save_doc(dict(soc, receivables_account=acct("1200"), surcharge_income_account=acct("4900"),
+	                      other_income_account=acct("4990"), adjustments_account=acct("5100"),
+	                      operating_model="Cost allocation", licence_no=f"NEPRA-EX-{RUN}",
+	                      payment_accounts=[{"mode": "Cash", "account": acct("1010")},
+	                                        {"mode": "Cheque", "account": acct("1020")},
+	                                        {"mode": "1Link", "account": acct("1020")}]))
+	eq((soc["operating_model"], len(soc["payment_accounts"])), ("Cost allocation", 3), "society accounting settings")
+
+
+@case("QA-54", "FS-GL-02: Accounts Officer makes journals: the November bill run and today's transactions")
+def t_make_journals(d: Desk):
+	expect_error(lambda: USERS["cashier"].call(f"{GLM}.make_journals", society=S["society"]))
+	made = USERS["ao"].call(f"{GLM}.make_journals", society=S["society"])
+	if len(made) != 2:
+		raise AssertionError(f"expected the bill run journal and one daily journal, got {made}")
+	run = USERS["ao"].get("Bill Run", S["run"]["name"])
+	j = USERS["ao"].get("GL Journal", run["gl_journal"])
+	lines = {l["account"]: float(l["debit"]) - float(l["credit"]) for l in j["lines"]}
+	eq(lines, {acct("1200"): 22700.0, acct("4100"): -21000.0, acct("4120"): -1700.0}, "bill run journal")
+	daily = USERS["ao"].get("GL Journal", [m for m in made if m != run["gl_journal"]][0])
+	lines = {l["account"]: float(l["debit"]) - float(l["credit"]) for l in daily["lines"]}
+	# cash 20,000 + 1Link 700 received (the cheque and its reversal cancel out); fee 100 and its credit note
+	eq(lines, {acct("1010"): 20000.0, acct("1020"): 700.0, acct("1200"): -20700.0, acct("4990"): -100.0, acct("5100"): 100.0},
+	   "daily journal")
+	eq((daily["journal_type"], float(daily["total_debit"]), float(daily["total_credit"])),
+	   ("Daily Transactions", 20800.0, 20800.0), "balanced")
+	S["journals"] = made
+	eq(USERS["ao"].call(f"{GLM}.make_journals", society=S["society"]), [], "nothing left to journal")
+
+
+@case("QA-55", "FS-GL-04, REC-13: receivables in the journals match the customer accounts")
+def t_reconcile(d: Desk):
+	r = USERS["ao"].call(f"{GLM}.reconcile_now", society=S["society"])
+	eq((r["status"], r["customer_accounts_total"], r["receivables_posted"], r["unexplained"]),
+	   ("Matched", 2000.0, 2000.0, 0.0), "reconciliation")
+	eq(USERS["ao"].get("Receivables Reconciliation", r["name"])["status"], "Matched", "recorded")
+
+
+def export(desk, layout, **kw):
+	from datetime import date
+
+	r = desk.s.post(f"{URL}/api/method/{GLM}.export_journals", data={
+		"society": S["society"], "from_date": "2026-01-01", "to_date": f"{date.today().year + 1}-12-31", "layout": layout, **kw})
+	if r.status_code != 200 or r.headers.get("content-type", "").startswith("application/json"):
+		data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+		raise ServerError(r.status_code, _message(data) or r.text[:300])
+	return r
+
+
+@case("QA-56", "FS-GL-03: journals exported as CSV and Excel in the standard, QuickBooks and Sage 50 layouts")
+def t_export(d: Desk):
+	import csv as _csv
+
+	rows = list(_csv.reader(io.StringIO(export(USERS["ao"], "Standard CSV").text)))
+	eq(rows[0], ["Journal No", "Date", "Account Code", "Account Name", "Debit", "Credit", "Narration"], "standard header")
+	eq(len(rows) - 1, 3 + 5, "one row per journal line")
+	sage = list(_csv.reader(io.StringIO(export(USERS["ao"], "Sage 50 / Peachtree general journal (CSV)").text)))
+	eq(round(sum(float(r[5]) for r in sage[1:]), 2), 0.0, "Sage signed amounts balance")
+	qb = list(_csv.reader(io.StringIO(export(USERS["ao"], "QuickBooks journal (CSV)").text)))
+	if "Electricity revenue" not in [r[2] for r in qb[1:]]:
+		raise AssertionError("QuickBooks export lacks account names")
+	xl = export(USERS["ao"], "Standard Excel")
+	if not xl.content.startswith(b"PK"):
+		raise AssertionError("Excel export isn't an xlsx file")
+	expect_error(lambda: export(USERS["cashier"], "Standard CSV"))
+	j = USERS["ao"].get("GL Journal", S["journals"][0])
+	eq((j["export_count"], j["last_exported_by"]), (4, EMAIL["ao"]), "exports recorded")
+
+
+@case("QA-57", "FS-REC-20: journals and ledger entries can't be changed")
+def t_journal_locked(d: Desk):
+	j = d.get("GL Journal", S["journals"][0])
+	expect_error(lambda: d.save_doc(dict(j, narration="edited")))
+	r = d.s.post(f"{URL}/api/method/frappe.client.delete", data={"doctype": "GL Journal", "name": j["name"]})
+	if r.status_code == 200:
+		raise AssertionError("a journal was deleted")
+
+
 # ---------------------------------------------------------------- runner
 def main():
 	d = Desk()

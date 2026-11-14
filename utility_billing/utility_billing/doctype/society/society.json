@@ -83,7 +83,20 @@
   "allow_part_payment",
   "allow_overpayment",
   "cb_payments",
-  "duplicate_bill_fee"
+  "duplicate_bill_fee",
+  "accounting_section",
+  "receivables_account",
+  "surcharge_income_account",
+  "other_income_account",
+  "cb_accounting",
+  "adjustments_account",
+  "payment_accounts",
+  "operating_section",
+  "operating_model",
+  "cb_operating",
+  "licence_no",
+  "licence_valid_to",
+  "licence_document"
  ],
  "fields": [
   {
@@ -517,13 +530,88 @@
    "fieldtype": "Select",
    "label": "Surcharge Applies When",
    "options": "Not paid in full by the due date\nNothing paid by the due date"
+  },
+  {
+   "collapsible": 1,
+   "description": "Account codes for summary journals (FS-GL-01). Charge types and fees carry their own income accounts.",
+   "fieldname": "accounting_section",
+   "fieldtype": "Section Break",
+   "label": "Accounting"
+  },
+  {
+   "fieldname": "receivables_account",
+   "fieldtype": "Link",
+   "label": "Receivables (Customer Accounts)",
+   "options": "Ledger Account"
+  },
+  {
+   "fieldname": "surcharge_income_account",
+   "fieldtype": "Link",
+   "label": "Late Payment Surcharge Income",
+   "options": "Ledger Account"
+  },
+  {
+   "description": "Bill lines without a charge type, such as the minimum bill adjustment",
+   "fieldname": "other_income_account",
+   "fieldtype": "Link",
+   "label": "Other Billing Income",
+   "options": "Ledger Account"
+  },
+  {
+   "fieldname": "cb_accounting",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Credit and debit notes",
+   "fieldname": "adjustments_account",
+   "fieldtype": "Link",
+   "label": "Bill Adjustments and Waivers",
+   "options": "Ledger Account"
+  },
+  {
+   "fieldname": "payment_accounts",
+   "fieldtype": "Table",
+   "label": "Cash and Bank Accounts by Payment Mode",
+   "options": "Payment Account"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "operating_section",
+   "fieldtype": "Section Break",
+   "label": "Operating Model and Licence"
+  },
+  {
+   "description": "The model the society is permitted to operate under (FS-CFG-39)",
+   "fieldname": "operating_model",
+   "fieldtype": "Select",
+   "label": "Operating Model",
+   "options": "\nCost allocation\nInternal distribution\nResale\nManagement fee"
+  },
+  {
+   "fieldname": "cb_operating",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "licence_no",
+   "fieldtype": "Data",
+   "label": "Licence or Exemption No"
+  },
+  {
+   "fieldname": "licence_valid_to",
+   "fieldtype": "Date",
+   "label": "Valid To"
+  },
+  {
+   "fieldname": "licence_document",
+   "fieldtype": "Attach",
+   "label": "Licence or Exemption Document"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 07:05:58.524521",
+ "modified": "2026-11-14 07:43:07.323560",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

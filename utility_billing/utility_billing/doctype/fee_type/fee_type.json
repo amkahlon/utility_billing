@@ -13,6 +13,7 @@
   "society",
   "cb1",
   "amount",
+  "income_account",
   "enabled",
   "description"
  ],
@@ -56,12 +57,18 @@
    "fieldname": "description",
    "fieldtype": "Small Text",
    "label": "Description"
+  },
+  {
+   "fieldname": "income_account",
+   "fieldtype": "Link",
+   "label": "Income Account",
+   "options": "Ledger Account"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 06:55:20.017593",
+ "modified": "2026-11-14 07:43:07.666269",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Fee Type",

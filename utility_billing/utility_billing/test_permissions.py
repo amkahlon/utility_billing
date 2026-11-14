@@ -34,6 +34,12 @@ EDITORS = {
 	"Payment Receipt": {"System Manager", "Cashier", "Accounts Officer"},
 	"Fee Charge": {"System Manager", "Cashier", "Billing Officer", "Billing Manager"},
 	"Account Adjustment": {"System Manager", "Billing Officer", "Billing Manager", "General Manager"},
+	# Increment 8: accounting
+	"Ledger Account": {"System Manager", "Accounts Officer", "Society Admin"},
+	"Journal Export Layout": {"System Manager", "Accounts Officer", "Society Admin"},
+	# Journals and reconciliation records are made only by gl.py (and can't be changed by anyone).
+	"GL Journal": {"System Manager"},
+	"Receivables Reconciliation": {"System Manager"},
 }
 SUBMITTERS = {
 	"Tariff": {"System Manager", "General Manager"},

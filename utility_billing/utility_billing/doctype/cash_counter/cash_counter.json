@@ -14,7 +14,8 @@
   "cb1",
   "society",
   "office",
-  "enabled"
+  "enabled",
+  "cash_account"
  ],
  "fields": [
   {
@@ -57,12 +58,19 @@
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enabled"
+  },
+  {
+   "description": "Overrides the society's Cash account for this counter",
+   "fieldname": "cash_account",
+   "fieldtype": "Link",
+   "label": "Cash Account",
+   "options": "Ledger Account"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 06:55:20.148076",
+ "modified": "2026-11-14 07:43:07.839539",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Cash Counter",

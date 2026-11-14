@@ -26,6 +26,7 @@
   "cb2",
   "reverses",
   "reversed_by",
+  "gl_journal",
   "remarks",
   "split_section",
   "d_current",
@@ -255,13 +256,20 @@
    "fieldtype": "Currency",
    "label": "Credit (advance)",
    "read_only": 1
+  },
+  {
+   "fieldname": "gl_journal",
+   "fieldtype": "Link",
+   "label": "GL Journal",
+   "options": "GL Journal",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 06:55:20.439722",
+ "modified": "2026-11-14 07:43:08.019253",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Customer Ledger Entry",
