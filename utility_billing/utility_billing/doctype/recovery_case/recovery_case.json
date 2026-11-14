@@ -1,0 +1,323 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "case_title",
+  "society",
+  "connection",
+  "consumer_name",
+  "cb1",
+  "status",
+  "assigned_to",
+  "block",
+  "consumer_category",
+  "snapshot_section",
+  "owed",
+  "oldest_days",
+  "cb2",
+  "last_stage",
+  "last_stage_date",
+  "promise_section",
+  "promise_date",
+  "promise_amount",
+  "legal_section",
+  "legal_case_no",
+  "court",
+  "cb3",
+  "filed_on",
+  "followups_section",
+  "followups",
+  "closing_section",
+  "closed_on",
+  "close_reason"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "RC-.YYYY.-.#####",
+   "default": "RC-.YYYY.-.#####",
+   "hidden": 1
+  },
+  {
+   "fieldname": "case_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Connection",
+   "reqd": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "label": "Consumer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nPromise to Pay\nLegal Case\nClosed",
+   "default": "Open",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "label": "Assigned To",
+   "options": "User",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "A user with the Recovery Officer role."
+  },
+  {
+   "fieldname": "block",
+   "fieldtype": "Data",
+   "label": "Block",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consumer_category",
+   "fieldtype": "Data",
+   "label": "Category",
+   "read_only": 1
+  },
+  {
+   "fieldname": "snapshot_section",
+   "fieldtype": "Section Break",
+   "label": "Position when last checked"
+  },
+  {
+   "fieldname": "owed",
+   "fieldtype": "Currency",
+   "label": "Owed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "oldest_days",
+   "fieldtype": "Int",
+   "label": "Oldest Overdue (days)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_stage",
+   "fieldtype": "Data",
+   "label": "Latest Stage Issued",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_stage_date",
+   "fieldtype": "Date",
+   "label": "Stage Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "promise_section",
+   "fieldtype": "Section Break",
+   "label": "Promise to pay"
+  },
+  {
+   "fieldname": "promise_date",
+   "fieldtype": "Date",
+   "label": "Promised Date",
+   "depends_on": "eval:doc.status=='Promise to Pay'"
+  },
+  {
+   "fieldname": "promise_amount",
+   "fieldtype": "Currency",
+   "label": "Promised Amount",
+   "depends_on": "eval:doc.status=='Promise to Pay'"
+  },
+  {
+   "fieldname": "legal_section",
+   "fieldtype": "Section Break",
+   "label": "Legal case"
+  },
+  {
+   "fieldname": "legal_case_no",
+   "fieldtype": "Data",
+   "label": "Case No",
+   "depends_on": "eval:doc.status=='Legal Case'"
+  },
+  {
+   "fieldname": "court",
+   "fieldtype": "Data",
+   "label": "Court or Forum",
+   "depends_on": "eval:doc.status=='Legal Case'"
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "filed_on",
+   "fieldtype": "Date",
+   "label": "Filed On",
+   "depends_on": "eval:doc.status=='Legal Case'"
+  },
+  {
+   "fieldname": "followups_section",
+   "fieldtype": "Section Break",
+   "label": "Follow-ups"
+  },
+  {
+   "fieldname": "followups",
+   "fieldtype": "Table",
+   "label": "Follow-ups",
+   "options": "Recovery Follow-up"
+  },
+  {
+   "fieldname": "closing_section",
+   "fieldtype": "Section Break",
+   "label": "Closing"
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Date",
+   "label": "Closed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "close_reason",
+   "fieldtype": "Small Text",
+   "label": "Reason for Closing",
+   "depends_on": "eval:doc.status=='Closed'"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Recovery Case",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "naming_series:",
+ "title_field": "case_title",
+ "show_title_field_in_link": 1,
+ "search_fields": "connection,consumer_name",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

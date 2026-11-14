@@ -795,7 +795,7 @@ def arrears_ageing(f):
 @report("defaulters", "Defaulters", RECOVERY,
         AGE_FILTERS[:2] + [dict(fieldname="min_amount", label="Owing At Least", fieldtype="Currency", default="1"),
                            dict(fieldname="min_days", label="Overdue At Least (days)", fieldtype="Int", default="1")] + AGE_FILTERS[2:],
-        "Accounts owing at least an amount and overdue at least some days, largest first. Disconnection lists and recovery targets come with recovery.",
+        "Accounts owing at least an amount and overdue at least some days, largest first, with the latest recovery stage, case and officer.",
         ref_doctype="Customer Ledger Entry")
 def defaulters(f):
 	s, as_of = society_of(f), getdate(f.get("as_of") or nowdate())
@@ -812,6 +812,13 @@ def defaulters(f):
 		data.append({"connection": r.connection, "consumer_name": r.consumer_name, "property_no": r.property_no, "block": r.block,
 		             "category": r.category, "mobile_no": r.mobile_no, "owed": flt(r.balance),
 		             "overdue": round(sum(a for _age, a in overdue), 2), "oldest": oldest, "last_paid": last_paid.get(r.connection)})
+	from utility_billing.utility_billing import recovery
+
+	state = {r["connection"]: r for r in recovery.accounts(s, as_of, f.get("block"), f.get("consumer_category"), include_all=True)}
+	for r in data:
+		st = state.get(r["connection"], {})
+		r.update(last_stage=st.get("last_stage"), next_stage=st.get("next_stage"), case_status=st.get("case_status"),
+		         assigned_to=st.get("assigned_to"), hold=st.get("hold"))
 	data.sort(key=lambda r: (-r["owed"], -r["oldest"]))
 	if data:
 		data.append(total_row("connection", _("Total"), data, ("owed", "overdue")))
@@ -819,7 +826,99 @@ def defaulters(f):
 	                    col("Property", "property_no", width=80), col("Block", "block", width=80), col("Category", "category", width=120),
 	                    col("Mobile", "mobile_no", width=110), col("Total Owed", "owed", "Currency", 110),
 	                    col("Of Which Overdue", "overdue", "Currency", 120), col("Oldest Overdue (days)", "oldest", "Int", 130),
-	                    col("Last Payment", "last_paid", "Date", 100)], "data": data}
+	                    col("Last Payment", "last_paid", "Date", 100), col("Latest Stage", "last_stage", width=130),
+	                    col("Next Stage Due", "next_stage", width=130), col("Case", "case_status", width=110),
+	                    col("Assigned To", "assigned_to", "Link", 150, "User"), col("On Hold", "hold", width=170)], "data": data,
+	        "message": _("Latest stage, case and hold come from Defaulters and Recovery. Stage rules and the defaulter amount and days are set on the Society.")}
+
+
+# ================================================================ 17b. recovery (RPT-24: disconnection lists, recovery against target)
+@report("disconnection_list", "Disconnection List", RECOVERY,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="status", label="Order Status", fieldtype="Select", options="\nAwaiting Approval\nIssued")],
+        "Accounts with a disconnection order that has not been cancelled: the list the field team works from.",
+        ref_doctype="Recovery Notice")
+def disconnection_list(f):
+	s = society_of(f)
+	rows = sql("""select n.name, n.connection, n.consumer_name, n.block, n.consumer_category category, n.issue_date, n.status, n.owed,
+	                    n.oldest_days, n.approved_by, c.status connection_status, co.mobile_no
+	              from `tabRecovery Notice` n join `tabConnection` c on c.name = n.connection left join `tabConsumer` co on co.name = c.consumer
+	              where n.society = %(s)s and n.stage = 'Disconnection Order' and n.status in ('Awaiting Approval', 'Issued')
+	                and (%(st)s = '' or n.status = %(st)s) order by n.block, n.owed desc""", {"s": s, "st": f.get("status") or ""})
+	data = [dict(r) for r in rows]
+	if data:
+		data.append(total_row("connection", _("Total"), data, ("owed",)))
+	return {"columns": [col("Order", "name", "Link", 130, "Recovery Notice"), col("Account", "connection", "Link", 110, "Connection"),
+	                    col("Consumer", "consumer_name", width=160), col("Block", "block", width=80), col("Category", "category", width=120),
+	                    col("Mobile", "mobile_no", width=110), col("Owed", "owed", "Currency", 110), col("Overdue (days)", "oldest_days", "Int", 110),
+	                    col("Ordered On", "issue_date", "Date", 100), col("Status", "status", width=130),
+	                    col("Approved By", "approved_by", "Link", 150, "User"), col("Connection Status", "connection_status", width=130)],
+	        "data": data,
+	        "message": _("An order marked Awaiting Approval has not been approved by a second user yet. Carrying out the disconnection in the field comes with the work-order workflow.")}
+
+
+@report("recovery_vs_target", "Recovery against Target", RECOVERY,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="year", label="Year", fieldtype="Int")],
+        "Each month's recovery target against what payments took off arrears, surcharge and fees.", ref_doctype="Recovery Target")
+def recovery_vs_target(f):
+	from utility_billing.utility_billing import recovery
+
+	s = society_of(f)
+	year = cint(f.get("year")) or getdate(nowdate()).year
+	data = []
+	for m in range(1, 13):
+		first = getdate(f"{year}-{m:02d}-01")
+		if first > getdate(nowdate()) and not recovery.target_of(s, first):
+			continue
+		p = recovery.target_progress(s, first)
+		data.append({"month": first.strftime("%b %Y"), "target": p["target"], "recovered": p["recovered"],
+		             "percent": p["percent"] if p["percent"] is not None else None, "remaining": p["remaining"] if p["target"] else None,
+		             "status": _("No target set") if not p["target"] else (_("Reached") if p["reached"] else _("Below target"))})
+	tot_t, tot_r = sum(r["target"] for r in data), sum(r["recovered"] for r in data)
+	chart = None
+	if data:
+		chart = {"data": {"labels": [r["month"] for r in data], "datasets": [{"name": _("Target"), "values": [r["target"] for r in data]},
+		                                                                   {"name": _("Recovered"), "values": [r["recovered"] for r in data]}]},
+		         "type": "bar", "fieldtype": "Currency"}
+	return {"columns": [col("Month", "month", width=100), col("Target", "target", "Currency", 120), col("Recovered", "recovered", "Currency", 120),
+	                    col("Reached (%)", "percent", "Percent", 100), col("Still To Recover", "remaining", "Currency", 130), col("Result", "status", width=120)],
+	        "data": data, "chart": chart,
+	        "summary": [{"value": tot_t, "label": _("Targets this year"), "datatype": "Currency", "indicator": "Blue"},
+	                    {"value": tot_r, "label": _("Recovered this year"), "datatype": "Currency", "indicator": "Green"}],
+	        "message": _("Recovered = payments taken against arrears, surcharge and fees (not the current bill), leaving out reversed payments. Set the targets in Recovery Target.")}
+
+
+@report("recovery_notices", "Recovery Notices Register", RECOVERY,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="from_date", label="From", fieldtype="Date", default="@month_start"),
+         dict(fieldname="to_date", label="To", fieldtype="Date", default="@today"),
+         dict(fieldname="stage", label="Stage", fieldtype="Select", options="\nReminder\nNotice\nFinal Notice\nDisconnection Order"),
+         dict(fieldname="block", label="Block", fieldtype="Data")],
+        "Every reminder, notice, final notice and disconnection order issued, with its date and channel.", ref_doctype="Recovery Notice")
+def recovery_notices(f):
+	s = society_of(f)
+	start, end = period(f, get_first_day(nowdate()))
+	where = ""
+	vals = {"s": s, "a": start, "b": end}
+	for k in ("stage", "block"):
+		if f.get(k):
+			where += f" and n.{k} = %({k})s"
+			vals[k] = f[k]
+	data = [dict(r) for r in sql(f"""select n.name, n.issue_date, n.connection, n.consumer_name, n.block, n.stage, n.channel, n.status, n.owed,
+	                    n.oldest_days, n.recovery_run from `tabRecovery Notice` n
+	             where n.society = %(s)s and n.issue_date between %(a)s and %(b)s{where} order by n.issue_date, n.name""", vals)]
+	by_stage = {}
+	for r in data:
+		if r["status"] != "Cancelled":
+			by_stage[r["stage"]] = by_stage.get(r["stage"], 0) + 1
+	return {"columns": [col("Notice", "name", "Link", 130, "Recovery Notice"), col("Date", "issue_date", "Date", 100),
+	                    col("Account", "connection", "Link", 110, "Connection"), col("Consumer", "consumer_name", width=160), col("Block", "block", width=80),
+	                    col("Stage", "stage", width=140), col("Channel", "channel", width=90), col("Status", "status", width=130),
+	                    col("Owed", "owed", "Currency", 110), col("Overdue (days)", "oldest_days", "Int", 110),
+	                    col("Run", "recovery_run", "Link", 130, "Recovery Run")], "data": data,
+	        "summary": [{"value": n, "label": _(stage), "datatype": "Int", "indicator": "Orange"} for stage, n in by_stage.items()],
+	        "message": _("Reconnections are recorded with the work-order workflow, which comes later.")}
 
 
 # ================================================================ 18. credit balances (RPT-26)

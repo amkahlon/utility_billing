@@ -1,0 +1,77 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "followup_date",
+  "kind",
+  "outcome",
+  "promise_date",
+  "promise_amount",
+  "notes",
+  "done_by"
+ ],
+ "fields": [
+  {
+   "fieldname": "followup_date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "label": "What",
+   "options": "Visit\nCall\nPromise to Pay\nOther",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "outcome",
+   "fieldtype": "Data",
+   "label": "Outcome",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "promise_date",
+   "fieldtype": "Date",
+   "label": "Promised Date",
+   "columns": 2
+  },
+  {
+   "fieldname": "promise_amount",
+   "fieldtype": "Currency",
+   "label": "Promised Amount",
+   "columns": 2
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "done_by",
+   "fieldtype": "Link",
+   "label": "Done By",
+   "options": "User",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Recovery Follow-up",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

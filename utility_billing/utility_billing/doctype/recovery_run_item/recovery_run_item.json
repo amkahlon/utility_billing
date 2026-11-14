@@ -1,0 +1,113 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "include",
+  "connection",
+  "consumer_name",
+  "block",
+  "category",
+  "stage",
+  "channel",
+  "owed",
+  "overdue",
+  "oldest_days",
+  "notice"
+ ],
+ "fields": [
+  {
+   "fieldname": "include",
+   "fieldtype": "Check",
+   "label": "Issue",
+   "default": "1",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Connection",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "label": "Consumer",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "block",
+   "fieldtype": "Data",
+   "label": "Block",
+   "read_only": 1
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Data",
+   "label": "Category",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Select",
+   "label": "Stage",
+   "options": "Reminder\nNotice\nFinal Notice\nDisconnection Order",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "channel",
+   "fieldtype": "Select",
+   "label": "Channel",
+   "options": "Print\nSMS\nWhatsApp",
+   "read_only": 1
+  },
+  {
+   "fieldname": "owed",
+   "fieldtype": "Currency",
+   "label": "Owed",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "overdue",
+   "fieldtype": "Currency",
+   "label": "Overdue",
+   "read_only": 1
+  },
+  {
+   "fieldname": "oldest_days",
+   "fieldtype": "Int",
+   "label": "Oldest Overdue (days)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notice",
+   "fieldtype": "Link",
+   "label": "Notice",
+   "options": "Recovery Notice",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Recovery Run Item",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

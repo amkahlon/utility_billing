@@ -100,7 +100,12 @@
   "cb_operating",
   "licence_no",
   "licence_valid_to",
-  "licence_document"
+  "licence_document",
+  "recovery_section",
+  "defaulter_min_amount",
+  "cb_recovery",
+  "defaulter_min_days",
+  "recovery_stages"
  ],
  "fields": [
   {
@@ -632,13 +637,42 @@
    "fieldname": "loss_high_percent",
    "fieldtype": "Percent",
    "label": "High Loss From (%)"
+  },
+  {
+   "fieldname": "recovery_section",
+   "fieldtype": "Section Break",
+   "label": "Defaulters and Recovery",
+   "collapsible": 1,
+   "description": "Who counts as a defaulter and when each recovery stage is issued (FS-REC-04, 05)."
+  },
+  {
+   "fieldname": "defaulter_min_amount",
+   "fieldtype": "Currency",
+   "label": "Defaulter Owes At Least",
+   "default": "10000"
+  },
+  {
+   "fieldname": "cb_recovery",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "defaulter_min_days",
+   "fieldtype": "Int",
+   "label": "Oldest Charge Overdue At Least (days)",
+   "default": "60"
+  },
+  {
+   "fieldname": "recovery_stages",
+   "fieldtype": "Table",
+   "label": "Recovery Stages",
+   "options": "Recovery Stage Rule"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 09:51:35.755451",
+ "modified": "2026-11-14 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",
