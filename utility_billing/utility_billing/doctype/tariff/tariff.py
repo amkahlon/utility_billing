@@ -73,6 +73,11 @@ class Tariff(Document):
 	def on_update(self):
 		approval.notify(self, APPROVER_ROLE)
 
+	def before_cancel(self):
+		used = frappe.db.get_value("Utility Bill", {"tariff": self.name, "docstatus": ["in", [1, 2]]}, "name")
+		if used:
+			frappe.throw(_("Tariff {0} was used for bill {1}, so it is locked. Correct it with a new version and a later effective date, or with adjustments.").format(self.name, used))
+
 	def on_cancel(self):
 		if workflow_active():
 			approval.log(self, APPROVED, self.workflow_state or approval.CANCELLED)

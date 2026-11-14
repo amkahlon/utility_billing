@@ -118,7 +118,9 @@
   "max_extensions_per_year",
   "cb_corr",
   "cheque_dishonour_fee",
-  "cash_only_after_dishonour"
+  "cash_only_after_dishonour",
+  "prorata_section",
+  "prorate_part_months"
  ],
  "fields": [
   {
@@ -759,13 +761,26 @@
    "fieldtype": "Check",
    "label": "Cash Only After a Dishonoured Cheque",
    "default": "0"
+  },
+  {
+   "fieldname": "prorata_section",
+   "fieldtype": "Section Break",
+   "label": "Part months",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "prorate_part_months",
+   "fieldtype": "Check",
+   "label": "Bill Fixed Charges for Part Months Only",
+   "default": "1",
+   "description": "A connection that starts or is disconnected during the month pays its fixed and per-area charges for the days it was connected."
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 16:00:00.000000",
+ "modified": "2026-11-14 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

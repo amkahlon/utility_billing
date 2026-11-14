@@ -119,7 +119,7 @@ GROUPS = [
 	                ("DocType", "Journal Export Layout")]),
 	("Meters and Network", [("DocType", "Meter"), ("DocType", "Transformer"), ("DocType", "Feeder"), ("DocType", "DISCO Bill")]),
 	("Reports", []),  # filled from the registry
-	("Setup", [("DocType", "Society"), ("DocType", "Tariff"), ("DocType", "Charge Type"), ("DocType", "Consumer Category"),
+	("Setup", [("DocType", "Society"), ("DocType", "Tariff"), ("DocType", "Charge Type"), ("DocType", "Tax"), ("DocType", "Consumer Category"),
 	           ("DocType", "Fee Type"), ("DocType", "Cash Counter"), ("DocType", "Reason Code"),
 	           ("DocType", "Reading Exception Code"), ("DocType", "Utility Type"), ("DocType", "KPI Definition")]),
 ]

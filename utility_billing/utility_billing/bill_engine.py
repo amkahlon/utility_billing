@@ -78,6 +78,7 @@ class Line:
 	rate: Decimal
 	amount: Decimal
 	note: str = ""
+	tax: str = ""  # the Tax a tax line belongs to
 
 
 @dataclass
@@ -88,6 +89,8 @@ class BillResult:
 	payable_within_due: Decimal = Decimal(0)
 	surcharge: Decimal = Decimal(0)
 	payable_after_due: Decimal = Decimal(0)
+	taxes: list = field(default_factory=list)  # tax_engine.TaxLine, inclusive ones too
+	tax_added: Decimal = Decimal(0)
 
 
 def calculate(
@@ -101,9 +104,16 @@ def calculate(
 	minimum_bill=0,
 	surcharge: dict | None = None,
 	bill_rounding: str = NEAREST,
+	taxes: Iterable = (),
+	fraction: Decimal | None = None,
+	fraction_note: str = "",
 ) -> BillResult:
 	"""`tariff`: {"method", "flat_rate", "slabs", "minimum_charge"}; `surcharge`: {"basis",
-	"rate", "fixed_amount", "cap"} with basis "Percentage of current bill" or "Fixed amount"."""
+	"rate", "fixed_amount", "cap"} with basis "Percentage of current bill" or "Fixed amount".
+	`taxes`: tax_engine.TaxSpec list (none by default). `fraction`: share of a part month to charge for the fixed and
+	per-area charges (FS-BIL-07), with its note.
+	"""
+	frac = D(fraction) if fraction is not None else Decimal(1)
 	u = D(units)
 	lines: list[Line] = []
 
@@ -138,10 +148,12 @@ def calculate(
 		                  rnd(D(a.units) * D(a.rate), c.rounding), f"{a.reference} units {fmt(a.units)} × {fmt(a.rate)}"))
 	# 4. Fixed, one-off and per-area charges
 	for c in (c for c in charges if c.basis in (FIXED, ONE_OFF)):
-		lines.append(Line(c.charge_type, c.label, c.group, c.order, c.basis, D(1), D(c.rate), rnd(c.rate, c.rounding), ""))
+		part = frac if c.basis == FIXED else Decimal(1)  # one-off charges are never pro-rated
+		lines.append(Line(c.charge_type, c.label, c.group, c.order, c.basis, D(1), D(c.rate), rnd(D(c.rate) * part, c.rounding),
+		                  fraction_note if part != 1 else ""))
 	for c in (c for c in charges if c.basis == PER_AREA):
 		lines.append(Line(c.charge_type, c.label, c.group, c.order, PER_AREA, D(area), D(c.rate),
-		                  rnd(D(area) * D(c.rate), c.rounding), f"{fmt(area)} × {fmt(c.rate)}"))
+		                  rnd(D(area) * D(c.rate) * frac, c.rounding), f"{fmt(area)} × {fmt(c.rate)}" + (f"; {fraction_note}" if frac != 1 else "")))
 	# 5. Percentage charges: % of the energy charge
 	for c in (c for c in charges if c.basis == PERCENT):
 		lines.append(Line(c.charge_type, c.label, c.group, c.order, PERCENT, energy_amount, D(c.rate),
@@ -154,9 +166,21 @@ def calculate(
 		lines.append(Line("", "Minimum bill adjustment", "Other", 999, FIXED, D(1), diff, diff,
 		                  f"Minimum bill {fmt(minimum_bill)}"))
 		current += diff
+	# 6b. Taxes, in their configured order, on the charges they apply to (FS-CFG-14)
+	tax_lines = []
+	taxes = list(taxes)
+	if taxes:
+		from utility_billing.utility_billing import tax_engine  # noqa: PLC0415
+
+		tax_lines = tax_engine.calculate_taxes([(l.charge_type, l.group, l.amount) for l in lines], taxes)
+		for t in tax_lines:
+			if not t.inclusive and t.amount:
+				lines.append(Line("", t.name, "Taxes", 1000 + t.order, PERCENT, t.base, t.rate, t.amount, t.note, tax=t.code))
+				current += t.amount
 
 	lines.sort(key=lambda l: (l.order, l.label))
-	result = BillResult(lines=lines, current=current, arrears=rnd(arrears, NONE))
+	result = BillResult(lines=lines, current=current, arrears=rnd(arrears, NONE), taxes=tax_lines,
+	                    tax_added=sum((t.amount for t in tax_lines if not t.inclusive), Decimal(0)))
 	result.payable_within_due = result.current + result.arrears
 	# 7. Surcharge on the current bill only (FS-BIL-04)
 	s = surcharge or {}

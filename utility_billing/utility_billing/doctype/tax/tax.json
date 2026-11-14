@@ -1,0 +1,292 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 18:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "tax_title",
+  "society",
+  "tax_name",
+  "tax_code",
+  "cb1",
+  "rate",
+  "enabled",
+  "inclusive",
+  "calculation_order",
+  "rounding_rule",
+  "account_code",
+  "dates_section",
+  "effective_from",
+  "cb_dates",
+  "effective_to",
+  "applies_section",
+  "applies_to",
+  "charge_rows",
+  "on_taxes",
+  "who_section",
+  "categories",
+  "exempt_categories",
+  "status_rates",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "tax_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "tax_name",
+   "fieldtype": "Data",
+   "label": "Tax or Duty",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "For example Electricity Duty, GST, VAT, Income Tax Withholding."
+  },
+  {
+   "fieldname": "tax_code",
+   "fieldtype": "Data",
+   "label": "Code",
+   "reqd": 1,
+   "description": "Short code used in reports, for example GST."
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Percent",
+   "label": "Rate (%)",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "On",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "inclusive",
+   "fieldtype": "Check",
+   "label": "Rate Is Included in the Charges",
+   "default": "0",
+   "description": "Included: the tax is carved out of the charges, the bill total does not change. Not ticked: added on top."
+  },
+  {
+   "fieldname": "calculation_order",
+   "fieldtype": "Int",
+   "label": "Calculation Order",
+   "default": "10",
+   "description": "Lowest first. A tax can also apply on earlier taxes (tax on tax)."
+  },
+  {
+   "fieldname": "rounding_rule",
+   "fieldtype": "Select",
+   "label": "Rounding",
+   "options": "Nearest rupee\nNo rounding\nRound up\nRound down",
+   "default": "Nearest rupee"
+  },
+  {
+   "fieldname": "account_code",
+   "fieldtype": "Link",
+   "label": "Tax Payable Account",
+   "options": "Ledger Account",
+   "description": "Where the tax collected is booked in the accounts."
+  },
+  {
+   "fieldname": "dates_section",
+   "fieldtype": "Section Break",
+   "label": "Effective dates"
+  },
+  {
+   "fieldname": "effective_from",
+   "fieldtype": "Date",
+   "label": "Effective From"
+  },
+  {
+   "fieldname": "cb_dates",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "effective_to",
+   "fieldtype": "Date",
+   "label": "Effective To"
+  },
+  {
+   "fieldname": "applies_section",
+   "fieldtype": "Section Break",
+   "label": "What it applies to"
+  },
+  {
+   "fieldname": "applies_to",
+   "fieldtype": "Select",
+   "label": "Applies To",
+   "options": "All charges\nCharge groups\nCharge types",
+   "default": "All charges",
+   "reqd": 1
+  },
+  {
+   "fieldname": "charge_rows",
+   "fieldtype": "Table",
+   "label": "Charge Groups or Types",
+   "options": "Tax Charge Row",
+   "depends_on": "eval:doc.applies_to!='All charges'"
+  },
+  {
+   "fieldname": "on_taxes",
+   "fieldtype": "Table",
+   "label": "Also Applies on These Taxes",
+   "options": "Tax On Tax",
+   "description": "Tax on tax: the listed taxes are added to the amount this tax is worked out on."
+  },
+  {
+   "fieldname": "who_section",
+   "fieldtype": "Section Break",
+   "label": "Who pays"
+  },
+  {
+   "fieldname": "categories",
+   "fieldtype": "Table",
+   "label": "Only These Categories",
+   "options": "Tax Category Row",
+   "description": "Empty means every category."
+  },
+  {
+   "fieldname": "exempt_categories",
+   "fieldtype": "Table",
+   "label": "Exempt Categories",
+   "options": "Tax Category Row"
+  },
+  {
+   "fieldname": "status_rates",
+   "fieldtype": "Table",
+   "label": "Rate by Tax Status",
+   "options": "Tax Status Rate",
+   "description": "Overrides the rate for a consumer who is a filer or non-filer."
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes",
+   "description": "For example the notification or section of law."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Tax",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "hash",
+ "title_field": "tax_title",
+ "show_title_field_in_link": 1,
+ "search_fields": "tax_name,tax_code",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

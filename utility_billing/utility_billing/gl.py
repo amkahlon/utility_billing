@@ -54,13 +54,23 @@ def bill_lines(bill_name, soc, society):
 	charge type (minimum bill adjustment) go to Other Billing Income."""
 	out = OrderedDict()
 	for l in frappe.get_all("Bill Line", filters={"parent": bill_name, "parenttype": "Utility Bill"},
-	                        fields=["charge_type", "label", "amount"], order_by="idx"):
-		if l.charge_type:
+	                        fields=["charge_type", "label", "amount", "tax"], order_by="idx"):
+		if l.tax:
+			acct = need(frappe.db.get_value("Tax", l.tax, "account_code"), _("tax {0} (Tax → Tax Payable Account)").format(l.label))
+		elif l.charge_type:
 			acct = need(frappe.db.get_value("Charge Type", l.charge_type, "account_code"),
 			            _("charge type {0} (Charge Type → Income Account)").format(l.charge_type))
 		else:
 			acct = need(soc.other, _("{0} (Society {1} → Other Billing Income)").format(l.label, society))
 		out[acct] = out.get(acct, 0) + flt(l.amount)
+	# A tax included in the charges is carved out of them: its part moves from income to the tax account. The charges it was
+	# worked out on are not tracked per account, so the carve-out comes off Other Billing Income.
+	for t in frappe.get_all("Bill Tax", filters={"parent": bill_name, "parenttype": "Utility Bill", "inclusive": 1}, fields=["tax", "tax_name", "amount"]):
+		if flt(t.amount):
+			acct = need(frappe.db.get_value("Tax", t.tax, "account_code"), _("tax {0} (Tax → Tax Payable Account)").format(t.tax_name))
+			other = need(soc.other, _("the included tax {0} (Society {1} → Other Billing Income)").format(t.tax_name, society))
+			out[acct] = out.get(acct, 0) + flt(t.amount)
+			out[other] = out.get(other, 0) - flt(t.amount)
 	return out
 
 

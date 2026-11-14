@@ -1058,6 +1058,52 @@ def corrections_register(f):
 	        "message": _("For a revision the amount is the change in the current bill; for a dispute, the amount held; for a bulk adjustment, the total across the accounts.")}
 
 
+# ================================================================ 17e. taxes (increment 14; FS-REC-17, tax register)
+@report("tax_register", "Tax Register and Taxes Payable", PAY_ROLES,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="from_date", label="From Month", fieldtype="Date", default="@month_start"),
+         dict(fieldname="to_date", label="To Month", fieldtype="Date", default="@today"),
+         dict(fieldname="as_of", label="Collected As Of", fieldtype="Date", default="@today"),
+         dict(fieldname="group_by", label="Group By", fieldtype="Select", options="Tax\nTax and Category", default="Tax")],
+        "Tax billed and collected by tax type (and category), from the posted bills of the months, for filing.", ref_doctype="Utility Bill")
+def tax_register(f):
+	s = society_of(f)
+	a, z = month_start(f.get("from_date") or nowdate()), get_last_day(f.get("to_date") or nowdate())
+	as_of = getdate(f.get("as_of") or nowdate())
+	bills = sql("""select bt.parent bill, bt.tax, bt.tax_name, bt.base, bt.amount, bt.inclusive, b.consumer_category category, b.connection, b.issue_date,
+	                     b.payable_within_due payable from `tabBill Tax` bt join `tabUtility Bill` b on b.name = bt.parent
+	              where b.society = %(s)s and b.docstatus = 1 and b.status = 'Posted' and b.billing_month between %(a)s and %(z)s and bt.amount != 0""",
+	            {"s": s, "a": a, "z": z})
+	pays = defaultdict(list)
+	for e in sql("""select connection, posting_date, -amount paid from `tabCustomer Ledger Entry` where society = %(s)s and entry_type = 'Payment'
+	               and ifnull(reversed_by, '') = '' and posting_date <= %(as_of)s""", {"s": s, "as_of": as_of}):
+		pays[e.connection].append((getdate(e.posting_date), flt(e.paid)))
+	by_cat = f.get("group_by") == "Tax and Category"
+	acc = OrderedDict()
+	for b in bills:
+		received = sum(x for d, x in pays.get(b.connection, []) if d >= getdate(b.issue_date))
+		share = min(1.0, received / flt(b.payable)) if flt(b.payable) else 0.0
+		k = (b.tax, b.category if by_cat else "")
+		row = acc.setdefault(k, {"tax": b.tax_name, "category": b.category if by_cat else None, "inclusive": cint(b.inclusive), "bills": 0, "base": 0.0, "billed": 0.0, "collected": 0.0})
+		row["bills"] += 1
+		row["base"] += flt(b.base)
+		row["billed"] += flt(b.amount)
+		row["collected"] += flt(b.amount) * share
+	data = []
+	for row in acc.values():
+		row = {**row, "base": round(row["base"], 2), "billed": round(row["billed"], 2), "collected": round(row["collected"], 2)}
+		row["to_collect"] = round(row["billed"] - row["collected"], 2)
+		row["kind"] = _("Included in charges") if row.pop("inclusive") else _("Added to bill")
+		data.append(row)
+	if data:
+		data.append(total_row("tax", _("Total"), data, ("bills", "base", "billed", "collected", "to_collect")))
+	return {"columns": [col("Tax", "tax", width=170)] + ([col("Category", "category", width=140)] if by_cat else []) +
+	                   [col("How", "kind", width=140), col("Bills", "bills", "Int", 80), col("Charged On", "base", "Currency", 130),
+	                    col("Tax Billed", "billed", "Currency", 120), col("Collected (estimate)", "collected", "Currency", 150), col("Still To Collect", "to_collect", "Currency", 130)],
+	        "data": data,
+	        "message": _("Payments go to the account, not to one bill, so the collected figure assumes each bill is paid in the share of the payments received since it was issued, up to the bill's payable amount.")}
+
+
 # ================================================================ 18. credit balances (RPT-26)
 @report("credit_balances", "Credit Balances and Advance Payments", RECOVERY, AGE_FILTERS[:1] + AGE_FILTERS[2:],
         "Accounts holding credit: money paid in advance or in excess.", ref_doctype="Customer Ledger Entry")
