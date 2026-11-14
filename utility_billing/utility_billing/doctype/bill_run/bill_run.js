@@ -8,6 +8,17 @@ frappe.ui.form.on("Bill Run", {
 		if (frm.doc.bill_count && frm.doc.calculation_status === "Calculated" && frm.doc.docstatus < 2) {
 			frm.add_custom_button(__("Print Bills"), () => print_run_bills(frm));
 		}
+		if (frm.doc.docstatus === 1) {
+			frm.add_custom_button(__("Record Delivery"), () => record_delivery(frm));
+			frappe.call({
+				method: "utility_billing.utility_billing.delivery.summary",
+				args: { run: frm.doc.name },
+				callback: ({ message: s }) => {
+					const bits = Object.entries(s.by_status || {}).map(([k, n]) => `${__(k)}: ${n}`);
+					if (bits.length) frm.dashboard.add_comment(__("Delivery of {0} bills: {1}", [s.total, bits.join(", ")]), "blue", true);
+				},
+			});
+		}
 		const editable = frm.doc.docstatus === 0 && ["Draft", "Rejected", "", undefined].includes(frm.doc.workflow_state);
 		if (editable) {
 			frm.add_custom_button(__("Calculate Bills"), () => {
@@ -42,6 +53,42 @@ frappe.ui.form.on("Bill Run", {
 	},
 });
 
+// Record that a run's bills (all, or one block or route) were handed to a distributor, delivered, and so on (FS-RUN-10).
+function record_delivery(frm) {
+	const method = "utility_billing.utility_billing";
+	frappe.call({ method: `${method}.bill_print.run_print_groups`, args: { run: frm.doc.name } }).then(({ message: g }) => {
+		const options = (counts) => Object.entries(counts).map(([k, n]) => ({ value: k, label: `${k} (${n})` }));
+		const d = new frappe.ui.Dialog({
+			title: __("Record Delivery"),
+			fields: [
+				{
+					fieldname: "status",
+					fieldtype: "Select",
+					label: __("Status"),
+					reqd: 1,
+					options: ["Handed to Distributor", "Delivered", "Returned", "Not Delivered", "Printed"],
+					default: "Handed to Distributor",
+				},
+				{ fieldname: "block", fieldtype: "Select", label: __("Block"), options: [{ value: "", label: __("All blocks") }, ...options(g.blocks)] },
+				{ fieldname: "route", fieldtype: "Select", label: __("Route"), options: [{ value: "", label: __("All routes") }, ...options(g.routes)] },
+				{ fieldname: "distributor", fieldtype: "Data", label: __("Distributor"), description: __("Required when handing bills over.") },
+				{ fieldname: "remarks", fieldtype: "Small Text", label: __("Remarks") },
+			],
+			primary_action_label: __("Record"),
+			primary_action(values) {
+				frappe
+					.call({ method: `${method}.delivery.mark`, args: { run: frm.doc.name, ...values }, freeze: true })
+					.then(({ message: r }) => {
+						frappe.show_alert({ message: __("{0} of {1} bills updated.", [r.changed, r.bills]), indicator: "green" });
+						d.hide();
+						frm.reload_doc();
+					});
+			},
+		});
+		d.show();
+	});
+}
+
 // Bulk print in delivery order (block, route, property), all bills or one block or route (FS-RUN-08).
 function print_run_bills(frm) {
 	const method = "utility_billing.utility_billing.bill_print";
@@ -64,6 +111,13 @@ function print_run_bills(frm) {
 			primary_action(values) {
 				const args = new URLSearchParams({ run: frm.doc.name, block: values.block || "", route: values.route || "" });
 				window.open(`/api/method/${method}.print_run_bills?${args}`);
+				if (frm.doc.docstatus === 1) {
+					frappe.call({
+						method: "utility_billing.utility_billing.delivery.mark",
+						args: { run: frm.doc.name, status: "Printed", block: values.block || "", route: values.route || "" },
+						silent: true,
+					});
+				}
 				d.hide();
 			},
 		});

@@ -10,7 +10,7 @@ from frappe import _
 from frappe.utils import add_months, flt, getdate, now_datetime
 
 from utility_billing.utility_billing import bill_engine as engine
-from utility_billing.utility_billing import plans, prorata, tax_engine
+from utility_billing.utility_billing import periods, plans, prorata, snapshots, split_engine, tax_engine
 from utility_billing.utility_billing import account, bill_print
 from utility_billing.utility_billing import readings
 from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff
@@ -91,6 +91,36 @@ def taxes_for(society, month, category, consumer, extra=None, without=None) -> l
 	return specs
 
 
+def tariff_segments(run, category, reading, units, fraction, fraction_note):
+	"""One segment per tariff in force during the reading period, when a tariff changed inside it (FS-CFG-05, FS-BIL-02); None when
+	one tariff covers the whole period, the dates are missing or the tariffs leave a gap."""
+	start, end = reading.get("previous_reading_date"), reading.get("reading_date")
+	if not (start and end):
+		return None
+	start, end = getdate(start), getdate(end)
+	rows = frappe.get_all(
+		"Tariff", filters={"docstatus": 1, "society": run.society, "utility": run.utility, "consumer_category": category,
+		                   "effective_from": ["<=", end]},
+		or_filters=[["effective_to", "is", "not set"], ["effective_to", ">=", start]],
+		fields=["name", "effective_from", "effective_to"])
+	parts = split_engine.tariff_days(start, end, [(r.name, getdate(r.effective_from), getdate(r.effective_to) if r.effective_to else None) for r in rows])
+	total = (end - start).days
+	if len(parts) < 2 or sum(p[3] for p in parts) != total:
+		return None
+	shares = split_engine.split_units(units, [p[3] for p in parts])
+	whole = engine.D(fraction) if fraction is not None else engine.D(1)
+	segments = []
+	for (name, lo, hi, days), share in zip(parts, shares, strict=True):
+		t = frappe.get_cached_doc("Tariff", name)
+		segments.append({
+			"units": share, "fraction": whole * engine.D(days) / engine.D(total),
+			"tariff": {"method": t.pricing_method, "flat_rate": t.flat_rate, "slabs": t.slabs, "minimum_charge": t.minimum_charge},
+			"charges": [charge_of(c.charge_type, rate=c.rate) for c in t.charges], "tariff_name": name,
+			"note": _("{0} of {1} days at {2}").format(days, total, t.tariff_title) + (f"; {fraction_note}" if fraction_note else ""),
+		})
+	return segments
+
+
 def build_bill(run, connection, override=None) -> dict:
 	"""Utility Bill fields for one connection in a run. Raises BillProblem with a plain reason.
 	`override` (a bill revision) may set units, category and arrears."""
@@ -101,7 +131,7 @@ def build_bill(run, connection, override=None) -> dict:
 
 	reading = frappe.db.get_value(
 		"Meter Reading", {"reading_cycle": run.reading_cycle, "connection": connection},
-		["name", "status", "units", "consumption_type"], as_dict=True,
+		["name", "status", "units", "consumption_type", "previous_reading_date", "reading_date"], as_dict=True,
 	)
 	if not reading:
 		raise BillProblem(_("No meter reading in cycle {0}.").format(run.reading_cycle))
@@ -153,6 +183,11 @@ def build_bill(run, connection, override=None) -> dict:
 			fraction, fraction_note = prorata.fraction(month, conn.connection_date, conn.get("disconnected_on"))
 		except prorata.NotConnected as e:
 			raise BillProblem(str(e)) from None
+	segments = None
+	if society.tariff_split_method == "By days" and not override.get("tariff"):
+		segments = tariff_segments(run, category, reading, units, fraction, fraction_note)
+		if segments:
+			tariff = frappe.get_cached_doc("Tariff", segments[-1]["tariff_name"])  # the bill carries the tariff in force now
 	result = engine.calculate(
 		units,
 		{"method": tariff.pricing_method, "flat_rate": tariff.flat_rate, "slabs": tariff.slabs,
@@ -163,7 +198,7 @@ def build_bill(run, connection, override=None) -> dict:
 		           "fixed_amount": society.surcharge_fixed_amount, "cap": society.surcharge_cap},
 		bill_rounding=society.rounding_rule or engine.NEAREST,
 		taxes=taxes_for(run.society, month, category, consumer), fraction=fraction, fraction_note=fraction_note,
-		installment=engine.D(installment) if installment else None,
+		installment=engine.D(installment) if installment else None, segments=segments,
 	)
 	bill = {
 		"doctype": "Utility Bill", "connection": connection, "consumer": conn.consumer,
@@ -314,6 +349,8 @@ def set_summary(doc):
 
 def post_run(doc):
 	"""On approval: post every draft bill of the run (FS-BIL-10: posted bills never change)."""
+	periods.assert_open(doc.society, doc.issue_date, "Bill run")
+	snapshots.take(doc)  # kept before anything is posted, so the run can be restored (FS-RUN-13)
 	for name in frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 0}, pluck="name"):
 		bill = frappe.get_doc("Utility Bill", name)
 		# Payments may have arrived between calculation and approval: arrears are taken from the account
@@ -335,6 +372,7 @@ def post_run(doc):
 
 
 def check_run_cancellable(doc):
+	periods.assert_open(doc.society, doc.issue_date, "Bill run")  # a closed month's bills can't be undone (FS-ACC-10)
 	for name in frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 1}, pluck="name"):
 		account.check_bill_reversible(frappe.get_doc("Utility Bill", name))
 

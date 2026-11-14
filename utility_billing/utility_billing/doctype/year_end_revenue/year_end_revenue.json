@@ -1,0 +1,54 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "charge_group",
+  "label",
+  "bills",
+  "amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "charge_group",
+   "fieldtype": "Data",
+   "label": "Group",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "label": "Charge",
+   "in_list_view": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "bills",
+   "fieldtype": "Int",
+   "label": "Bills",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Billed",
+   "in_list_view": 1,
+   "columns": 2
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Year End Revenue",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

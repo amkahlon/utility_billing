@@ -46,6 +46,11 @@
   "installment_due",
   "installment_no",
   "installment_plan",
+  "delivery_section",
+  "delivery_status",
+  "delivery_date",
+  "distributor",
+  "delivery_log",
   "account_section",
   "ledger_entry",
   "surcharge_status",
@@ -432,13 +437,54 @@
    "options": "Installment Plan",
    "read_only": 1,
    "no_copy": 1
+  },
+  {
+   "fieldname": "delivery_section",
+   "fieldtype": "Section Break",
+   "label": "Delivery",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "delivery_status",
+   "fieldtype": "Select",
+   "label": "Delivery Status",
+   "options": "\nPrinted\nHanded to Distributor\nDelivered\nSent by Message\nReturned\nNot Delivered",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "delivery_date",
+   "fieldtype": "Date",
+   "label": "Delivery Date",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "distributor",
+   "fieldtype": "Data",
+   "label": "Distributor",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "delivery_log",
+   "fieldtype": "Table",
+   "label": "Delivery History",
+   "options": "Bill Delivery Event",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-14 20:00:00.000000",
+ "modified": "2026-11-14 22:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Bill",
