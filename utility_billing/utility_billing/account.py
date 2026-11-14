@@ -142,7 +142,8 @@ def arrears_for_new_bill(connection) -> float:
 
 # ---------------------------------------------------------------- surcharge (FS-REC-03, FS-PAY-08)
 def surcharge_deadline(bill):
-	return add_days(bill.due_date, cint(frappe.db.get_value("Society", bill.society, "grace_days")))
+	due = bill.get("extended_due_date") or bill.due_date  # a due date extension moves the deadline (FS-WF-03)
+	return add_days(due, cint(frappe.db.get_value("Society", bill.society, "grace_days")))
 
 
 NOTHING_PAID = "Nothing paid by the due date"
@@ -175,6 +176,8 @@ def apply_surcharges(as_of=None, society=None):
 		deadline = surcharge_deadline(bill)
 		if deadline >= as_of:
 			continue
+		if frappe.db.exists("Bill Dispute", {"bill": bill.name, "status": "Open"}):
+			continue  # the surcharge is held while the bill is in dispute (FS-WF-10)
 		if flt(bill.surcharge_amount) <= 0 or paid_in_time(bill, deadline):
 			bill.db_set("surcharge_status", "Not charged (paid in time)", update_modified=False)
 			continue
@@ -286,6 +289,10 @@ def reverse_document(doctype: str, name: str, reason_code: str, remarks: str | N
 	doc.flags.reversal = {"reason_code": reason_code, "remarks": remarks.strip()}
 	doc.flags.ignore_permissions = True
 	doc.cancel()
+	if doctype == "Payment Receipt" and reason_code == "CHQ-BOUNCE":
+		from utility_billing.utility_billing import corrections
+
+		corrections.after_dishonour(doc)  # the dishonour fee and the cash-only flag, as the society set them (FS-WF-11)
 	return doc.name
 
 
@@ -307,8 +314,8 @@ def enquiry(reference_no: str):
 	conn = frappe.db.get_value("Connection", connection, ["consumer_name", "society", "status"], as_dict=True)
 	bill = frappe.db.get_value(
 		"Utility Bill", {"connection": connection, "docstatus": 1},
-		["name", "billing_month", "due_date", "payable_within_due", "payable_after_due", "surcharge_status"],
-		order_by="billing_month desc", as_dict=True,
+		["name", "billing_month", "due_date", "extended_due_date", "payable_within_due", "payable_after_due", "surcharge_status"],
+		order_by="billing_month desc, creation desc", as_dict=True,
 	)
 	bal = balances(connection)
 	owed = flt(engine.total(bal))
@@ -316,7 +323,7 @@ def enquiry(reference_no: str):
 		"connection": connection, "consumer_name": conn.consumer_name, "society": conn.society, "status": conn.status,
 		"bill": bill.name if bill else None,
 		"bill_month": getdate(bill.billing_month).strftime("%B %Y") if bill else None,
-		"due_date": str(bill.due_date) if bill else None,
+		"due_date": str(bill.extended_due_date or bill.due_date) if bill else None,
 		"payable_within_due": flt(bill.payable_within_due) if bill else 0,
 		"payable_after_due": flt(bill.payable_after_due) if bill else 0,
 		"balance": owed, "balances": {b: flt(v) for b, v in bal.items()},

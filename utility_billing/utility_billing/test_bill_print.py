@@ -96,6 +96,7 @@ class IntegrationTestBillPrint(BillingCase):
 		frappe.set_user("Administrator")
 		run.reload()
 		run.flags.ignore_permissions = True
+		run.cancellation_reason = "Run reversed: wrong readings"  # FS-RUN-06 needs a reason
 		run.cancel()
 		self.assertIn("CANCELLED", bill_print.bill_html(bill.name))
 

@@ -1018,6 +1018,46 @@ def refunds_register(f):
 	                    col("Approved By", "approved_by", "Link", 150, "User"), col("Posted On", "posting_date", "Date", 100)], "data": data}
 
 
+# ================================================================ 17d. corrections register (increment 13)
+@report("corrections_register", "Corrections Register", PAY_ROLES + ["Billing Officer"],
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="from_date", label="From", fieldtype="Date", default="@month_start"),
+         dict(fieldname="to_date", label="To", fieldtype="Date", default="@today"),
+         dict(fieldname="kind", label="Kind", fieldtype="Select", options="\nBill revision\nDue date extension\nBill dispute\nBulk adjustment")],
+        "Revised bills, due date extensions, bill disputes and bulk adjustments: what was corrected, by whom, and the effect.", ref_doctype="Bill Revision")
+def corrections_register(f):
+	s = society_of(f)
+	start, end = period(f, get_first_day(nowdate()))
+	v = {"s": s, "a": start, "b": end}
+	data = []
+	for r in sql("""select name, date(creation) d, connection, consumer_name, difference amount, kind detail, workflow_state status, requested_by by_user,
+	                      original_bill ref, revised_bill ref2, reason_code from `tabBill Revision`
+	               where society = %(s)s and docstatus < 2 and date(creation) between %(a)s and %(b)s""", v):
+		data.append({"kind": "Bill revision", "name": r.name, "date": r.d, "connection": r.connection, "consumer_name": r.consumer_name,
+		             "amount": flt(r.amount), "detail": f"{r.detail}: {r.ref} → {r.ref2 or 'not yet revised'}", "status": r.status, "by_user": r.by_user, "reason": r.reason_code})
+	for r in sql("""select name, date(creation) d, connection, consumer_name, days_extended, old_due_date, new_due_date, reason_code, granted_by
+	               from `tabDue Date Extension` where society = %(s)s and date(creation) between %(a)s and %(b)s""", v):
+		data.append({"kind": "Due date extension", "name": r.name, "date": r.d, "connection": r.connection, "consumer_name": r.consumer_name, "amount": None,
+		             "detail": f"+{r.days_extended} days: {formatdate(r.old_due_date)} → {formatdate(r.new_due_date)}", "status": "Granted", "by_user": r.granted_by, "reason": r.reason_code})
+	for r in sql("""select name, date(creation) d, connection, consumer_name, disputed_amount, status, reason, resolved_by, owner from `tabBill Dispute`
+	               where society = %(s)s and date(creation) between %(a)s and %(b)s""", v):
+		data.append({"kind": "Bill dispute", "name": r.name, "date": r.d, "connection": r.connection, "consumer_name": r.consumer_name, "amount": flt(r.disputed_amount),
+		             "detail": r.reason, "status": r.status, "by_user": r.resolved_by or r.owner, "reason": None})
+	for r in sql("""select name, date(creation) d, note_type, audience, accounts, total_amount, workflow_state, requested_by, reason_code
+	               from `tabBulk Adjustment` where society = %(s)s and docstatus < 2 and date(creation) between %(a)s and %(b)s""", v):
+		data.append({"kind": "Bulk adjustment", "name": r.name, "date": r.d, "connection": None, "consumer_name": f"{cint(r.accounts)} accounts ({r.audience})",
+		             "amount": flt(r.total_amount) * (1 if r.note_type == "Debit Note" else -1), "detail": r.note_type, "status": r.workflow_state,
+		             "by_user": r.requested_by, "reason": r.reason_code})
+	if f.get("kind"):
+		data = [d for d in data if d["kind"] == f.kind]
+	data.sort(key=lambda d: (d["date"], d["name"]))
+	return {"columns": [col("Kind", "kind", width=140), col("Document", "name", width=140), col("Date", "date", "Date", 100),
+	                    col("Account", "connection", "Link", 110, "Connection"), col("Consumer", "consumer_name", width=170),
+	                    col("Amount (+ owed, - credited)", "amount", "Currency", 150), col("What", "detail", width=300), col("Status", "status", width=130),
+	                    col("By", "by_user", "Link", 150, "User"), col("Reason", "reason", "Link", 120, "Reason Code")], "data": data,
+	        "message": _("For a revision the amount is the change in the current bill; for a dispute, the amount held; for a bulk adjustment, the total across the accounts.")}
+
+
 # ================================================================ 18. credit balances (RPT-26)
 @report("credit_balances", "Credit Balances and Advance Payments", RECOVERY, AGE_FILTERS[:1] + AGE_FILTERS[2:],
         "Accounts holding credit: money paid in advance or in excess.", ref_doctype="Customer Ledger Entry")
@@ -1062,12 +1102,13 @@ def consumer_census(f):
 
 # ================================================================ 20. pending approvals (RPT-41)
 PENDING = (("Tariff", "tariff_title", "General Manager"), ("Tariff Adjustment", "adjustment_title", "General Manager"),
-           ("Bill Run", "run_title", "Billing Manager"), ("Account Adjustment", "adjustment_title", "General Manager"), ("Refund", "refund_title", "General Manager"))
+           ("Bill Run", "run_title", "Billing Manager"), ("Account Adjustment", "adjustment_title", "General Manager"), ("Refund", "refund_title", "General Manager"),
+           ("Bill Revision", "revision_title", "Billing Manager"), ("Bulk Adjustment", "adjustment_title", "General Manager"))
 
 
 @report("pending_approvals", "Pending Approvals", APPROVERS,
         [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
-         dict(fieldname="transaction", label="Transaction", fieldtype="Select", options="\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund"),
+         dict(fieldname="transaction", label="Transaction", fieldtype="Select", options="\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund\nBill Revision\nBulk Adjustment"),
          dict(fieldname="older_than", label="Waiting More Than (days)", fieldtype="Int", default="0")],
         "Everything waiting for approval, by type and how long it has waited.", ref_doctype="Tariff")
 def pending_approvals(f):
@@ -1239,7 +1280,7 @@ def disco_reconciliation(f):
 
 
 # ================================================================ 21. audit log (RPT-42)
-AUDITED = ("Society", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Refund", "Settlement File", "Suspense Payment", "Notification Template", "Messaging Provider", "Fee Type", "Charge Type", "Consumer Category",
+AUDITED = ("Society", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Refund", "Bill Revision", "Bulk Adjustment", "Due Date Extension", "Bill Dispute", "Settlement File", "Suspense Payment", "Notification Template", "Messaging Provider", "Fee Type", "Charge Type", "Consumer Category",
            "Cash Counter", "Reason Code", "Ledger Account", "Journal Export Layout", "Consumer", "Property", "Connection", "Meter",
            "Reading Cycle", "Meter Reading", "Cashier Day", "KPI Definition")
 

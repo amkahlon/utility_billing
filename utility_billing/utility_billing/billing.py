@@ -49,8 +49,10 @@ def arrears_of(connection, month):
 	return account.arrears_for_new_bill(connection)
 
 
-def build_bill(run, connection) -> dict:
-	"""Utility Bill fields for one connection in a run. Raises BillProblem with a plain reason."""
+def build_bill(run, connection, override=None) -> dict:
+	"""Utility Bill fields for one connection in a run. Raises BillProblem with a plain reason.
+	`override` (a bill revision) may set units, category and arrears."""
+	override = override or {}
 	month = readings.month_start(run.billing_month)
 	conn = frappe.get_cached_doc("Connection", connection)
 	society = frappe.get_cached_doc("Society", run.society)
@@ -64,9 +66,11 @@ def build_bill(run, connection) -> dict:
 	if reading.status not in readings.DONE:
 		raise BillProblem(_("Meter reading {0} is {1}.").format(reading.name, reading.status))
 
-	tariff_name = get_applicable_tariff(run.society, run.utility, conn.consumer_category, month)
+	category = override.get("category") or conn.consumer_category
+	units = flt(override.get("units")) if override.get("units") is not None else reading.units
+	tariff_name = get_applicable_tariff(run.society, run.utility, category, month)
 	if not tariff_name:
-		raise BillProblem(_("No approved tariff for {0} in {1}.").format(conn.consumer_category, month_label(month)))
+		raise BillProblem(_("No approved tariff for {0} in {1}.").format(category, month_label(month)))
 	tariff = frappe.get_cached_doc("Tariff", tariff_name)
 
 	if not society.energy_charge_type:
@@ -83,8 +87,8 @@ def build_bill(run, connection) -> dict:
 			raise BillProblem(_("No approved {0} for {1}.").format(adj_type, month_label(month)))
 		ref_units = readings.get_billable_units(connection, adj.reference_month)
 		exempt = None
-		if conn.consumer_category in {e.consumer_category for e in adj.exempt_categories}:
-			exempt = _("{0} category").format(frappe.db.get_value("Consumer Category", conn.consumer_category, "category_name"))
+		if category in {e.consumer_category for e in adj.exempt_categories}:
+			exempt = _("{0} category").format(frappe.db.get_value("Consumer Category", category, "category_name"))
 		elif flt(adj.exempt_below_units) and ref_units is not None and ref_units < flt(adj.exempt_below_units):
 			exempt = _("below {0} units").format(adj.exempt_below_units)
 		adjustments.append(engine.Adjustment(
@@ -94,20 +98,20 @@ def build_bill(run, connection) -> dict:
 
 	area = flt(frappe.db.get_value("Property", conn.property, "area"))
 	result = engine.calculate(
-		reading.units,
+		units,
 		{"method": tariff.pricing_method, "flat_rate": tariff.flat_rate, "slabs": tariff.slabs,
 		 "minimum_charge": tariff.minimum_charge},
 		energy, charges=charges, adjustments=adjustments, area=area,
-		arrears=arrears_of(connection, month), minimum_bill=society.minimum_bill,
+		arrears=override["arrears"] if override.get("arrears") is not None else arrears_of(connection, month), minimum_bill=society.minimum_bill,
 		surcharge={"basis": society.surcharge_basis, "rate": society.surcharge_rate,
 		           "fixed_amount": society.surcharge_fixed_amount, "cap": society.surcharge_cap},
 		bill_rounding=society.rounding_rule or engine.NEAREST,
 	)
 	bill = {
 		"doctype": "Utility Bill", "connection": connection, "consumer": conn.consumer,
-		"consumer_name": conn.consumer_name, "property": conn.property, "consumer_category": conn.consumer_category,
+		"consumer_name": conn.consumer_name, "property": conn.property, "consumer_category": category,
 		"society": run.society, "utility": run.utility, "billing_month": month, "issue_date": run.issue_date,
-		"due_date": run.due_date, "bill_run": run.name, "meter_reading": reading.name, "units": flt(reading.units),
+		"due_date": run.due_date, "bill_run": run.name, "meter_reading": reading.name, "units": flt(units),
 		"consumption_type": reading.consumption_type, "tariff": tariff.name, "status": "Draft",
 		"lines": [
 			{"label": l.label, "charge_type": l.charge_type or None, "charge_group": l.group, "basis": l.basis,
@@ -119,6 +123,8 @@ def build_bill(run, connection) -> dict:
 		"payable_within_due": flt(result.payable_within_due), "surcharge_amount": flt(result.surcharge),
 		"payable_after_due": flt(result.payable_after_due), "outstanding_amount": 0,
 	}
+	if override.get("revises"):
+		bill["revises"], bill["revision_no"] = override["revises"], override.get("revision_no") or 2
 	bill["print_snapshot"] = json.dumps(bill_print.build_snapshot(bill))
 	return bill
 

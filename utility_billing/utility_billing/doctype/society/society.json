@@ -112,7 +112,13 @@
   "cb_notify",
   "quiet_hours_start",
   "quiet_hours_end",
-  "notification_rules"
+  "notification_rules",
+  "corrections_section",
+  "max_extension_days",
+  "max_extensions_per_year",
+  "cb_corr",
+  "cheque_dishonour_fee",
+  "cash_only_after_dishonour"
  ],
  "fields": [
   {
@@ -716,13 +722,50 @@
    "fieldtype": "Table",
    "label": "Event Rules",
    "options": "Notification Rule"
+  },
+  {
+   "fieldname": "corrections_section",
+   "fieldtype": "Section Break",
+   "label": "Corrections",
+   "collapsible": 1,
+   "description": "Limits for due date extensions and what follows a dishonoured cheque (FS-WF-03, 11)."
+  },
+  {
+   "fieldname": "max_extension_days",
+   "fieldtype": "Int",
+   "label": "Longest Due Date Extension (days)",
+   "default": "7",
+   "description": "A Billing Manager can extend up to this; a General Manager beyond it."
+  },
+  {
+   "fieldname": "max_extensions_per_year",
+   "fieldtype": "Int",
+   "label": "Extensions per Account per Year",
+   "default": "2"
+  },
+  {
+   "fieldname": "cb_corr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cheque_dishonour_fee",
+   "fieldtype": "Link",
+   "label": "Dishonoured Cheque Fee",
+   "options": "Fee Type",
+   "description": "Charged when a cheque or pay order is reversed as dishonoured."
+  },
+  {
+   "fieldname": "cash_only_after_dishonour",
+   "fieldtype": "Check",
+   "label": "Cash Only After a Dishonoured Cheque",
+   "default": "0"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 14:00:00.000000",
+ "modified": "2026-11-14 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

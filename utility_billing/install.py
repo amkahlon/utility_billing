@@ -44,6 +44,13 @@ REASON_CODES = [
 	("IRRECOV", "Irrecoverable after recovery steps", "Write-off"),
 	("REFUND-CLOSE", "Credit refunded on closing the account", "Refund"),
 	("REFUND-EXCESS", "Excess payment refunded", "Refund"),
+	("READ-WRONG", "Meter reading was wrong", "Revised Bill"),
+	("CAT-WRONG", "Wrong consumer category", "Revised Bill"),
+	("EXT-HARDSHIP", "Due date extended: hardship", "Due Date Extension"),
+	("EXT-BANK-DELAY", "Due date extended: bank or channel delay", "Due Date Extension"),
+	("OUTAGE-COMP", "Compensation for a long outage", "Bulk Adjustment"),
+	("BULK-CORRECTION", "Group correction approved by management", "Bulk Adjustment"),
+	("DISPUTE", "Bill disputed by the consumer", "Bill Dispute"),
 ]
 
 

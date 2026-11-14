@@ -1,0 +1,389 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 16:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "adjustment_title",
+  "workflow_state",
+  "society",
+  "audience",
+  "block",
+  "consumer_category",
+  "feeder",
+  "transformer",
+  "cb1",
+  "note_type",
+  "bucket",
+  "amount",
+  "reason_code",
+  "remarks",
+  "rows_section",
+  "accounts",
+  "total_amount",
+  "rows",
+  "posting_date",
+  "amended_from",
+  "approval_section",
+  "requested_by",
+  "requested_on",
+  "cb_approval",
+  "approved_by",
+  "approved_on",
+  "changes_since_last_submission",
+  "rejection_reason",
+  "approval_history_section",
+  "approval_history_html",
+  "approval_log",
+  "submitted_snapshot"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "BA-.YYYY.-.#####",
+   "default": "BA-.YYYY.-.#####",
+   "hidden": 1
+  },
+  {
+   "fieldname": "adjustment_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Approval Status",
+   "no_copy": 1,
+   "options": "Workflow State",
+   "read_only": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "audience",
+   "fieldtype": "Select",
+   "label": "Applies To",
+   "options": "Whole society\nBlock\nCategory\nFeeder\nTransformer",
+   "default": "Whole society",
+   "reqd": 1
+  },
+  {
+   "fieldname": "block",
+   "fieldtype": "Data",
+   "label": "Block",
+   "depends_on": "eval:doc.audience=='Block'"
+  },
+  {
+   "fieldname": "consumer_category",
+   "fieldtype": "Link",
+   "label": "Category",
+   "options": "Consumer Category",
+   "depends_on": "eval:doc.audience=='Category'"
+  },
+  {
+   "fieldname": "feeder",
+   "fieldtype": "Link",
+   "label": "Feeder",
+   "options": "Feeder",
+   "depends_on": "eval:doc.audience=='Feeder'"
+  },
+  {
+   "fieldname": "transformer",
+   "fieldtype": "Link",
+   "label": "Transformer",
+   "options": "Transformer",
+   "depends_on": "eval:doc.audience=='Transformer'"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "note_type",
+   "fieldtype": "Select",
+   "label": "Type",
+   "options": "Credit Note\nDebit Note",
+   "default": "Credit Note",
+   "reqd": 1,
+   "description": "Credit note lowers what each consumer owes (for example compensation for a long outage); debit note raises it."
+  },
+  {
+   "fieldname": "bucket",
+   "fieldtype": "Select",
+   "label": "Balance Adjusted",
+   "options": "Current bill\nArrears\nSurcharge\nFees",
+   "default": "Current bill",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount per Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reason_code",
+   "fieldtype": "Link",
+   "label": "Reason",
+   "options": "Reason Code",
+   "reqd": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Explanation",
+   "reqd": 1
+  },
+  {
+   "fieldname": "rows_section",
+   "fieldtype": "Section Break",
+   "label": "Accounts"
+  },
+  {
+   "fieldname": "accounts",
+   "fieldtype": "Int",
+   "label": "Accounts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_amount",
+   "fieldtype": "Currency",
+   "label": "Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rows",
+   "fieldtype": "Table",
+   "label": "Accounts Affected",
+   "options": "Bulk Adjustment Row"
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "label": "Posted On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "Bulk Adjustment",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "Approval"
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Submitted for Approval By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requested_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_approval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "depends_on": "eval:doc.changes_since_last_submission",
+   "fieldname": "changes_since_last_submission",
+   "fieldtype": "Small Text",
+   "label": "Changes Since Last Submission",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.rejection_reason",
+   "fieldname": "rejection_reason",
+   "fieldtype": "Small Text",
+   "label": "Rejection Reason",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_history_section",
+   "fieldtype": "Section Break",
+   "label": "Approval History"
+  },
+  {
+   "fieldname": "approval_history_html",
+   "fieldtype": "HTML",
+   "label": "Approval History View"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approval_log",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "no_copy": 1,
+   "options": "Approval Log",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "submitted_snapshot",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Submitted Snapshot",
+   "no_copy": 1,
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 16:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Bulk Adjustment",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "naming_series:",
+ "is_submittable": 1,
+ "title_field": "adjustment_title",
+ "show_title_field_in_link": 1,
+ "search_fields": "society,reason_code",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

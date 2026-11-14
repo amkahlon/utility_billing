@@ -22,4 +22,5 @@ class UtilityBill(Document):
 			frappe.throw(_("Bills are cancelled through their bill run."))
 
 	def on_cancel(self):
-		self.db_set({"status": "Cancelled", "outstanding_amount": 0})
+		# A bill replaced by a revised bill is Superseded, and stays visible beside its replacement (FS-BIL-11)
+		self.db_set({"status": "Superseded" if self.flags.superseding else "Cancelled", "outstanding_amount": 0})

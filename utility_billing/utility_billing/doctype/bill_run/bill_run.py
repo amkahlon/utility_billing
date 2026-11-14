@@ -78,6 +78,8 @@ class BillRun(Document):
 
 	def before_cancel(self):
 		# Checked before Frappe marks the run cancelled, so a refused cancel changes nothing.
+		if len((self.cancellation_reason or "").strip()) < 5:
+			frappe.throw(_("Give the reason for reversing this run (FS-RUN-06)."))
 		billing.check_run_cancellable(self)
 
 	def on_cancel(self):

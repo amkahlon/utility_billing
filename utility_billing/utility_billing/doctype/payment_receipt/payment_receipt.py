@@ -77,6 +77,8 @@ class PaymentReceipt(Document):
 			other = frappe.db.get_value("Payment Receipt", {"channel_txn_id": self.channel_txn_id, "name": ["!=", self.name]})
 			if other:
 				frappe.throw(_("Transaction ID {0} is already posted as receipt {1}.").format(self.channel_txn_id, other))
+		if self.mode in INSTRUMENT_MODES and frappe.db.get_value("Consumer", frappe.db.get_value("Connection", self.connection, "consumer"), "cash_only"):
+			frappe.throw(_("{0} pays by cash only after a dishonoured cheque. Take cash, card or a bank transfer.").format(self.consumer_name))
 		if self.mode in INSTRUMENT_MODES and not (self.instrument_no or "").strip():
 			frappe.throw(_("Enter the {0} number.").format(_(self.mode).lower()))
 

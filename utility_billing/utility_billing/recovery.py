@@ -79,10 +79,14 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 	as_of = getdate(as_of or nowdate())
 	rules = rules_of(society)
 	cases, hist = open_cases(society), notice_history(society)
+	disputed = frappe.db.sql("""select connection, sum(disputed_amount) a from `tabBill Dispute` where society = %s and status = 'Open' group by connection""",
+	                         society, as_dict=True)
+	disputed = {d.connection: flt(d.a) for d in disputed}  # money in dispute is left out of recovery (FS-WF-10)
 	rows = []
 	for r, parts in mis.aging_for(society, as_of, category, block):
 		overdue, oldest = overdue_view(parts)
-		if overdue <= 0:
+		r.balance = flt(r.balance) - disputed.get(r.connection, 0)
+		if overdue <= 0 or r.balance <= 0:
 			continue
 		if not include_all and flt(r.balance) < rules.min_amount:
 			continue
