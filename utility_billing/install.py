@@ -67,11 +67,67 @@ EXPORT_LAYOUTS = [
 ]
 
 
+# KPI dictionary (FS-RPT-45): code, name, area, what it means, formula, data source, refresh, split by, drill-down, report
+KPIS = [
+	("BILLED", "Billed", "Billing", "Current bills issued for a billing month, before arrears and surcharge.",
+	 "Sum of Current Bill of posted utility bills", "Utility Bill", "Live", "Month, category, block, charge type",
+	 "Management Dashboard → Billing Summary by Cycle → Bill Register", "Billing Summary by Cycle"),
+	("PAYABLE", "Payable within due date", "Billing", "What the bills issued for a month ask consumers to pay by the due date (current bill plus arrears).",
+	 "Sum of Payable Within Due Date of posted utility bills", "Utility Bill", "Live", "Month, category, block",
+	 "Bill Register", "Bill Register"),
+	("COLLECTED", "Collected", "Collections", "Money received in a period, on any bill, at the counter or through a bank or channel. Reversed receipts are not counted.",
+	 "Sum of Amount of posted payment receipts, by payment date", "Payment Receipt", "Live", "Day, counter, cashier, payment mode, channel, category, block",
+	 "Collections → Cashier Closing", "Collections"),
+	("COLLECTION_RATE", "Collection rate", "Collections", "How much of what was asked for in a month was received in that month. Above 100% means arrears were recovered.",
+	 "Collected in the month ÷ Payable within due date of the bills issued that month × 100", "Payment Receipt, Utility Bill", "Live",
+	 "Month, category, block", "Management Dashboard → Collection vs Billing by Category and Block", "Collection vs Billing by Category and Block"),
+	("OWED", "Total owed", "Receivables", "What all consumers owe now: current bills, arrears, surcharge and fees, accounts in credit left out.",
+	 "Sum of the balance of every account whose balance is above zero", "Customer Ledger Entry (latest entry of each account)", "Live",
+	 "Block, category", "Arrears Ageing → Defaulters", "Arrears Ageing"),
+	("ARREARS", "Arrears, surcharge and fees", "Receivables", "What is owed beyond the current bill.",
+	 "Sum of the arrears, surcharge and fees balances of all accounts", "Customer Ledger Entry", "Live", "Block, category",
+	 "Arrears Ageing", "Arrears Ageing"),
+	("ACCOUNTS_IN_ARREARS", "Accounts in arrears", "Receivables", "Number of accounts that owe money from before their current bill.",
+	 "Count of accounts with an arrears balance above zero", "Customer Ledger Entry", "Live", "Block, category", "Defaulters", "Defaulters"),
+	("CREDIT_HELD", "Credit held", "Receivables", "Money consumers have paid in advance or in excess, to be used by their next bills.",
+	 "Sum of the credit balance of all accounts", "Customer Ledger Entry", "Live", "Block, category", "Credit Balances and Advance Payments",
+	 "Credit Balances and Advance Payments"),
+	("AGEING", "Owed by age", "Receivables", "What is owed, grouped by how many days past the due date it is: 0-30, 31-60, 61-90, 91-180, over 180.",
+	 "Balance of each account allocated to its newest charges (payments clear the oldest first), aged from the charge's due date or posting date",
+	 "Customer Ledger Entry, Utility Bill", "Live", "Block, category", "Arrears Ageing → Defaulters", "Arrears Ageing"),
+	("AVG_RATE", "Average rate per unit", "Billing", "What consumers paid per unit of energy on average.",
+	 "Energy charge ÷ units billed", "Utility Bill, Bill Line", "Live", "Category, tariff", "Sales by Category and Tariff", "Sales by Category and Tariff"),
+	("SURCHARGE_NET", "Net surcharge", "Receivables", "Late payment surcharge actually kept: levied less waived and reversed.",
+	 "Levied − waived by credit note − reversed because paid in time", "Customer Ledger Entry", "Live", "Month", "Surcharge Register",
+	 "Surcharge Register"),
+	("READING_COMPLETION", "Reading completion", "Readings", "Share of meters in a reading cycle with an accepted reading.",
+	 "Valid, approved or estimated readings ÷ meters in the cycle × 100", "Meter Reading", "Live", "Route, reader", "Reading Completion by Route and Reader → Reading Exceptions",
+	 "Reading Completion by Route and Reader"),
+	("ESTIMATED_RUNNING", "Consumers estimated 2+ months running", "Readings", "Consumers billed on an estimate for two or more months in a row, who need a real reading.",
+	 "Count of connections with consecutive estimated readings ending in the month, 2 or more", "Meter Reading", "Live", "Block", "Estimated Bills",
+	 "Estimated Bills"),
+	("CASH_DIFFERENCE", "Cash difference", "Control", "Cash counted when a cashier closes the day against the cash expected.",
+	 "Cash counted − (opening cash + cash received − cash reversed)", "Cashier Day", "Live", "Counter, cashier", "Cashier Closing", "Cashier Closing"),
+	("APPROVAL_WAIT", "Days waiting for approval", "Control", "How long a tariff, adjustment, bill run or credit/debit note has waited for its approver.",
+	 "Today − date submitted for approval", "Tariff, Tariff Adjustment, Bill Run, Account Adjustment", "Live", "Transaction type", "Pending Approvals",
+	 "Pending Approvals"),
+]
+
+
+def create_default_kpis():
+	for code, name, area, definition, formula, source, refresh, dims, drill, report in KPIS:
+		if not frappe.db.exists("KPI Definition", code):
+			frappe.get_doc({"doctype": "KPI Definition", "kpi_code": code, "kpi_name": name, "area": area, "definition": definition,
+			                "formula": formula, "data_source": source, "refresh": refresh, "dimensions": dims, "drill_down": drill,
+			                "report": report if frappe.db.exists("Report", report) else None}).insert(ignore_permissions=True)
+
+
 def after_install():
 	create_default_utilities()
 	create_default_exception_codes()
 	create_default_reason_codes()
 	create_default_export_layouts()
+	create_default_kpis()
 
 
 def create_default_export_layouts():
