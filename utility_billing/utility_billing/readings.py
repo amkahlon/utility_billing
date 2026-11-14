@@ -180,14 +180,14 @@ def close_cycle(cycle: str):
 @frappe.whitelist()
 def upload_readings(cycle: str, file_url: str):
 	"""Apply readings from an Excel or CSV file (FS-RDG-04). Columns: Reference No, Present Reading,
-	Reading Date (optional, default today), Exception Code (optional). Every row gets the same checks
+	Reading Date (optional, default today), Exception Code (optional), MDI (optional, kW). Every row gets the same checks
 	as office entry; rows that can't be applied are returned with the reason."""
 	c = cycle_doc(cycle)
 	rows = _read_rows(file_url)
 	if not rows:
 		frappe.throw(_("The file has no rows."))
 	header = [cstr(h).strip().lower() for h in rows[0]]
-	col = {k: header.index(k) for k in ("reference no", "present reading", "reading date", "exception code") if k in header}
+	col = {k: header.index(k) for k in ("reference no", "present reading", "reading date", "exception code", "mdi") if k in header}
 	if "reference no" not in col or ("present reading" not in col and "exception code" not in col):
 		frappe.throw(_("The file needs the columns Reference No and Present Reading (or Exception Code)."))
 	updated, errors = 0, []
@@ -213,6 +213,8 @@ def upload_readings(cycle: str, file_url: str):
 					raise frappe.ValidationError(_("Present Reading is empty"))
 				r.present_reading = flt(present)
 				r.exception_code = None
+				if val("mdi") not in (None, ""):
+					r.mdi_kw = flt(val("mdi"))  # the maximum demand shown on the meter (MDI), in kW
 			r.reading_date = getdate(val("reading date")) if val("reading date") else nowdate()
 			r.source = "Import"
 			r.save()

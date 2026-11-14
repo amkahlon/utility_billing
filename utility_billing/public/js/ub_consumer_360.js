@@ -109,6 +109,12 @@ window.UtilityBillingConsumer360 = class UtilityBillingConsumer360 {
 				{ label: __("Property"), cell: (a) => `${this.esc(a.property_no)}<div class="sub">${this.esc(a.block || "")}</div>` },
 				{ label: __("Category / status"), cell: (a) => `${this.esc(a.consumer_category)}<div class="sub">${this.esc(a.status)}</div>` },
 				{ label: __("Meter / route"), cell: (a) => `${this.esc(a.current_meter || "")}<div class="sub">${this.esc(a.route || "")}</div>` },
+				{
+					label: __("Load kW (sanctioned / MDI)"),
+					num: 1,
+					cell: (a) => `${this.esc(a.sanctioned_load_kw || 0)} / ${a.last_mdi_kw ? this.esc(a.last_mdi_kw) : "–"}${
+						a.last_mdi_kw > a.sanctioned_load_kw && a.sanctioned_load_kw ? ` <span class="ub-badge">${__("over")}</span>` : ""}`,
+				},
 				{ label: __("Flags"), cell: (a) => (a.flags.length ? `<span class="ub-badge">${this.esc(a.flags.join(", "))}</span>` : "") },
 				{ label: __("Deposit"), num: 1, cell: (a) => this.rs(a.security_deposit) },
 				{ label: __("Owes"), num: 1, cell: (a) => `<b>${this.rs(a.owes)}</b>` },

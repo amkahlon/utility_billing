@@ -23,6 +23,7 @@
   "previous_reading",
   "previous_reading_date",
   "present_reading",
+  "mdi_kw",
   "reading_date",
   "cb2",
   "exception_code",
@@ -325,12 +326,19 @@
    "options": "User",
    "read_only": 1,
    "in_standard_filter": 1
+  },
+  {
+   "fieldname": "mdi_kw",
+   "fieldtype": "Float",
+   "label": "Maximum Demand (MDI, kW)",
+   "precision": "2",
+   "description": "The meter's maximum demand indicator, read with the units (and reset by the reader where the meter needs it)."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 23:00:00.000000",
+ "modified": "2026-11-15 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Meter Reading",

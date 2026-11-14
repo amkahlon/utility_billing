@@ -24,6 +24,8 @@
   "expires_on",
   "supply_section",
   "sanctioned_load_kw",
+  "last_mdi_kw",
+  "last_mdi_date",
   "phase",
   "cb_supply",
   "transformer",
@@ -212,12 +214,26 @@
    "fieldtype": "Date",
    "label": "Temporary Until",
    "description": "A temporary or construction connection ends on this date (FS-WF-30)."
+  },
+  {
+   "fieldname": "last_mdi_kw",
+   "fieldtype": "Float",
+   "label": "Connected Load (last MDI, kW)",
+   "read_only": 1,
+   "precision": "2",
+   "description": "The maximum demand read from the meter at the last reading that had one."
+  },
+  {
+   "fieldname": "last_mdi_date",
+   "fieldtype": "Date",
+   "label": "MDI Read On",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 10:00:00.000000",
+ "modified": "2026-11-15 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection",

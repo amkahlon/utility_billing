@@ -1,0 +1,159 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 15:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "society",
+  "target_year",
+  "target_title",
+  "cb1",
+  "total_billed",
+  "total_collected",
+  "months_section",
+  "months"
+ ],
+ "fields": [
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "target_year",
+   "fieldtype": "Int",
+   "label": "Year",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "target_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_billed",
+   "fieldtype": "Currency",
+   "label": "Billing Target for the Year",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "total_collected",
+   "fieldtype": "Currency",
+   "label": "Collection Target for the Year",
+   "read_only": 1
+  },
+  {
+   "fieldname": "months_section",
+   "fieldtype": "Section Break",
+   "label": "Months"
+  },
+  {
+   "fieldname": "months",
+   "fieldtype": "Table",
+   "label": "Targets by Month",
+   "options": "Target Month"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 15:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Revenue Target",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "format:{society}-{target_year}",
+ "title_field": "target_title",
+ "search_fields": "society,target_year",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

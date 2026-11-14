@@ -37,7 +37,7 @@ def search(text: str, limit: int = 20):
 def _connections(consumer):
 	return frappe.get_all("Connection", filters={"consumer": consumer},
 	                      fields=["name", "reference_no", "society", "property", "utility", "consumer_category", "status", "connection_date",
-	                              "sanctioned_load_kw", "phase", "current_meter", "transformer", "feeder", "route", "security_deposit"],
+	                              "sanctioned_load_kw", "last_mdi_kw", "phase", "current_meter", "transformer", "feeder", "route", "security_deposit"],
 	                      order_by="society, name")
 
 

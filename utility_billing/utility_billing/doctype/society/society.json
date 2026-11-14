@@ -135,7 +135,9 @@
   "escalate_to_role",
   "cb_rules",
   "disconnection_notice_days",
-  "reconnection_fee_type"
+  "reconnection_fee_type",
+  "channel_fees_section",
+  "channel_fees"
  ],
  "fields": [
   {
@@ -885,13 +887,26 @@
    "label": "Reconnection Fee",
    "options": "Fee Type",
    "description": "Charged on a reconnection request when its type has no fee of its own."
+  },
+  {
+   "fieldname": "channel_fees_section",
+   "fieldtype": "Section Break",
+   "label": "Channel fees and commissions",
+   "collapsible": 1,
+   "description": "What each payment channel charges the society, for the channel fees report (FS-RPT-22)."
+  },
+  {
+   "fieldname": "channel_fees",
+   "fieldtype": "Table",
+   "label": "Fees",
+   "options": "Channel Fee"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 12:00:00.000000",
+ "modified": "2026-11-15 15:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",
