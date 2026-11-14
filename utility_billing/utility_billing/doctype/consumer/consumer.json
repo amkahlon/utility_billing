@@ -25,6 +25,8 @@
   "notify_app",
   "notify_sms",
   "notify_email",
+  "notify_whatsapp",
+  "preferred_channel",
   "status_section",
   "enabled"
  ],
@@ -140,12 +142,24 @@
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Active"
+  },
+  {
+   "fieldname": "notify_whatsapp",
+   "fieldtype": "Check",
+   "label": "WhatsApp",
+   "default": "0"
+  },
+  {
+   "fieldname": "preferred_channel",
+   "fieldtype": "Select",
+   "label": "Preferred Channel",
+   "options": "\nSMS\nWhatsApp\nEmail"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-13 22:38:48.221904",
+ "modified": "2026-11-14 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Consumer",

@@ -16,7 +16,7 @@ from frappe.model.document import Document
 from frappe.model.naming import make_autoname
 from frappe.utils import flt, getdate, now_datetime, nowdate
 
-from utility_billing.utility_billing import account
+from utility_billing.utility_billing import account, notify
 from utility_billing.utility_billing.doctype.cashier_day.cashier_day import open_day_of, refresh_totals
 
 CHANNEL_ROLES = {"System Manager", "Accounts Officer"}
@@ -95,6 +95,7 @@ class PaymentReceipt(Document):
 			"ledger_entry": entry.name, "status": "Posted",
 		})
 		self.update_day()
+		notify.payment_received(self)  # FS-PAY-09: the receipt notification
 
 	def before_cancel(self):
 		if not self.flags.reversal:
@@ -107,6 +108,7 @@ class PaymentReceipt(Document):
 		self.db_set({"status": "Reversed", "reversal_reason": r["reason_code"], "reversal_remarks": r["remarks"],
 		             "reversed_by": frappe.session.user, "reversed_on": now_datetime()})
 		self.update_day()
+		notify.payment_received(self, reversed_=True)
 
 	def update_day(self):
 		if not self.cashier_day:

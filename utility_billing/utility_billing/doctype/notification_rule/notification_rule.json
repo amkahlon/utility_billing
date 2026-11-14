@@ -1,0 +1,76 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 14:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "event",
+  "channel_1",
+  "channel_2",
+  "channel_3",
+  "critical",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "event",
+   "fieldtype": "Select",
+   "label": "Event",
+   "options": "bill.issued\nbill.revised\npayment.received\npayment.reversed\nreminder.due\nbill.overdue\ndisconnection.notice\nconnection.disconnected\nconnection.reconnected\nreading.taken\nrequest.updated\noutage.notice\nrecovery.notice",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "channel_1",
+   "fieldtype": "Select",
+   "label": "First Channel",
+   "options": "\nSMS\nWhatsApp\nEmail\nApp",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "channel_2",
+   "fieldtype": "Select",
+   "label": "If That Fails",
+   "options": "\nSMS\nWhatsApp\nEmail\nApp",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "channel_3",
+   "fieldtype": "Select",
+   "label": "Then",
+   "options": "\nSMS\nWhatsApp\nEmail\nApp",
+   "columns": 2
+  },
+  {
+   "fieldname": "critical",
+   "fieldtype": "Check",
+   "label": "Critical",
+   "in_list_view": 1,
+   "columns": 1,
+   "description": "Sent even in quiet hours."
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "On",
+   "default": "1",
+   "in_list_view": 1,
+   "columns": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Notification Rule",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

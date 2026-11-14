@@ -1,0 +1,165 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 14:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "provider_title",
+  "society",
+  "channel",
+  "provider_type",
+  "cb1",
+  "enabled",
+  "priority",
+  "cost_per_message",
+  "gateway_section",
+  "endpoint_url",
+  "api_key",
+  "sender_id",
+  "callback_token"
+ ],
+ "fields": [
+  {
+   "fieldname": "provider_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "in_standard_filter": 1,
+   "description": "Leave empty to serve every society."
+  },
+  {
+   "fieldname": "channel",
+   "fieldtype": "Select",
+   "label": "Channel",
+   "options": "SMS\nWhatsApp\nEmail",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "provider_type",
+   "fieldtype": "Select",
+   "label": "Type",
+   "options": "Dry run\nFrappe Email\nHTTP gateway",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Dry run only records the message (testing). Frappe Email hands it to the site's mail queue. HTTP gateway posts JSON to a gateway URL."
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "On",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Order",
+   "default": "1",
+   "description": "Lowest number is used first."
+  },
+  {
+   "fieldname": "cost_per_message",
+   "fieldtype": "Currency",
+   "label": "Cost per Message (Rs)",
+   "default": "0"
+  },
+  {
+   "fieldname": "gateway_section",
+   "fieldtype": "Section Break",
+   "label": "HTTP gateway",
+   "depends_on": "eval:doc.provider_type=='HTTP gateway'"
+  },
+  {
+   "fieldname": "endpoint_url",
+   "fieldtype": "Data",
+   "label": "Gateway URL",
+   "depends_on": "eval:doc.provider_type=='HTTP gateway'"
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "API Key",
+   "depends_on": "eval:doc.provider_type=='HTTP gateway'",
+   "description": "Kept encrypted on this site only; never put it in a file or a message."
+  },
+  {
+   "fieldname": "sender_id",
+   "fieldtype": "Data",
+   "label": "Sender ID or Number",
+   "depends_on": "eval:doc.provider_type=='HTTP gateway'"
+  },
+  {
+   "fieldname": "callback_token",
+   "fieldtype": "Password",
+   "label": "Delivery Report Token",
+   "depends_on": "eval:doc.provider_type=='HTTP gateway'",
+   "description": "The gateway sends delivery reports with this token."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Messaging Provider",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "title_field": "provider_title",
+ "show_title_field_in_link": 1,
+ "search_fields": "channel,provider_type",
+ "autoname": "hash",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

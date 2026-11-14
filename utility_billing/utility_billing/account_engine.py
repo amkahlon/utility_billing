@@ -116,6 +116,16 @@ def credit_note(bal: dict, bucket: str, amount) -> dict:
 	return {**{b: D(0) for b in ALL}, bucket: -amount}
 
 
+def refund(bal: dict, amount) -> dict:
+	"""Deltas for refunding credit to the consumer. It can't take more than the credit held."""
+	amount = D(amount)
+	if amount <= 0:
+		raise ValueError("The refund must be more than zero.")
+	if amount > D(bal["credit"]):
+		raise ValueError(f"The credit balance is only {bal['credit']}.")
+	return {**{b: D(0) for b in ALL}, "credit": -amount}
+
+
 def reverse(bal: dict, deltas: dict) -> dict:
 	"""Deltas that undo an earlier entry's deltas, kept within the rules above."""
 	after = normalise(apply(bal, {b: -D(deltas.get(b)) for b in ALL}))

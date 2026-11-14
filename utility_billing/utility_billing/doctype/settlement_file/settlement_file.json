@@ -1,0 +1,251 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 14:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "file_title",
+  "society",
+  "mode",
+  "source_name",
+  "cb1",
+  "file_date",
+  "status",
+  "settlement_file",
+  "summary_section",
+  "rows_in_file",
+  "matched",
+  "amount_differs",
+  "not_recorded",
+  "cb2",
+  "missing_from_file",
+  "other_flags",
+  "total_amount",
+  "total_fees",
+  "rows_section",
+  "rows",
+  "closed_by",
+  "closed_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "STL-.YYYY.-.####",
+   "default": "STL-.YYYY.-.####",
+   "hidden": 1
+  },
+  {
+   "fieldname": "file_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Channel",
+   "options": "Cash\nCheque\nPay Order\nCard\nBank Transfer\n1Link\nKuickpay",
+   "default": "Bank Transfer",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Receipts recorded with this payment mode are matched to the file."
+  },
+  {
+   "fieldname": "source_name",
+   "fieldtype": "Data",
+   "label": "Bank or Provider"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "file_date",
+   "fieldtype": "Date",
+   "label": "Settlement Date",
+   "reqd": 1,
+   "default": "Today",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nMatched\nClosed",
+   "default": "Draft",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "settlement_file",
+   "fieldtype": "Attach",
+   "label": "File (CSV)",
+   "description": "Columns: transaction_id, reference_no, amount, date (YYYY-MM-DD or DD-MM-YYYY); optional: fee."
+  },
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Result"
+  },
+  {
+   "fieldname": "rows_in_file",
+   "fieldtype": "Int",
+   "label": "Rows in File",
+   "read_only": 1
+  },
+  {
+   "fieldname": "matched",
+   "fieldtype": "Int",
+   "label": "Matched",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amount_differs",
+   "fieldtype": "Int",
+   "label": "Amount Differs",
+   "read_only": 1
+  },
+  {
+   "fieldname": "not_recorded",
+   "fieldtype": "Int",
+   "label": "In File, Not Recorded",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "missing_from_file",
+   "fieldtype": "Int",
+   "label": "Recorded, Not in File",
+   "read_only": 1
+  },
+  {
+   "fieldname": "other_flags",
+   "fieldtype": "Int",
+   "label": "Reversed or Duplicate",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_amount",
+   "fieldtype": "Currency",
+   "label": "File Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_fees",
+   "fieldtype": "Currency",
+   "label": "Channel Fees",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rows_section",
+   "fieldtype": "Section Break",
+   "label": "Rows"
+  },
+  {
+   "fieldname": "rows",
+   "fieldtype": "Table",
+   "label": "Rows",
+   "options": "Settlement Row"
+  },
+  {
+   "fieldname": "closed_by",
+   "fieldtype": "Link",
+   "label": "Closed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Datetime",
+   "label": "Closed On",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Settlement File",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "naming_series:",
+ "title_field": "file_title",
+ "show_title_field_in_link": 1,
+ "search_fields": "society,mode,file_date",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

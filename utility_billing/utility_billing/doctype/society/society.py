@@ -46,7 +46,22 @@ class Society(Document):
 		if not 0 < watch < high <= 100:
 			frappe.throw(_("Line loss alert levels: Watch must be above 0 and below High loss, and High loss at most 100%."))
 		self.validate_recovery_rules()
+		self.validate_notifications()
 		self.validate_logo()
+
+	def validate_notifications(self):
+		seen = set()
+		for r in self.notification_rules:
+			if r.event in seen:
+				frappe.throw(_("Event rules: {0} is listed twice.").format(r.event))
+			seen.add(r.event)
+			chans = [c for c in (r.channel_1, r.channel_2, r.channel_3) if c]
+			if len(set(chans)) != len(chans):
+				frappe.throw(_("Event rules: {0} repeats a channel.").format(r.event))
+			if cint(r.enabled) and not chans:
+				frappe.throw(_("Event rules: choose at least one channel for {0}, or turn it off.").format(r.event))
+		if cint(self.reminder_days_before_due) < 0:
+			frappe.throw(_("Reminder days can't be negative."))
 
 	def validate_recovery_rules(self):
 		if flt(self.defaulter_min_amount) < 0 or cint(self.defaulter_min_days) < 0:

@@ -105,7 +105,14 @@
   "defaulter_min_amount",
   "cb_recovery",
   "defaulter_min_days",
-  "recovery_stages"
+  "recovery_stages",
+  "notifications_section",
+  "whatsapp_enabled",
+  "reminder_days_before_due",
+  "cb_notify",
+  "quiet_hours_start",
+  "quiet_hours_end",
+  "notification_rules"
  ],
  "fields": [
   {
@@ -666,13 +673,56 @@
    "fieldtype": "Table",
    "label": "Recovery Stages",
    "options": "Recovery Stage Rule"
+  },
+  {
+   "fieldname": "notifications_section",
+   "fieldtype": "Section Break",
+   "label": "Notifications",
+   "collapsible": 1,
+   "description": "Which message goes by which channel for each event (FS-NTF-01, 04, 06). An empty table uses the defaults."
+  },
+  {
+   "fieldname": "whatsapp_enabled",
+   "fieldtype": "Check",
+   "label": "WhatsApp On",
+   "default": "0",
+   "description": "Switch off to stop all WhatsApp messages."
+  },
+  {
+   "fieldname": "reminder_days_before_due",
+   "fieldtype": "Int",
+   "label": "Remind Consumers Before Due Date (days)",
+   "default": "3"
+  },
+  {
+   "fieldname": "cb_notify",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "quiet_hours_start",
+   "fieldtype": "Time",
+   "label": "Quiet Hours From",
+   "default": "21:00:00",
+   "description": "Ordinary messages wait until quiet hours end; critical ones go out."
+  },
+  {
+   "fieldname": "quiet_hours_end",
+   "fieldtype": "Time",
+   "label": "Quiet Hours To",
+   "default": "08:00:00"
+  },
+  {
+   "fieldname": "notification_rules",
+   "fieldtype": "Table",
+   "label": "Event Rules",
+   "options": "Notification Rule"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 12:00:00.000000",
+ "modified": "2026-11-14 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

@@ -1285,13 +1285,156 @@ def t_recovery(d: Desk):
 	expect_error(lambda: run_report(cashier, "Recovery Notices Register", from_date="2027-03-01", to_date="2027-03-31"))
 
 
-def doc_method(desk, doc: dict, method: str):
+def doc_method(desk, doc: dict, method: str, args: dict | None = None):
 	"""Call a whitelisted document method the way the form's custom buttons do (frm.call)."""
-	r = desk.s.post(f"{URL}/api/method/run_doc_method", data={"docs": json.dumps(doc), "method": method})
+	data = {"docs": json.dumps(doc), "method": method}
+	if args:
+		data["args"] = json.dumps(args)
+	r = desk.s.post(f"{URL}/api/method/run_doc_method", data=data)
 	data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
 	if r.status_code != 200:
 		raise ServerError(r.status_code, f"{_message(data) or r.text[:300]} [{method}]")
 	return data.get("message")
+
+
+@case("QA-68", "FS-NTF-01..09, FS-PAY-09/10/11/16: messages, providers, templates, settlement file, suspense, refund, broadcast, links")
+def t_notifications_and_settlement(d: Desk):
+	from datetime import date
+
+	import requests
+
+	N = "utility_billing.utility_billing.notify."
+	ao, bm, gm, cashier = USERS["ao"], USERS["bm"], USERS["gm"], USERS["cashier"]
+	today = date.today().isoformat()
+	conn = S["conn"]["name"]
+
+	def logs(**filters):
+		r = d.s.get(f"{URL}/api/resource/Message Log", params={"filters": json.dumps({"society": S["society"], **filters}), "limit_page_length": 200,
+		                                                         "fields": json.dumps(["name", "event", "channel", "status", "body", "recipient", "provider_ref", "cost", "bill_link", "reference_name"]),
+		                                                         "order_by": "creation asc"})
+		return r.json()["data"]
+
+	owner = d.get("Consumer", S["owner"])
+	owner.update({"mobile_no": "0300-1234567", "email": "owner@example.com", "notify_sms": "1", "notify_email": "1", "notify_whatsapp": "0"})
+	d.save_doc(owner)
+	soc = d.get("Society", S["society"])
+	soc.update({"quiet_hours_start": "00:00:00", "quiet_hours_end": "00:00:00", "whatsapp_enabled": "0",
+	            "notification_rules": [{"event": "payment.received", "channel_1": "SMS", "channel_2": "Email", "enabled": "1"}]})
+	d.save_doc(soc)
+	bad_rule = d.get("Society", S["society"])
+	bad_rule["notification_rules"] = [{"event": "bill.issued", "channel_1": "SMS", "enabled": "1"}, {"event": "bill.issued", "channel_1": "Email", "enabled": "1"}]
+	expect_error(lambda: d.save_doc(bad_rule), "twice")
+
+	# providers and templates
+	expect_error(lambda: d.save_doc({"doctype": "Messaging Provider", "channel": "SMS", "provider_type": "HTTP gateway", "endpoint_url": "http://insecure.example/x",
+	                                 "society": S["society"], "enabled": "1"}), "https")
+	sms = d.save_doc({"doctype": "Messaging Provider", "channel": "SMS", "provider_type": "Dry run", "society": S["society"], "cost_per_message": "2", "enabled": "1"})
+	d.save_doc({"doctype": "Messaging Provider", "channel": "Email", "provider_type": "Dry run", "society": S["society"], "enabled": "1"})
+	expect_error(lambda: cashier.get("Messaging Provider", sms["name"]))
+	tpl = {"doctype": "Notification Template", "society": S["society"], "event": "payment.received", "channel": "SMS", "language": "English",
+	       "body": "Thanks {consumer}: Rs {amount} received, receipt {receipt}."}
+	bm.save_doc(dict(tpl))
+	expect_error(lambda: bm.save_doc(dict(tpl)), "already")
+
+	# FS-PAY-09: a payment sends its receipt message, which goes out and is logged with its cost
+	pay = ao.save_doc({"doctype": "Payment Receipt", "payment_channel": "Bank / Channel", "reference_no": conn, "amount": "100", "mode": "Bank Transfer",
+	                   "payment_date": today, "channel_txn_id": f"N-{RUN}-1"})
+	pay = ao.save_doc(pay, action="Submit")
+	d.call(N + "send_now")
+	expect_error(lambda: cashier.call(N + "send_now"))
+	sent = [m for m in logs(event="payment.received") if m["reference_name"] == pay["name"]]
+	eq(len(sent), 1, "one receipt message")
+	m = sent[0]
+	eq((m["channel"], m["status"], m["recipient"], float(m["cost"])), ("SMS", "Sent", "0300-1234567", 2.0), "receipt message")
+	eq(m["body"], f"Thanks {owner['consumer_name']}: Rs 100 received, receipt {pay['name']}.", "the society's own template was used")
+	if not m["provider_ref"].startswith("DRY-"):
+		raise AssertionError(f"provider reference: {m['provider_ref']}")
+
+	# the delivery report and the bill link are open to a gateway or a consumer, but only with the right token
+	anon = requests.Session()
+	anon.headers.update({"Host": SITE, "Accept": "application/json"})
+	r = anon.post(f"{URL}/api/method/{N}delivery_report", data={"provider_ref": m["provider_ref"], "status": "Delivered", "token": "guess"})
+	eq(r.status_code, 403, "delivery report without the provider's token")
+	link = [x for x in logs(event="bill.issued") if x["reference_name"] == S["bill"] and x["bill_link"]]
+	if not link:
+		raise AssertionError("no bill message carries a PDF link")
+	url = link[0]["bill_link"].split("/api/method/")[1]
+	good = anon.get(f"{URL}/api/method/{url}")
+	if good.status_code != 200 or not good.content.startswith(b"%PDF"):
+		raise AssertionError(f"bill link did not give a PDF: {good.status_code}")
+	bad = anon.get(f"{URL}/api/method/{url.split('token=')[0]}token=0000")
+	eq(bad.status_code, 403, "bill link with a wrong token")
+
+	# FS-PAY-10/11: a settlement file is matched, unrecorded money is posted or held, and the file closes
+	csv_text = (f"transaction_id,reference_no,amount,date\nN-{RUN}-1,{conn},100,{today}\nN-{RUN}-2,{conn},250,{today}\nN-{RUN}-3,NOPE-REF,75,{today}\n")
+	sf = ao.save_doc({"doctype": "Settlement File", "society": S["society"], "mode": "Bank Transfer", "file_date": today, "source_name": "MBL"})
+	up = ao.s.post(f"{URL}/api/method/upload_file", files={"file": (f"settlement-{RUN}.csv", csv_text)},
+	               data={"is_private": "1", "doctype": "Settlement File", "docname": sf["name"], "fieldname": "settlement_file"})
+	eq(up.status_code, 200, "file upload")
+	sf = ao.get("Settlement File", sf["name"])
+	sf["settlement_file"] = up.json()["message"]["file_url"]  # the form puts the uploaded file's URL in the Attach field and saves
+	sf = ao.save_doc(sf)
+	out = doc_method(ao, sf, "import_file")
+	eq(out, {"matched": 1, "flagged": 2}, "import result")
+	sf = ao.get("Settlement File", sf["name"])
+	eq([r["result"] for r in sf["rows"]], ["Matched", "Not recorded", "Not recorded"], "row results")
+	expect_error(lambda: doc_method(cashier, sf, "post_unrecorded"))
+	expect_error(lambda: doc_method(ao, sf, "close_file"))  # flagged rows have no action yet
+	out = doc_method(ao, sf, "post_unrecorded")
+	eq(out, {"posted": 1, "suspense": 1}, "posted and held")
+	sf = ao.get("Settlement File", sf["name"])
+	susp = sf["rows"][2]["suspense"]
+	receipt2 = sf["rows"][1]["receipt"]
+	eq((ao.get("Payment Receipt", receipt2)["amount"], ao.get("Suspense Payment", susp)["status"]), (250.0, "Held"), "posted receipt and held payment")
+	exc = rows_of(run_report(ao, "Settlement Exceptions", from_date=today, to_date=today))
+	eq([r["result"] for r in exc], [], "nothing open after the actions")
+	eq(doc_method(ao, sf, "close_file"), "Closed", "file closed")
+	held = rows_of(run_report(ao, "Suspense Payments", as_of=today))
+	eq((held[0]["name"], float(held[0]["amount"])), (susp, 75.0), "suspense report")
+	doc_method(ao, ao.get("Suspense Payment", susp), "match", {"connection": conn})
+	eq(ao.get("Suspense Payment", susp)["status"], "Matched", "suspense matched")
+
+	# FS-PAY-16, WF-13: a refund of credit needs a second person and can't exceed the credit
+	big = ao.save_doc({"doctype": "Payment Receipt", "payment_channel": "Bank / Channel", "reference_no": conn, "amount": "5000", "mode": "Bank Transfer",
+	                   "payment_date": today, "channel_txn_id": f"N-{RUN}-4"})
+	ao.save_doc(big, action="Submit")
+	credit = float(d.call("utility_billing.utility_billing.account.account_summary", connection=conn)["balances"]["credit"])
+	if credit < 1000:
+		raise AssertionError(f"expected credit after the overpayment, got {credit}")
+	refund = {"doctype": "Refund", "connection": conn, "amount": str(credit + 1), "reason_code": "REFUND-EXCESS", "refund_mode": "Bank Transfer",
+	          "payee_name": "QA Owner", "instrument_no": "PK00 QA 1"}
+	too_much = ao.save_doc(dict(refund))
+	expect_error(lambda: ao.workflow(too_much, "Submit for Approval"), "credit")
+	ok = ao.save_doc(dict(refund, amount="1000"))
+	ao.workflow(ok, "Submit for Approval")
+	expect_error(lambda: ao.workflow(ok, "Approve"))
+	gm.workflow(ok, "Approve")
+	ok = d.get("Refund", ok["name"])
+	eq((ok["docstatus"], ok["workflow_state"], ok["approved_by"]), (1, "Approved", EMAIL["gm"]), "refund approved")
+	entry = d.get("Customer Ledger Entry", ok["ledger_entry"])
+	eq((entry["entry_type"], float(entry["amount"])), ("Refund", 1000.0), "refund entry")
+	eq(float(d.call("utility_billing.utility_billing.account.account_summary", connection=conn)["balances"]["credit"]), credit - 1000, "credit reduced")
+	reg = rows_of(run_report(gm, "Refunds Register", from_date=today, to_date=today))
+	row = [r for r in reg if r["name"] == ok["name"]][0]
+	eq((row["amount"], row["workflow_state"], row["approved_by"]), (1000.0, "Approved", EMAIL["gm"]), "refunds register")
+	eq([r["workflow_state"] for r in reg if r["name"] == too_much["name"]], ["Draft"], "the refused refund stays a draft")
+
+	# FS-NTF-09: a broadcast to the whole society
+	b = bm.save_doc({"doctype": "Broadcast", "society": S["society"], "audience": "Whole society", "message": "Power off 9 am to 1 pm for maintenance."})
+	expect_error(lambda: doc_method(cashier, b, "send"))
+	n = doc_method(bm, b, "send")
+	if int(n) < 1:
+		raise AssertionError(f"broadcast reached nobody: {n}")
+	d.call(N + "send_now")
+	outage = [x for x in logs(event="outage.notice")]
+	eq((outage[-1]["status"], outage[-1]["body"]), ("Sent", "Power off 9 am to 1 pm for maintenance."), "broadcast message")
+
+	# FS-NTF-06: the cost report
+	cost = rows_of(run_report(ao, "Message Cost by Channel", from_date=today, to_date=today))
+	by = {r["channel"]: r for r in cost}
+	if int(by["SMS"]["sent"]) < 2 or float(by["SMS"]["cost"]) < 4:
+		raise AssertionError(f"cost report: {by['SMS']}")
+	expect_error(lambda: run_report(cashier, "Message Cost by Channel", from_date=today, to_date=today))
 
 
 def _notice_pdf(desk, run):
