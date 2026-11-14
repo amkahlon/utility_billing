@@ -13,7 +13,7 @@
    "fieldname": "transaction",
    "fieldtype": "Select",
    "label": "Transaction",
-   "options": "Account Adjustment\nRefund\nBulk Adjustment\nWrite Off\nInstallment Plan",
+   "options": "Account Adjustment\nRefund\nBulk Adjustment\nWrite Off\nInstallment Plan\nSecurity Deposit",
    "reqd": 1,
    "in_list_view": 1,
    "columns": 3
@@ -38,7 +38,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 20:00:00.000000",
+ "modified": "2026-11-14 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Approval Level",

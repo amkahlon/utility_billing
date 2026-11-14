@@ -105,8 +105,9 @@ def build_reports():
 
 
 GROUPS = [
-	("Consumers", [("DocType", "Consumer"), ("DocType", "Property"), ("DocType", "Connection")]),
-	("Meter Readings", [("DocType", "Reading Cycle"), ("DocType", "Meter Reading")]),
+	("Consumers", [("Page", "ub-consumer-360", "Consumer 360"), ("DocType", "Consumer"), ("DocType", "Property"), ("DocType", "Connection"),
+	               ("DocType", "Security Deposit")]),
+	("Meter Readings", [("DocType", "Reading Cycle"), ("DocType", "Meter Reading"), ("DocType", "Reading Route")]),
 	("Billing", [("DocType", "Bill Run"), ("DocType", "Utility Bill"), ("DocType", "Tariff Adjustment")]),
 	("Payments", [("DocType", "Cashier Day"), ("DocType", "Payment Receipt"), ("DocType", "Fee Charge"),
 	              ("DocType", "Account Adjustment"), ("DocType", "Refund"), ("DocType", "Settlement File"),
@@ -123,7 +124,7 @@ GROUPS = [
 	("Reports", []),  # filled from the registry
 	("Setup", [("DocType", "Society"), ("DocType", "Tariff"), ("DocType", "Charge Type"), ("DocType", "Tax"), ("DocType", "Consumer Category"),
 	           ("DocType", "Fee Type"), ("DocType", "Cash Counter"), ("DocType", "Reason Code"),
-	           ("DocType", "Reading Exception Code"), ("DocType", "Utility Type"), ("DocType", "KPI Definition")]),
+	           ("DocType", "Reading Exception Code"), ("DocType", "Connection Flag Type"), ("DocType", "Utility Type"), ("DocType", "KPI Definition")]),
 ]
 
 

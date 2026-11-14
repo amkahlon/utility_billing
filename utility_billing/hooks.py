@@ -102,6 +102,7 @@ boot_session = "utility_billing.boot.boot_session"
 
 # before_install = "utility_billing.install.before_install"
 after_install = "utility_billing.install.after_install"
+after_migrate = ["utility_billing.install.after_migrate"]
 
 # Bill print format helper (FS-BIL-08)
 jinja = {"methods": [
@@ -318,7 +319,7 @@ fixtures = [
 	},
 	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},
 	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit for Approval", "Approve", "Reject", "Withdraw", "Cancel"]]]},
-	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval", "Account Adjustment Approval", "Refund Approval", "Bill Revision Approval", "Bulk Adjustment Approval", "Installment Plan Approval", "Write Off Approval"]]]},
+	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval", "Account Adjustment Approval", "Refund Approval", "Bill Revision Approval", "Bulk Adjustment Approval", "Installment Plan Approval", "Write Off Approval", "Security Deposit Approval"]]]},
 	{"dt": "Property Setter", "filters": [["name", "in", ["Utility Bill-main-default_print_format", "Payment Receipt-main-default_print_format"]]]},
 ]
 

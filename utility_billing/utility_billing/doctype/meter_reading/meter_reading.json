@@ -47,7 +47,11 @@
   "correction_reason",
   "cb4",
   "reviewed_by",
-  "reviewed_on"
+  "reviewed_on",
+  "route_section",
+  "route",
+  "route_sequence",
+  "assigned_reader"
  ],
  "fields": [
   {
@@ -294,12 +298,39 @@
    "fieldtype": "Datetime",
    "label": "Reviewed On",
    "read_only": 1
+  },
+  {
+   "fieldname": "route_section",
+   "fieldtype": "Section Break",
+   "label": "Route",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "route",
+   "fieldtype": "Data",
+   "label": "Route",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "route_sequence",
+   "fieldtype": "Int",
+   "label": "Order on the Route",
+   "read_only": 1
+  },
+  {
+   "fieldname": "assigned_reader",
+   "fieldtype": "Link",
+   "label": "Assigned Reader",
+   "options": "User",
+   "read_only": 1,
+   "in_standard_filter": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-13 23:25:02.611667",
+ "modified": "2026-11-14 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Meter Reading",

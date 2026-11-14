@@ -10,6 +10,7 @@ from frappe import _
 from frappe.utils import add_months, cstr, flt, getdate, now_datetime, nowdate
 
 from utility_billing.utility_billing import reading_engine as engine
+from utility_billing.utility_billing import routes
 
 DONE = ("Valid", "Approved", "Estimated")
 ACTUAL_DONE = ("Valid", "Approved")
@@ -124,16 +125,19 @@ def create_reading_sheet(cycle: str):
 	c = cycle_doc(cycle)
 	existing = set(frappe.get_all("Meter Reading", filters={"reading_cycle": c.name}, pluck="connection"))
 	created = 0
-	for conn in frappe.get_all(
+	routed = routes.plan(c)  # the sheet follows the order of the routes given a reader (FS-MST-09)
+	names = frappe.get_all(
 		"Connection",
 		filters={"society": c.society, "utility": c.utility, "status": "Active", "current_meter": ["is", "set"]},
 		pluck="name",
 		order_by="name",
-	):
+	)
+	for conn in sorted(names, key=lambda n: (n not in routed, routed.get(n, {}).get("rank", 0))):
 		if conn in existing:
 			continue
 		frappe.get_doc({"doctype": "Meter Reading", "reading_cycle": c.name, "connection": conn, "source": "Office"}).insert()
 		created += 1
+	routes.apply(c)
 	c.refresh_counts()
 	return {"created": created, "total": c.total_readings}
 

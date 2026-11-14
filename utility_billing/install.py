@@ -157,6 +157,18 @@ def after_install():
 	create_default_reason_codes()
 	create_default_export_layouts()
 	create_default_kpis()
+	create_default_flags()
+
+
+def create_default_flags():
+	from utility_billing.utility_billing import flags  # noqa: PLC0415
+
+	flags.create_default_flags()
+
+
+def after_migrate():
+	"""Defaults added by later increments reach sites that were installed before them."""
+	create_default_flags()
 
 
 def create_default_export_layouts():

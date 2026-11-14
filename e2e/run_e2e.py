@@ -1646,6 +1646,56 @@ def t_period_controls(d: Desk):
 	eq([(r["status"], r["reopened"]) for r in rep], [("Closed", 1)], "period report")
 
 
+@case("QA-73", "FS-MST-09/10/13/14/15/18: reading route, connection flag, security deposit, representatives, Consumer 360")
+def t_master_data(d: Desk):
+	P = "utility_billing.utility_billing"
+	bo, bm, gm, ao = USERS["bo"], USERS["bm"], USERS["gm"], USERS["ao"]
+	conn = S["conn"]["name"]
+	consumer = bo.get("Connection", conn)["consumer"]
+
+	# a route for the account, with its code kept on the account
+	route = bo.save_doc({"doctype": "Reading Route", "society": S["society"], "utility": "Electricity", "route_code": f"R-{RUN}",
+	                     "stops": [{"sequence": "1", "stop_type": "Connection", "connection": conn}]})
+	eq((route["stops_count"], bo.get("Connection", conn)["route"]), (1, f"R-{RUN}"), "route")
+	expect_error(lambda: bo.save_doc({"doctype": "Reading Route", "society": S["society"], "utility": "Electricity", "route_code": f"R2-{RUN}",
+	                                  "stops": [{"sequence": "1", "stop_type": "Connection", "connection": conn}]}), "already on route")
+
+	# a flag that holds recovery shows in the account view
+	c = bm.get("Connection", conn)
+	c["connection_flags"] = [{"flag": "DISPUTE", "from_date": "2026-01-01", "remarks": "Disputes the reading"}]
+	bm.save_doc(c)
+
+	# a deposit received and approved by a General Manager
+	dep = ao.save_doc({"doctype": "Security Deposit", "connection": conn, "deposit_type": "Received", "amount": "3000", "mode": "Cash",
+	                   "posting_date": "2026-11-02", "reference_no": f"DEP-{RUN}"})
+	ao.workflow(dep, "Submit for Approval")
+	expect_error(lambda: bm.workflow(dep, "Approve"), "General Manager")
+	gm.workflow(dep, "Approve")
+	eq(float(bo.get("Connection", conn)["security_deposit"]), 3000.0, "deposit held")
+	expect_error(lambda: USERS["cashier"].save_doc({"doctype": "Security Deposit", "connection": conn, "deposit_type": "Received", "amount": "10",
+	                                                "mode": "Cash", "posting_date": "2026-11-02"}))
+
+	# representatives on the consumer
+	cons = bo.get("Consumer", consumer)
+	cons["representatives"] = [{"rep_name": "Agent", "relation": "Attorney", "can_pay": "0"}]
+	expect_error(lambda: bo.save_doc(cons), "tick at least one")
+	cons["representatives"][0]["can_pay"] = "1"
+	bo.save_doc(cons)
+
+	# Consumer 360 and the combined statement
+	found = bo.call(f"{P}.consumer360.search", text=bo.get("Connection", conn)["reference_no"])
+	eq([r["name"] for r in found][:1], [consumer], "search by reference number")
+	v = bo.call(f"{P}.consumer360.view", consumer=consumer)
+	acc = next(a for a in v["accounts"] if a["name"] == conn)
+	eq((acc["flags"], float(acc["security_deposit"]), v["consumer"]["representatives"][0]["name"]), (["Under dispute"], 3000.0, "Agent"), "consumer view")
+	expect_error(lambda: USERS["reader"].call(f"{P}.consumer360.view", consumer=consumer))
+	rep = run_report(bo, "Consumer Statement (All Accounts)", consumer=consumer)
+	if not rows_of(rep):
+		raise AssertionError("combined statement is empty")
+	rep = rows_of(run_report(ao, "Security Deposits Held", society=S["society"]))
+	eq((rep[0]["connection"], rep[0]["held"]), (conn, 3000), "deposits held")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

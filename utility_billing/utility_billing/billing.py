@@ -10,7 +10,7 @@ from frappe import _
 from frappe.utils import add_months, flt, getdate, now_datetime
 
 from utility_billing.utility_billing import bill_engine as engine
-from utility_billing.utility_billing import periods, plans, prorata, snapshots, split_engine, tax_engine
+from utility_billing.utility_billing import flags, periods, plans, prorata, snapshots, split_engine, tax_engine
 from utility_billing.utility_billing import account, bill_print
 from utility_billing.utility_billing import readings
 from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff
@@ -129,6 +129,9 @@ def build_bill(run, connection, override=None) -> dict:
 	conn = frappe.get_cached_doc("Connection", connection)
 	society = frappe.get_cached_doc("Society", run.society)
 
+	held = flags.effect(connection, flags.HOLD_BILLING, month, frappe.utils.get_last_day(month))
+	if held:
+		raise BillProblem(_("Bill on hold: flag {0}. Remove it to bill this account.").format(held))
 	reading = frappe.db.get_value(
 		"Meter Reading", {"reading_cycle": run.reading_cycle, "connection": connection},
 		["name", "status", "units", "consumption_type", "previous_reading_date", "reading_date"], as_dict=True,

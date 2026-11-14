@@ -31,7 +31,15 @@
   "tax_status",
   "tax_exempt",
   "status_section",
-  "enabled"
+  "enabled",
+  "corporate_section",
+  "registration_no",
+  "tax_no",
+  "cb_corp",
+  "registered_address",
+  "contacts",
+  "reps_section",
+  "representatives"
  ],
  "fields": [
   {
@@ -177,12 +185,57 @@
    "fieldtype": "Check",
    "label": "Exempt From All Taxes",
    "default": "0"
+  },
+  {
+   "fieldname": "corporate_section",
+   "fieldtype": "Section Break",
+   "label": "Company details",
+   "collapsible": 1,
+   "depends_on": "eval:doc.consumer_type=='Company'"
+  },
+  {
+   "fieldname": "registration_no",
+   "fieldtype": "Data",
+   "label": "Registration No"
+  },
+  {
+   "fieldname": "tax_no",
+   "fieldtype": "Data",
+   "label": "Tax No (NTN)"
+  },
+  {
+   "fieldname": "cb_corp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "registered_address",
+   "fieldtype": "Small Text",
+   "label": "Registered Address"
+  },
+  {
+   "fieldname": "contacts",
+   "fieldtype": "Table",
+   "label": "Contacts",
+   "options": "Consumer Contact"
+  },
+  {
+   "fieldname": "reps_section",
+   "fieldtype": "Section Break",
+   "label": "Authorized representatives",
+   "collapsible": 1,
+   "description": "People who may act for the customer, with what they may do (FS-MST-18)."
+  },
+  {
+   "fieldname": "representatives",
+   "fieldtype": "Table",
+   "label": "Representatives",
+   "options": "Consumer Representative"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 18:00:00.000000",
+ "modified": "2026-11-14 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Consumer",

@@ -1,0 +1,107 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 23:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "rep_name",
+  "relation",
+  "id_number",
+  "mobile_no",
+  "can_pay",
+  "can_receive_notices",
+  "can_sign",
+  "can_request_changes",
+  "valid_from",
+  "valid_to",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "rep_name",
+   "fieldtype": "Data",
+   "label": "Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "relation",
+   "fieldtype": "Data",
+   "label": "Relation or Position",
+   "in_list_view": 1,
+   "columns": 2,
+   "description": "Agent, attorney, company officer, family member."
+  },
+  {
+   "fieldname": "id_number",
+   "fieldtype": "Data",
+   "label": "CNIC or ID",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "mobile_no",
+   "fieldtype": "Data",
+   "label": "Mobile",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "can_pay",
+   "fieldtype": "Check",
+   "label": "May Pay",
+   "default": "1",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "can_receive_notices",
+   "fieldtype": "Check",
+   "label": "Gets Notices",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "can_sign",
+   "fieldtype": "Check",
+   "label": "May Sign",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "can_request_changes",
+   "fieldtype": "Check",
+   "label": "May Ask for Changes",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Date",
+   "label": "From"
+  },
+  {
+   "fieldname": "valid_to",
+   "fieldtype": "Date",
+   "label": "To"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Authority Given"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 23:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Consumer Representative",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}
