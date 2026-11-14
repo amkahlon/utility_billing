@@ -40,6 +40,8 @@ EDITORS = {
 	# Journals and reconciliation records are made only by gl.py (and can't be changed by anyone).
 	"GL Journal": {"System Manager"},
 	"Receivables Reconciliation": {"System Manager"},
+	# Increment 9: the KPI dictionary
+	"KPI Definition": {"System Manager", "Society Admin", "Billing Manager"},
 }
 SUBMITTERS = {
 	"Tariff": {"System Manager", "General Manager"},

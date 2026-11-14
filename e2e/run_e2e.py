@@ -976,6 +976,125 @@ def t_journal_locked(d: Desk):
 		raise AssertionError("a journal was deleted")
 
 
+# ---------------------------------------------------------------- increment 9: management reports and dashboard
+WIDE = {"from_date": "2026-01-01", "to_date": "2030-12-31"}
+
+
+def run_report(desk, name, **filters):
+	"""Run a report the way the browser does and return the whole result (columns, result rows, summary, chart)."""
+	return desk.call("frappe.desk.query_report.run", report_name=name, filters={"society": S["society"], **filters})
+
+
+def rows_of(result):
+	return [r for r in result["result"] if isinstance(r, dict)]
+
+
+@case("QA-58", "FS-RPT-01: Management opens the dashboard: 13 months, summary cards, chart, drill-down links")
+def t_dashboard(d: Desk):
+	res = run_report(USERS["mgmt"], "Management Dashboard", month="2026-11-15")
+	rows = rows_of(res)
+	eq(len(rows), 13, "13 months")
+	nov = rows[-1]
+	eq((nov["month"], nov["bills"], float(nov["units"]), float(nov["billed"]), float(nov["payable"])), ("Nov 2026", 1, 300.0, 22700.0, 22700.0), "November")
+	cards = {c["label"]: c for c in res["report_summary"]}
+	for label in ("Billed this month", "Collected this month", "Collection rate this month (%)", "Total owed by consumers",
+	              "Of which arrears, surcharge and fees", "Accounts in arrears", "Credit held for consumers"):
+		if label not in cards:
+			raise AssertionError(f"dashboard card {label!r} missing")
+	eq(float(cards["Billed this month"]["value"]), 22700.0, "billed card")
+	eq(len(res["chart"]["data"]["labels"]), 13, "chart months")
+	if "/desk/query-report/" not in (res["message"] or ""):
+		raise AssertionError("dashboard has no drill-down links")
+
+
+@case("QA-59", "FS-RPT-04/05: billing summary and bill register match the November bill (22,700)")
+def t_billing_reports(d: Desk):
+	res = run_report(USERS["bo"], "Billing Summary by Cycle", from_date="2026-11-01", to_date="2026-11-30")
+	by = {r["item"]: r for r in rows_of(res)}
+	eq((float(by["Energy Charges"]["amount"]), float(by["Energy Charges"]["units"]), float(by["Total"]["amount"])), (21000.0, 300.0, 22700.0), "by charge type")
+	cat = rows_of(run_report(USERS["bo"], "Billing Summary by Cycle", from_date="2026-11-01", to_date="2026-11-30", group_by="Category"))
+	eq((cat[-1]["item"], float(cat[-1]["amount"]), cat[-1]["bills"]), ("Total", 22700.0, 1), "by category")
+	reg = rows_of(run_report(USERS["bm"], "Bill Register", bill_run=S["run"]["name"]))
+	eq((reg[0]["bill"], float(reg[-1]["current_amount"]), float(reg[-1]["payable_within_due"]), float(reg[-1]["payable_after_due"])),
+	   (S["bill"], 22700.0, 22700.0, 24970.0), "register totals")
+	lines = rows_of(run_report(USERS["bm"], "Bill Register", bill_run=S["run"]["name"], show_lines=1))
+	eq(sum(float(l["amount"]) for l in lines), 22700.0, "lines add up to the bill")
+
+
+@case("QA-60", "FS-RPT-02/17/18/21: collections, collection vs billing, cashier closing and reversals match the counter")
+def t_collection_reports(d: Desk):
+	by_mode = {r["item"]: r for r in rows_of(run_report(USERS["ao"], "Collections", group_by="Payment Mode", **WIDE))}
+	eq((float(by_mode["Cash"]["amount"]), float(by_mode["1Link"]["amount"]), float(by_mode["Cheque"]["amount"]),
+	    float(by_mode["Cheque"]["reversed_amount"])), (20000.0, 700.0, 0.0, 3000.0), "by payment mode")
+	eq(float(by_mode["Total"]["amount"]), 20700.0, "total collected")
+	by_counter = {r["item"]: r for r in rows_of(run_report(USERS["ao"], "Collections", group_by="Counter", **WIDE))}
+	eq((float(by_counter[S["counter"]]["amount"]), float(by_counter["(bank / channel)"]["amount"])), (20000.0, 700.0), "by counter")
+	cvb = rows_of(run_report(USERS["gm"], "Collection vs Billing by Category and Block", **WIDE))
+	eq((float(cvb[-1]["billed"]), float(cvb[-1]["collected"]), float(cvb[-1]["rate"])), (22700.0, 20700.0, 91.2), "collection rate")
+	closing = [r for r in rows_of(run_report(USERS["ao"], "Cashier Closing", **WIDE)) if r["name"] == S["day"]][0]
+	eq((closing["status"], float(closing["expected_cash"]), float(closing["cash_counted"]), float(closing["difference"]), closing["approved_by"]),
+	   ("Approved", 20500.0, 20500.0, 0.0, EMAIL["ao"]), "cashier day")
+	rev = [r for r in rows_of(run_report(USERS["bm"], "Payment and Fee Reversals", **WIDE)) if r.get("document") == S["cheque"]][0]
+	eq((rev["kind"], float(rev["amount"]), rev["reason"], rev["reversed_by"]), ("Payment", 3000.0, "CHQ-BOUNCE", EMAIL["bm"]), "reversal")
+
+
+@case("QA-61", "FS-RPT-23/24/26: arrears ageing and defaulters for the Rs 2,000 still owed")
+def t_receivable_reports(d: Desk):
+	age = rows_of(run_report(USERS["bm"], "Arrears Ageing", as_of="2027-03-01"))
+	eq(float(age[-1]["total"]), 2000.0, "ageing total = the balance")
+	dflt = rows_of(run_report(USERS["gm"], "Defaulters", as_of="2027-03-01", min_days=60))
+	eq((dflt[0]["connection"], float(dflt[0]["owed"])), (S["conn"]["name"], 2000.0), "defaulter")
+	if int(dflt[0]["oldest"]) < 60 or not dflt[0]["last_paid"]:
+		raise AssertionError(f"oldest overdue / last payment wrong: {dflt[0]}")
+	eq(rows_of(run_report(USERS["gm"], "Defaulters", as_of="2027-03-01", min_amount=5000)), [], "nobody owes 5,000")
+	run_report(USERS["bm"], "Credit Balances and Advance Payments")
+
+
+@case("QA-62", "FS-RPT-41/42, ACC: report rights by role; the audit log shows who changed what")
+def t_report_rights(d: Desk):
+	for desk, name in ((USERS["cashier"], "Management Dashboard"), (USERS["reader"], "Collections"), (USERS["bo"], "Collections"),
+	                   (USERS["mgmt"], "Audit Log and User Activity"), (USERS["bm"], "Audit Log and User Activity")):
+		expect_error(lambda desk=desk, name=name: run_report(desk, name, **WIDE))
+	run_report(USERS["bo"], "Billing Summary by Cycle")
+	run_report(USERS["mgmt"], "Pending Approvals")
+	audit = rows_of(run_report(USERS["auditor"], "Audit Log and User Activity", doctype="Tariff", **WIDE))
+	if not audit or not all(r["summary"] is not None for r in audit):
+		raise AssertionError("audit log lists no tariff changes")
+	if not any("Approval Status" in r["summary"] or "Workflow State" in r["summary"] for r in audit):
+		raise AssertionError("audit log doesn't show the approval status changes")
+	logins = rows_of(run_report(USERS["gm"], "Audit Log and User Activity", show="Logins and Logouts", **WIDE))
+	if not any(r["operation"] == "Login" for r in logins):
+		raise AssertionError("audit log lists no logins")
+
+
+@case("QA-63", "FS-RPT-06/07/10/11/13-16/35, RPT-45: remaining reports and the KPI dictionary")
+def t_other_reports(d: Desk):
+	bm = USERS["bm"]
+	sales = rows_of(run_report(bm, "Sales by Category and Tariff", from_date="2026-11-01", to_date="2026-11-30"))
+	eq(float(sales[-1]["units"]), 300.0, "sales units")
+	slab = rows_of(run_report(bm, "Sales by Category and Tariff", from_date="2026-11-01", to_date="2026-11-30", show="Units by Slab"))
+	eq(slab[0]["slab"], "Flat rate", "flat tariff")
+	fpa = [r for r in rows_of(run_report(bm, "FPA and QTA Register", adjustment_type="FPA", **WIDE)) if str(r["billing_month"]) == "2026-11-01"][0]
+	eq((float(fpa["rate"]), str(fpa["reference_month"]), fpa["bills"]), (1.3, "2026-09-01", 1), "FPA register")
+	adj = rows_of(run_report(bm, "Adjustments by Reason and Approver", **WIDE))
+	eq((adj[0]["reason_code"], float(adj[0]["amount"]), adj[0]["approved_by"]), ("BILL-ERROR", 100.0, EMAIL["gm"]), "credit note")
+	run_report(bm, "Surcharge Register", **WIDE)
+	comp = rows_of(run_report(USERS["bo"], "Reading Completion by Route and Reader", reading_cycle=S["cycle"]))
+	if comp[-1]["meters"] < 1 or comp[-1]["done"] < 1:
+		raise AssertionError(f"reading completion: {comp}")
+	run_report(USERS["reader"], "Reading Exceptions", reading_cycle=S["cycle"])
+	run_report(bm, "Estimated Bills", month="2026-11-01")
+	meters = run_report(bm, "Meter Register")
+	if not rows_of(meters) or len(meters["report_summary"]) != 4:
+		raise AssertionError("meter register is empty or has no status counts")
+	census = rows_of(run_report(bm, "Consumer Census"))
+	if census[-1]["total"] < 1:
+		raise AssertionError(f"census: {census}")
+	kpis = d.s.get(f"{URL}/api/resource/KPI Definition", params={"limit_page_length": 100, "fields": json.dumps(["name", "formula"])}).json()["data"]
+	if len(kpis) < 15 or not all(k["formula"] for k in kpis):
+		raise AssertionError(f"KPI dictionary has {len(kpis)} entries")
+
+
 # ---------------------------------------------------------------- runner
 def main():
 	d = Desk()
@@ -987,6 +1106,8 @@ def main():
 	make_user(d, "cashier", ["Cashier"])
 	make_user(d, "reader", ["Meter Reader"])
 	make_user(d, "ao", ["Accounts Officer"])
+	make_user(d, "mgmt", ["Management"])
+	make_user(d, "auditor", ["Billing Auditor"])
 	results = []
 	for qa_id, req, fn in CASES:
 		try:
