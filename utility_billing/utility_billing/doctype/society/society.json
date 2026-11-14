@@ -47,6 +47,11 @@
   "minimum_bill",
   "rounding_rule",
   "payment_posting_order",
+  "charges_section",
+  "energy_charge_type",
+  "cb_charges",
+  "charges_fpa",
+  "charges_qta",
   "surcharge_section",
   "surcharge_basis",
   "surcharge_rate",
@@ -391,13 +396,42 @@
    "fieldtype": "Select",
    "label": "Estimation Method",
    "options": "Average of last 3 months\nAverage of last 6 months\nSame month last year"
+  },
+  {
+   "fieldname": "charges_section",
+   "fieldtype": "Section Break",
+   "label": "Bill Charges"
+  },
+  {
+   "description": "Charge type used for the energy line on bills",
+   "fieldname": "energy_charge_type",
+   "fieldtype": "Link",
+   "label": "Energy Charge Type",
+   "options": "Charge Type"
+  },
+  {
+   "fieldname": "cb_charges",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Bill runs need an approved FPA for the month",
+   "fieldname": "charges_fpa",
+   "fieldtype": "Check",
+   "label": "Charges FPA"
+  },
+  {
+   "default": "0",
+   "fieldname": "charges_qta",
+   "fieldtype": "Check",
+   "label": "Charges QTA"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-13 23:25:03.038225",
+ "modified": "2026-11-14 05:36:56.221855",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

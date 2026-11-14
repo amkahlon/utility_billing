@@ -4,6 +4,60 @@
 
 frappe.provide("utility_billing");
 
+// For any document using the shared approval module: call from refresh, and return
+// utility_billing.before_workflow_action(frm) from the form's before_workflow_action.
+utility_billing.setup_approval_form = function (frm) {
+	utility_billing.render_approval_history(frm);
+	if (frm.doc.workflow_state === "Rejected" && frm.doc.rejection_reason) {
+		frm.dashboard.set_headline_alert(
+			`${__("Rejected")}: ${frappe.utils.escape_html(frm.doc.rejection_reason)}`,
+			"red"
+		);
+	}
+};
+
+utility_billing.before_workflow_action = function (frm) {
+	if (frm.selected_workflow_action !== "Reject") return;
+	// Frappe freezes the screen before this runs; lift it so the dialog can be used (D6).
+	frappe.dom.unfreeze();
+	return new Promise((resolve, reject) => {
+		let saved = false;
+		const d = new frappe.ui.Dialog({
+			title: __("Reject {0}", [__(frm.doctype)]),
+			fields: [
+				{
+					fieldname: "reason",
+					fieldtype: "Small Text",
+					label: __("Reason for rejecting"),
+					description: __("The submitter sees this reason and can correct and resubmit."),
+					reqd: 1,
+				},
+			],
+			primary_action_label: __("Reject"),
+			primary_action({ reason }) {
+				frappe
+					.call({
+						method: "utility_billing.utility_billing.approval.set_rejection_reason",
+						args: { doctype: frm.doctype, name: frm.doc.name, reason },
+					})
+					.then(() => {
+						saved = true;
+						d.hide();
+						frappe.dom.freeze();
+						resolve();
+					});
+			},
+		});
+		d.onhide = () => {
+			if (!saved) {
+				frm.selected_workflow_action = null;
+				reject();
+			}
+		};
+		d.show();
+	});
+};
+
 utility_billing.render_approval_history = function (frm, html_field = "approval_history_html") {
 	const field = frm.fields_dict[html_field];
 	if (!field) return;

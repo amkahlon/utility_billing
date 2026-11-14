@@ -20,8 +20,17 @@ EDITORS = {
 	"Reading Cycle": {"System Manager", "Billing Officer", "Billing Manager", "Society Admin"},
 	# Meter readers enter readings; reviewing them is limited to officers and managers in readings.py.
 	"Meter Reading": {"System Manager", "Meter Reader", "Billing Officer", "Billing Manager"},
+	"Tariff Adjustment": {"System Manager", "Billing Manager", "General Manager"},
+	"Bill Run": {"System Manager", "Billing Officer", "Billing Manager"},
+	# Bills are created and posted only by bill runs (ignore_permissions there); nobody edits them.
+	"Utility Bill": {"System Manager"},
 }
-SUBMITTERS = {"Tariff": {"System Manager", "General Manager"}}
+SUBMITTERS = {
+	"Tariff": {"System Manager", "General Manager"},
+	"Tariff Adjustment": {"System Manager", "General Manager"},
+	"Bill Run": {"System Manager", "Billing Manager"},
+	"Utility Bill": {"System Manager"},
+}
 
 
 class IntegrationTestPermissions(IntegrationTestCase):
