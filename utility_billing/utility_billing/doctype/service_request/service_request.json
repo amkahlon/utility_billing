@@ -1,0 +1,597 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "request_title",
+  "request_type",
+  "kind",
+  "society",
+  "status",
+  "cb1",
+  "connection",
+  "consumer",
+  "consumer_name",
+  "property",
+  "cb2",
+  "requested_on",
+  "effective_date",
+  "due_by",
+  "current_step",
+  "description",
+  "connection_section",
+  "utility",
+  "new_category",
+  "new_load_kw",
+  "cb3",
+  "phase",
+  "transformer",
+  "expires_on",
+  "meter_section",
+  "new_meter",
+  "new_meter_reading",
+  "old_meter_reading",
+  "cb4",
+  "seal_no",
+  "meter_reason",
+  "disconnection_reason",
+  "test_error_percent",
+  "months_to_revise",
+  "people_section",
+  "new_consumer",
+  "owner_liable",
+  "contact_section",
+  "new_mobile",
+  "new_email",
+  "new_address",
+  "money_section",
+  "deposit_change",
+  "deposit_amount",
+  "assessed_load_kw",
+  "hours_per_day",
+  "assessed_days",
+  "rate_per_unit",
+  "cb5",
+  "assessed_units",
+  "assessed_amount",
+  "steps_section",
+  "steps",
+  "docs_section",
+  "documents",
+  "result_section",
+  "fee_charge",
+  "security_deposit",
+  "adjustment",
+  "cb6",
+  "certificate_no",
+  "verification_code",
+  "completed_on",
+  "result_note"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "SR-.YYYY.-.#####",
+   "default": "SR-.YYYY.-.#####",
+   "hidden": 1
+  },
+  {
+   "fieldname": "request_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "request_type",
+   "fieldtype": "Link",
+   "label": "Request",
+   "options": "Service Request Type",
+   "reqd": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "kind",
+   "fieldtype": "Data",
+   "label": "What It Does",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nIn Progress\nCompleted\nRejected\nCancelled",
+   "default": "Open",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Connection",
+   "in_standard_filter": 1,
+   "description": "For a new connection leave it empty: the request makes the account."
+  },
+  {
+   "fieldname": "consumer",
+   "fieldtype": "Link",
+   "label": "Consumer",
+   "options": "Consumer",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "label": "Consumer Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "Property"
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "requested_on",
+   "fieldtype": "Date",
+   "label": "Requested On",
+   "default": "Today",
+   "reqd": 1
+  },
+  {
+   "fieldname": "effective_date",
+   "fieldtype": "Date",
+   "label": "Effective Date",
+   "description": "When the change takes effect (connection date, disconnection date, new category \u2026)."
+  },
+  {
+   "fieldname": "due_by",
+   "fieldtype": "Date",
+   "label": "To Be Done By",
+   "read_only": 1
+  },
+  {
+   "fieldname": "current_step",
+   "fieldtype": "Int",
+   "label": "Step Now",
+   "read_only": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "What Is Asked"
+  },
+  {
+   "fieldname": "connection_section",
+   "fieldtype": "Section Break",
+   "label": "Connection",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Change of category' || doc.kind=='Load change'"
+  },
+  {
+   "fieldname": "utility",
+   "fieldtype": "Link",
+   "label": "Utility",
+   "options": "Utility Type",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection'"
+  },
+  {
+   "fieldname": "new_category",
+   "fieldtype": "Link",
+   "label": "Category",
+   "options": "Consumer Category",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Change of category'"
+  },
+  {
+   "fieldname": "new_load_kw",
+   "fieldtype": "Float",
+   "label": "Sanctioned Load (kW)",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Load change'"
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "phase",
+   "fieldtype": "Select",
+   "label": "Phase",
+   "options": "\nSingle Phase\nThree Phase",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection'"
+  },
+  {
+   "fieldname": "transformer",
+   "fieldtype": "Link",
+   "label": "Transformer (from the survey)",
+   "options": "Transformer",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection'"
+  },
+  {
+   "fieldname": "expires_on",
+   "fieldtype": "Date",
+   "label": "Connection Ends On",
+   "depends_on": "eval:doc.kind=='Temporary connection'"
+  },
+  {
+   "fieldname": "meter_section",
+   "fieldtype": "Section Break",
+   "label": "Meter",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Disconnection' || doc.kind=='Reconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Meter test'"
+  },
+  {
+   "fieldname": "new_meter",
+   "fieldtype": "Link",
+   "label": "New Meter",
+   "options": "Meter",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change'"
+  },
+  {
+   "fieldname": "new_meter_reading",
+   "fieldtype": "Float",
+   "label": "New Meter's First Reading",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change'"
+  },
+  {
+   "fieldname": "old_meter_reading",
+   "fieldtype": "Float",
+   "label": "Old Meter's Last Reading",
+   "depends_on": "eval:doc.kind=='Meter change' || doc.kind=='Disconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Reconnection'",
+   "description": "For a disconnection, the reading when the supply was cut; for a reconnection, the reading when it was restored."
+  },
+  {
+   "fieldname": "cb4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "seal_no",
+   "fieldtype": "Data",
+   "label": "Seal No",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change'"
+  },
+  {
+   "fieldname": "meter_reason",
+   "fieldtype": "Data",
+   "label": "Reason",
+   "depends_on": "eval:doc.kind=='Meter change'"
+  },
+  {
+   "fieldname": "disconnection_reason",
+   "fieldtype": "Select",
+   "label": "Why",
+   "options": "\nDefaulter\nConsumer request\nSafety\nOther",
+   "depends_on": "eval:doc.kind=='Disconnection'"
+  },
+  {
+   "fieldname": "test_error_percent",
+   "fieldtype": "Float",
+   "label": "Test Result: Error (%)",
+   "depends_on": "eval:doc.kind=='Meter test'",
+   "description": "Positive when the meter runs fast, negative when it runs slow."
+  },
+  {
+   "fieldname": "months_to_revise",
+   "fieldtype": "Int",
+   "label": "Months to Revise",
+   "default": "2",
+   "depends_on": "eval:doc.kind=='Meter test'"
+  },
+  {
+   "fieldname": "people_section",
+   "fieldtype": "Section Break",
+   "label": "New holder",
+   "depends_on": "eval:doc.kind=='Change of name or ownership' || doc.kind=='Tenant moving in' || doc.kind=='Tenant leaving'"
+  },
+  {
+   "fieldname": "new_consumer",
+   "fieldtype": "Link",
+   "label": "New Consumer",
+   "options": "Consumer",
+   "depends_on": "eval:doc.kind=='Change of name or ownership' || doc.kind=='Tenant moving in' || doc.kind=='Tenant leaving'",
+   "description": "Tenant leaving: the owner who is billed again."
+  },
+  {
+   "fieldname": "owner_liable",
+   "fieldtype": "Check",
+   "label": "Owner Liable for the Tenant's Arrears",
+   "default": "1",
+   "depends_on": "eval:doc.kind=='Tenant moving in'"
+  },
+  {
+   "fieldname": "contact_section",
+   "fieldtype": "Section Break",
+   "label": "New contact details",
+   "depends_on": "eval:doc.kind=='Contact update'"
+  },
+  {
+   "fieldname": "new_mobile",
+   "fieldtype": "Data",
+   "label": "Mobile"
+  },
+  {
+   "fieldname": "new_email",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "new_address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "money_section",
+   "fieldtype": "Section Break",
+   "label": "Deposit and assessment",
+   "depends_on": "eval:doc.kind=='Deposit change' || doc.kind=='Detection bill'"
+  },
+  {
+   "fieldname": "deposit_change",
+   "fieldtype": "Select",
+   "label": "Deposit",
+   "options": "\nRaise\nRefund",
+   "depends_on": "eval:doc.kind=='Deposit change'"
+  },
+  {
+   "fieldname": "deposit_amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "depends_on": "eval:doc.kind=='Deposit change'"
+  },
+  {
+   "fieldname": "assessed_load_kw",
+   "fieldtype": "Float",
+   "label": "Connected Load Found (kW)",
+   "depends_on": "eval:doc.kind=='Detection bill'"
+  },
+  {
+   "fieldname": "hours_per_day",
+   "fieldtype": "Float",
+   "label": "Hours a Day",
+   "default": "8",
+   "depends_on": "eval:doc.kind=='Detection bill'"
+  },
+  {
+   "fieldname": "assessed_days",
+   "fieldtype": "Int",
+   "label": "Days",
+   "depends_on": "eval:doc.kind=='Detection bill'"
+  },
+  {
+   "fieldname": "rate_per_unit",
+   "fieldtype": "Currency",
+   "label": "Rate per Unit",
+   "depends_on": "eval:doc.kind=='Detection bill'"
+  },
+  {
+   "fieldname": "cb5",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "assessed_units",
+   "fieldtype": "Float",
+   "label": "Units Assessed",
+   "read_only": 1,
+   "depends_on": "eval:doc.kind=='Detection bill'"
+  },
+  {
+   "fieldname": "assessed_amount",
+   "fieldtype": "Currency",
+   "label": "Amount Assessed",
+   "read_only": 1,
+   "depends_on": "eval:doc.kind=='Detection bill'"
+  },
+  {
+   "fieldname": "steps_section",
+   "fieldtype": "Section Break",
+   "label": "Steps"
+  },
+  {
+   "fieldname": "steps",
+   "fieldtype": "Table",
+   "label": "Steps",
+   "options": "Service Request Step",
+   "read_only": 1,
+   "description": "Done one at a time with the button at the top, by a user with the step's role."
+  },
+  {
+   "fieldname": "docs_section",
+   "fieldtype": "Section Break",
+   "label": "Documents"
+  },
+  {
+   "fieldname": "documents",
+   "fieldtype": "Table",
+   "label": "Documents",
+   "options": "Service Request Document"
+  },
+  {
+   "fieldname": "result_section",
+   "fieldtype": "Section Break",
+   "label": "Result"
+  },
+  {
+   "fieldname": "fee_charge",
+   "fieldtype": "Link",
+   "label": "Fee Charged",
+   "options": "Fee Charge",
+   "read_only": 1
+  },
+  {
+   "fieldname": "security_deposit",
+   "fieldtype": "Link",
+   "label": "Security Deposit",
+   "options": "Security Deposit",
+   "read_only": 1
+  },
+  {
+   "fieldname": "adjustment",
+   "fieldtype": "Link",
+   "label": "Account Adjustment",
+   "options": "Account Adjustment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb6",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "certificate_no",
+   "fieldtype": "Data",
+   "label": "Certificate No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "verification_code",
+   "fieldtype": "Data",
+   "label": "Verification Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "completed_on",
+   "fieldtype": "Datetime",
+   "label": "Completed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "result_note",
+   "fieldtype": "Small Text",
+   "label": "What Was Done",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Service Request",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "naming_series:",
+ "title_field": "request_title",
+ "show_title_field_in_link": 1,
+ "search_fields": "request_type,connection,consumer_name,kind",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

@@ -16,7 +16,13 @@
   "kva_rating",
   "location",
   "check_meter_no",
-  "enabled"
+  "enabled",
+  "network_section",
+  "check_meter",
+  "location_section",
+  "latitude",
+  "cb_loc",
+  "longitude"
  ],
  "fields": [
   {
@@ -68,12 +74,47 @@
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Active"
+  },
+  {
+   "fieldname": "network_section",
+   "fieldtype": "Section Break",
+   "label": "Network",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "check_meter",
+   "fieldtype": "Link",
+   "label": "Check Meter",
+   "options": "Meter"
+  },
+  {
+   "fieldname": "location_section",
+   "fieldtype": "Section Break",
+   "label": "Map location",
+   "collapsible": 1,
+   "description": "Latitude and longitude in decimal degrees, for example 31.4504 and 74.2786 (FS-MST-27)."
+  },
+  {
+   "fieldname": "latitude",
+   "fieldtype": "Float",
+   "label": "Latitude",
+   "precision": "6"
+  },
+  {
+   "fieldname": "cb_loc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "longitude",
+   "fieldtype": "Float",
+   "label": "Longitude",
+   "precision": "6"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-13 22:38:49.040091",
+ "modified": "2026-11-15 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Transformer",

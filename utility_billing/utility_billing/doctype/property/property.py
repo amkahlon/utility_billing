@@ -7,6 +7,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, formatdate, getdate
 
+from utility_billing.utility_billing import network
+
 OPEN_END = getdate("9999-12-31")
 
 
@@ -33,6 +35,7 @@ class Property(Document):
 		if flt(self.area) < 0:
 			frappe.throw(_("Area can't be negative."))
 		self.validate_occupants()
+		network.check_location(self)  # FS-MST-27
 
 	def validate_occupants(self):
 		rows = self.occupants

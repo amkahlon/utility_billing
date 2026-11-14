@@ -51,6 +51,8 @@ REASON_CODES = [
 	("OUTAGE-COMP", "Compensation for a long outage", "Bulk Adjustment"),
 	("BULK-CORRECTION", "Group correction approved by management", "Bulk Adjustment"),
 	("DISPUTE", "Bill disputed by the consumer", "Bill Dispute"),
+	("METER-TEST", "Meter found fast or slow when tested", "Waiver / Adjustment"),
+	("DETECTION", "Detection bill: theft or tampering assessed", "Waiver / Adjustment"),
 ]
 
 
@@ -169,6 +171,11 @@ def create_default_flags():
 def after_migrate():
 	"""Defaults added by later increments reach sites that were installed before them."""
 	create_default_flags()
+	create_default_reason_codes()
+	from utility_billing.utility_billing import servicereq  # noqa: PLC0415
+
+	for society in frappe.get_all("Society", pluck="name"):
+		servicereq.ensure_types(society)  # the standard service request types (FS-WF-00)
 
 
 def create_default_export_layouts():

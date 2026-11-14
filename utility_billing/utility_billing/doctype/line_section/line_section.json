@@ -1,0 +1,200 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "society",
+  "section_code",
+  "feeder",
+  "from_point",
+  "to_point",
+  "cb1",
+  "length_km",
+  "conductor",
+  "estimated_loss_percent",
+  "enabled",
+  "route_section",
+  "route_description"
+ ],
+ "fields": [
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "section_code",
+   "fieldtype": "Data",
+   "label": "Code",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "feeder",
+   "fieldtype": "Link",
+   "label": "Feeder",
+   "options": "Feeder",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "from_point",
+   "fieldtype": "Data",
+   "label": "From"
+  },
+  {
+   "fieldname": "to_point",
+   "fieldtype": "Data",
+   "label": "To"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "length_km",
+   "fieldtype": "Float",
+   "label": "Length (km)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "conductor",
+   "fieldtype": "Data",
+   "label": "Conductor",
+   "description": "For example Dog, Rabbit or 4/0 ACSR, or underground cable."
+  },
+  {
+   "fieldname": "estimated_loss_percent",
+   "fieldtype": "Percent",
+   "label": "Estimated Technical Loss (%)",
+   "in_list_view": 1,
+   "description": "The engineer's estimate for the section; the line-loss reports show it next to the measured loss."
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "In Use",
+   "default": "1"
+  },
+  {
+   "fieldname": "route_section",
+   "fieldtype": "Section Break",
+   "label": "Route"
+  },
+  {
+   "fieldname": "route_description",
+   "fieldtype": "Small Text",
+   "label": "Route",
+   "description": "Streets, poles or landmarks the section follows."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Line Section",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "format:{society}-{section_code}",
+ "title_field": "section_code",
+ "search_fields": "society,feeder",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

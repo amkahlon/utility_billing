@@ -1,0 +1,227 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "society",
+  "facility_name",
+  "facility_type",
+  "cb1",
+  "connection",
+  "meter",
+  "enabled",
+  "allocation_section",
+  "allocation_method",
+  "allocation_category",
+  "notes",
+  "location_section",
+  "latitude",
+  "cb_loc",
+  "longitude"
+ ],
+ "fields": [
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "facility_name",
+   "fieldtype": "Data",
+   "label": "Facility",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "facility_type",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "Streetlights\nPark\nLift\nWater pump\nSecurity\nClubhouse\nOffice\nMosque\nOther",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Metered Account",
+   "options": "Connection",
+   "description": "The society's own account that carries the facility's meter."
+  },
+  {
+   "fieldname": "meter",
+   "fieldtype": "Link",
+   "label": "Meter",
+   "options": "Meter",
+   "read_only": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "In Use",
+   "default": "1"
+  },
+  {
+   "fieldname": "allocation_section",
+   "fieldtype": "Section Break",
+   "label": "How its cost is shared"
+  },
+  {
+   "fieldname": "allocation_method",
+   "fieldtype": "Select",
+   "label": "Allocation",
+   "options": "Society bears it\nShared equally by all accounts\nShared by area\nShared by units used\nCharged to one category",
+   "default": "Society bears it",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "allocation_category",
+   "fieldtype": "Link",
+   "label": "Category That Pays",
+   "options": "Consumer Category",
+   "depends_on": "eval:doc.allocation_method=='Charged to one category'",
+   "mandatory_depends_on": "eval:doc.allocation_method=='Charged to one category'"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "location_section",
+   "fieldtype": "Section Break",
+   "label": "Map location",
+   "collapsible": 1,
+   "description": "Latitude and longitude in decimal degrees, for example 31.4504 and 74.2786 (FS-MST-27)."
+  },
+  {
+   "fieldname": "latitude",
+   "fieldtype": "Float",
+   "label": "Latitude",
+   "precision": "6"
+  },
+  {
+   "fieldname": "cb_loc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "longitude",
+   "fieldtype": "Float",
+   "label": "Longitude",
+   "precision": "6"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Common Area Facility",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "format:{society}-{facility_name}",
+ "title_field": "facility_name",
+ "search_fields": "society,facility_type",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

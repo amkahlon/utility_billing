@@ -40,7 +40,7 @@ from utility_billing.ui_version import ui_version  # noqa: E402
 _V = ui_version()
 app_include_css = f"/assets/utility_billing/css/ub_theme.css?v={_V}"
 web_include_css = f"/assets/utility_billing/css/ub_theme.css?v={_V}"
-app_include_js = f"/assets/utility_billing/js/approval.js?v={_V}"
+app_include_js = [f"/assets/utility_billing/js/approval.js?v={_V}", f"/assets/utility_billing/js/ub_map.js?v={_V}"]
 boot_session = "utility_billing.boot.boot_session"
 
 # include js, css files in header of web template
