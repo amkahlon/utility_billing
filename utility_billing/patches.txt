@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 utility_billing.patches.v0_1.tariff_title_fixed_date
 utility_billing.patches.v0_1.tariff_workflow_states
+utility_billing.patches.v0_1.default_exception_codes

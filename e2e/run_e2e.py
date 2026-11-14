@@ -507,6 +507,70 @@ def t_audit(d: Desk):
 			raise AssertionError(f"'{word}' missing from {len(versions)} versions of {name}")
 
 
+# ---------------------------------------------------------------- increment 4: meter readings
+RDG = "utility_billing.utility_billing.readings"
+
+
+def my_reading(d):
+	r = d.s.get(f"{URL}/api/resource/Meter Reading", params={
+		"filters": json.dumps([["reading_cycle", "=", S["cycle"]], ["connection", "=", S["conn"]["name"]]]),
+		"fields": json.dumps(["name"])})
+	rows = r.json()["data"]
+	if not rows:
+		raise AssertionError("no reading for the test connection in the cycle")
+	return d.get("Meter Reading", rows[0]["name"])
+
+
+@case("QA-29", "FS-RDG-01: Billing Officer opens a reading cycle and creates the reading sheet")
+def t_cycle(d: Desk):
+	c = USERS["bo"].save_doc({"doctype": "Reading Cycle", "society": S["society"], "utility": "Electricity",
+	                          "billing_month": "2026-11-10"})
+	eq(c["name"], f"{S['society']}-Electricity-2026-11", "cycle name")
+	eq(c["billing_month"], "2026-11-01", "month stored as the 1st")
+	S["cycle"] = c["name"]
+	res = USERS["bo"].call(f"{RDG}.create_reading_sheet", cycle=c["name"])
+	if res["total"] < 1:
+		raise AssertionError(f"no readings created: {res}")
+	r = my_reading(USERS["bo"])
+	eq((r["status"], r["meter"], float(r["previous_reading"])), ("Pending", f"QA-{RUN}-M2", 0.0), "pending reading on the new meter")
+
+
+@case("QA-30", "FS-RDG-05/07: zero use is flagged; the reader can't approve; the officer corrects")
+def t_reader_flag(d: Desk):
+	r = my_reading(USERS["reader"])
+	saved = USERS["reader"].save_doc(dict(r, present_reading="0", reading_date="2026-11-05"))
+	eq(saved["status"], "Flagged", "zero use flagged")
+	expect_error(lambda: USERS["reader"].call(f"{RDG}.approve_reading", name=r["name"], note="Looks fine to me"))
+	USERS["bo"].call(f"{RDG}.correct_reading", name=r["name"], present_reading="264", reason="Reader entered 0 by mistake")
+	fixed = USERS["bo"].get("Meter Reading", r["name"])
+	eq((fixed["status"], float(fixed["units"]), float(fixed["corrected_from"])), ("Valid", 264.0, 0.0), "corrected")
+
+
+@case("QA-31", "FS-RDG-04: readings uploaded from a CSV file get the same checks")
+def t_upload(d: Desk):
+	csv = "\n".join([
+		"Reference No,Present Reading,Reading Date",
+		f"{S['conn']['name']},300,2026-11-06",
+		"1999999999,5,2026-11-06",
+	]) + "\n"
+	up = USERS["bo"].s.post(f"{URL}/api/method/upload_file", files={"file": ("readings.csv", csv.encode())},
+	                        data={"is_private": 1, "doctype": "Reading Cycle", "docname": S["cycle"]})
+	if up.status_code != 200:
+		raise AssertionError(f"upload failed: HTTP {up.status_code} {up.text[:200]}")
+	res = USERS["bo"].call(f"{RDG}.upload_readings", cycle=S["cycle"], file_url=up.json()["message"]["file_url"])
+	eq((res["updated"], [e["row"] for e in res["errors"]]), (1, [3]), "one row applied, unknown reference reported")
+	r = my_reading(USERS["bo"])
+	eq((float(r["units"]), r["source"], r["status"]), (300.0, "Import", "Valid"), "imported reading")
+
+
+@case("QA-32", "FS-RDG-01: closing the cycle locks its readings")
+def t_close(d: Desk):
+	USERS["bo"].call(f"{RDG}.close_cycle", cycle=S["cycle"])
+	eq(USERS["bo"].get("Reading Cycle", S["cycle"])["status"], "Closed", "closed")
+	r = my_reading(USERS["reader"])
+	expect_error(lambda: USERS["reader"].save_doc(dict(r, present_reading="310")), "closed")
+
+
 # ---------------------------------------------------------------- runner
 def main():
 	d = Desk()
@@ -516,6 +580,7 @@ def main():
 	make_user(d, "bmgm", ["Billing Manager", "General Manager"])
 	make_user(d, "bo", ["Billing Officer"])
 	make_user(d, "cashier", ["Cashier"])
+	make_user(d, "reader", ["Meter Reader"])
 	results = []
 	for qa_id, req, fn in CASES:
 		try:

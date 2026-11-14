@@ -16,6 +16,10 @@ EDITORS = {
 	"Charge Type": {"System Manager", "Society Admin", "Billing Manager"},
 	"Tariff": {"System Manager", "Billing Manager", "General Manager"},
 	**{dt: {"System Manager", "Billing Officer", "Billing Manager", "Society Admin"} for dt in MASTERS},
+	"Reading Exception Code": {"System Manager", "Society Admin", "Billing Manager"},
+	"Reading Cycle": {"System Manager", "Billing Officer", "Billing Manager", "Society Admin"},
+	# Meter readers enter readings; reviewing them is limited to officers and managers in readings.py.
+	"Meter Reading": {"System Manager", "Meter Reader", "Billing Officer", "Billing Manager"},
 }
 SUBMITTERS = {"Tariff": {"System Manager", "General Manager"}}
 
