@@ -97,6 +97,9 @@ app_include_js = "/assets/utility_billing/js/approval.js"
 # before_install = "utility_billing.install.before_install"
 after_install = "utility_billing.install.after_install"
 
+# Bill print format helper (FS-BIL-08)
+jinja = {"methods": ["utility_billing.utility_billing.bill_print.utility_bill_html"]}
+
 # Uninstallation
 # ------------
 
@@ -290,5 +293,6 @@ fixtures = [
 	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},
 	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit for Approval", "Approve", "Reject", "Withdraw", "Cancel"]]]},
 	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval"]]]},
+	{"dt": "Property Setter", "filters": [["name", "in", ["Utility Bill-main-default_print_format"]]]},
 ]
 

@@ -1,0 +1,301 @@
+# Copyright (c) 2026, SoftVerx. All rights reserved. See license.txt.
+"""Bill print (FS-BIL-08, 16, 17; FS-RUN-08, 09; FS-CLT-03; FS-CFG-19).
+
+Every bill carries a print snapshot: the society's branding, notices and bank details, the consumer
+and connection details, the meter reading and the bill history, as they were when the bill was
+calculated and again when it was posted. Printing reads only the snapshot and the bill's own stored
+lines and totals, so a past bill reprints exactly as issued even after the society changes its logo,
+notices or bank accounts, or the consumer's details change (FS-RUN-09).
+"""
+
+import base64
+import json
+import mimetypes
+
+import frappe
+from frappe import _
+from frappe.utils import cint, flt, formatdate, getdate, now_datetime
+
+SNAPSHOT_VERSION = 1
+DEFAULT_HISTORY_MONTHS = 12
+MAX_HISTORY_MONTHS = 24
+MAX_BILLS_PER_PDF = 500  # bulk print: larger runs are printed block by block or route by route
+PDF_OPTIONS = {"page-size": "A4", "margin-top": "6mm", "margin-bottom": "6mm", "margin-left": "8mm",
+               "margin-right": "8mm", "encoding": "UTF-8"}
+MEASURED = ("Per Unit", "Per Area")  # lines printed as quantity x rate
+TITLES = {"Electricity": "Electricity Bill", "Water": "Water Bill", "Gas": "Gas Bill"}
+
+
+# ---------------------------------------------------------------- snapshot
+def history_months(society) -> int:
+	months = cint(society.get("bill_history_months"))
+	return min(months, MAX_HISTORY_MONTHS) if months > 0 else DEFAULT_HISTORY_MONTHS
+
+
+def bill_history(connection, month, months):
+	"""The connection's earlier posted bills, newest first. Paid date and amount arrive with
+	payments in increment 7; until then they print as blank."""
+	rows = frappe.get_all(
+		"Utility Bill",
+		filters={"connection": connection, "docstatus": 1, "billing_month": ["<", getdate(month)]},
+		fields=["billing_month", "units", "current_amount", "payable_within_due"],
+		order_by="billing_month desc", limit=months,
+	)
+	return [{"month": str(r.billing_month), "units": flt(r.units), "billed": flt(r.payable_within_due),
+	         "current": flt(r.current_amount), "paid_on": None, "paid": None} for r in rows]
+
+
+def build_snapshot(bill) -> dict:
+	"""Snapshot for a bill (a Utility Bill document or the dict build_bill returns)."""
+	g = bill.get
+	society = frappe.get_cached_doc("Society", g("society"))
+	conn = frappe.get_cached_doc("Connection", g("connection"))
+	prop = frappe.db.get_value("Property", conn.property, ["property_no", "block", "sector", "area", "area_unit"],
+	                           as_dict=True) or {}
+	consumer = frappe.db.get_value("Consumer", conn.consumer, ["consumer_name", "mobile_no", "address"], as_dict=True) or {}
+	reading = frappe.db.get_value(
+		"Meter Reading", g("meter_reading"),
+		["meter", "previous_reading", "previous_reading_date", "present_reading", "reading_date", "multiplier",
+		 "consumption_type", "status"], as_dict=True,
+	) if g("meter_reading") else None
+	category = frappe.db.get_value("Consumer Category", g("consumer_category"), "category_name") if g("consumer_category") else ""
+	return {
+		"version": SNAPSHOT_VERSION,
+		"captured_on": str(now_datetime()),
+		"society": {
+			"name": society.society_name, "short_name": society.short_name, "address": society.address,
+			"phone": society.phone, "email": society.email, "website": society.website,
+			"office_hours": society.office_hours, "ntn": society.ntn, "strn": society.strn_vat,
+			"logo": society.logo, "colour": society.brand_colour or "#1F5F8B",
+			"letterhead": society.letterhead_text, "footer": society.footer_text,
+			"notices": [n.strip() for n in (society.bill_notices or "").splitlines() if n.strip()],
+			"payment_instructions": society.payment_instructions,
+			"banks": [{"bank": b.bank_name, "title": b.account_title, "account": b.account_number, "iban": b.iban,
+			           "channel": b.biller_channel, "biller_code": b.biller_code}
+			          for b in society.bank_accounts if b.print_on_bill],
+			"office_copy": bool(cint(society.print_office_copy)),
+			"show_qr": bool(cint(society.show_qr_code)),
+		},
+		"consumer": {"name": consumer.get("consumer_name") or g("consumer_name"), "mobile": consumer.get("mobile_no"),
+		             "address": consumer.get("address")},
+		"connection": {
+			"reference_no": conn.reference_no, "property_no": prop.get("property_no"), "block": prop.get("block"),
+			"sector": prop.get("sector"), "area": flt(prop.get("area")), "area_unit": prop.get("area_unit"),
+			"category": category, "sanctioned_load_kw": flt(conn.sanctioned_load_kw), "phase": conn.phase,
+			"route": conn.route,
+		},
+		"reading": dict(reading, previous_reading_date=str(reading.previous_reading_date or ""),
+		                reading_date=str(reading.reading_date or "")) if reading else None,
+		"history": bill_history(g("connection"), g("billing_month"), history_months(society)),
+	}
+
+
+def snapshot_of(bill) -> dict:
+	if bill.get("print_snapshot"):
+		snap = bill.print_snapshot
+		return json.loads(snap) if isinstance(snap, str) else snap
+	return build_snapshot(bill)  # bills calculated before increment 6
+
+
+# ---------------------------------------------------------------- rendering helpers
+def money(v):
+	v = flt(v)
+	text = f"{abs(v):,.0f}"
+	return f"-{text}" if v < 0 else text
+
+
+def qty(v):
+	v = flt(v)
+	return f"{v:,.0f}" if v == int(v) else f"{v:,.2f}"
+
+
+def rate(v):
+	"""Whole rates as they are (70); others with at least 2 decimals (1.30, 1.305)."""
+	v = flt(v)
+	if not v:
+		return ""
+	if v == int(v):
+		return f"{v:,.0f}"
+	text = f"{v:,.4f}".rstrip("0")
+	return text if len(text.split(".")[1]) >= 2 else text + "0"
+
+
+def date(v):
+	return formatdate(v) if v else ""
+
+
+def month_name(v, short=False):
+	return getdate(v).strftime("%b %Y" if short else "%B %Y") if v else ""
+
+
+def qr_data_uri(text: str) -> str:
+	import pyqrcode
+
+	return "data:image/png;base64," + pyqrcode.create(text, error="M").png_as_base64_str(scale=4, quiet_zone=2)
+
+
+def logo_data_uri(file_url):
+	"""Embed the logo, so the PDF engine never has to fetch it over HTTP."""
+	if not file_url:
+		return None
+	name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+	if not name:
+		return None
+	try:
+		content = frappe.get_doc("File", name).get_content()
+	except Exception:
+		return None
+	if isinstance(content, str):
+		content = content.encode()
+	mime = mimetypes.guess_type(file_url)[0] or "image/png"
+	return f"data:{mime};base64,{base64.b64encode(content).decode()}"
+
+
+def watermark_of(bill, duplicate):
+	if bill.docstatus == 2:
+		return _("CANCELLED")
+	if bill.docstatus == 0:
+		return _("DRAFT")
+	return _("DUPLICATE") if duplicate else None
+
+
+def bill_context(bill, duplicate=0) -> dict:
+	snap = snapshot_of(bill)
+	soc = snap["society"]
+	lines = sorted(bill.lines, key=lambda l: (cint(l.line_order), l.idx))
+	ref = snap["connection"].get("reference_no") or ""
+	duplicate = cint(duplicate) if bill.docstatus == 1 else 0
+	return {
+		"bill": bill, "snap": snap, "soc": soc, "con": snap["connection"], "consumer": snap["consumer"],
+		"reading": snap.get("reading"), "history": snap.get("history") or [],
+		"lines": [{"label": l.label, "quantity": qty(l.quantity) if l.basis in MEASURED else "",
+		           "rate": rate(l.rate) if l.basis in MEASURED else "", "amount": money(l.amount), "note": l.note}
+		          for l in lines],
+		"title": _(TITLES.get(bill.utility, "Utility Bill")),
+		"month": month_name(bill.billing_month), "issue_date": date(bill.issue_date), "due_date": date(bill.due_date),
+		"logo": logo_data_uri(soc.get("logo")),
+		"qr": qr_data_uri(ref) if soc.get("show_qr") and ref else None,
+		"watermark": watermark_of(bill, duplicate),
+		"duplicate": duplicate,
+		"money": money, "qty": qty, "date": date, "month_name": month_name,
+	}
+
+
+def bill_html(name, duplicate=0) -> str:
+	"""HTML of one bill (consumer copy, and the office copy if the society prints one)."""
+	bill = frappe.get_doc("Utility Bill", name)
+	return frappe.render_template("utility_billing/templates/bill/utility_bill.html", bill_context(bill, duplicate))
+
+
+def utility_bill_html(name):
+	"""Jinja method for the "Utility Bill" print format (the desk's Print and PDF)."""
+	return bill_html(name)
+
+
+def document_html(names, duplicate=0) -> str:
+	pages = "".join(f'<div class="ub-page">{bill_html(n, duplicate)}</div>' for n in names)
+	return ('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bills</title>'
+	        "<style>.ub-page{page-break-after:always}.ub-page:last-child{page-break-after:auto}</style>"
+	        f"</head><body>{pages}</body></html>")
+
+
+def pdf_of(names, duplicate=0) -> bytes:
+	from frappe.utils.pdf import get_pdf
+
+	return get_pdf(document_html(names, duplicate), options=dict(PDF_OPTIONS))
+
+
+def send_pdf(content: bytes, filename: str):
+	frappe.local.response.filename = filename
+	frappe.local.response.filecontent = content
+	frappe.local.response.type = "pdf"
+
+
+# ---------------------------------------------------------------- endpoints
+def readable_bill(name):
+	bill = frappe.get_doc("Utility Bill", name)
+	bill.check_permission("print")
+	return bill
+
+
+@frappe.whitelist()
+def download_bill(name: str, duplicate: int = 0):
+	"""PDF of one bill, for print, WhatsApp, email and the apps (FS-BIL-16). A reprint of a posted
+	bill is identical to the original (FS-RUN-09); a duplicate is marked DUPLICATE (FS-BIL-17) and
+	must have been issued first with issue_duplicate, which records it."""
+	bill = readable_bill(name)
+	duplicate = cint(duplicate)
+	if duplicate:
+		if bill.docstatus != 1:
+			frappe.throw(_("Only a posted bill can have a duplicate."))
+		if duplicate > cint(bill.duplicate_count):
+			frappe.throw(_("Issue the duplicate first."))
+	send_pdf(pdf_of([bill.name], duplicate), f"{bill.name}{'-duplicate' if duplicate else ''}.pdf")
+
+
+@frappe.whitelist(methods=["POST"])
+def issue_duplicate(name: str):
+	"""Record a duplicate bill for a consumer who lost theirs (FS-BIL-17). The duplicate bill fee
+	comes with the fee schedule (FS-CFG-24, not built yet)."""
+	bill = readable_bill(name)
+	if bill.docstatus != 1:
+		frappe.throw(_("Only a posted bill can have a duplicate."))
+	count = cint(bill.duplicate_count) + 1
+	frappe.db.set_value("Utility Bill", bill.name, {"duplicate_count": count, "last_duplicate_on": now_datetime()},
+	                    update_modified=False)
+	bill.add_comment("Info", _("Duplicate bill {0} issued by {1}.").format(count, frappe.session.user))
+	return count
+
+
+def run_bills(run, block=None, route=None):
+	"""A run's bills in delivery order: block, route, property number (FS-RUN-08)."""
+	conditions, values = ["b.bill_run = %(run)s", "b.docstatus < 2"], {"run": run}
+	if block:
+		conditions.append("ifnull(p.block, '') = %(block)s")
+		values["block"] = "" if block == "(none)" else block
+	if route:
+		conditions.append("ifnull(c.route, '') = %(route)s")
+		values["route"] = "" if route == "(none)" else route
+	return frappe.db.sql(
+		f"""select b.name, ifnull(p.block, '') as block, ifnull(c.route, '') as route, p.property_no
+		from `tabUtility Bill` b
+		left join `tabProperty` p on p.name = b.property
+		left join `tabConnection` c on c.name = b.connection
+		where {' and '.join(conditions)}
+		order by ifnull(p.block, ''), ifnull(c.route, ''), length(p.property_no), p.property_no, b.name""",
+		values, as_dict=True,
+	)
+
+
+def readable_run(run):
+	doc = frappe.get_doc("Bill Run", run)
+	doc.check_permission("read")
+	if not frappe.has_permission("Utility Bill", "print"):
+		raise frappe.PermissionError(_("You can't print bills."))
+	return doc
+
+
+@frappe.whitelist()
+def run_print_groups(run: str):
+	"""Blocks and routes in a run, with bill counts, for the bulk print dialog."""
+	readable_run(run)
+	blocks, routes = {}, {}
+	for b in run_bills(run):
+		blocks[b.block or "(none)"] = blocks.get(b.block or "(none)", 0) + 1
+		routes[b.route or "(none)"] = routes.get(b.route or "(none)", 0) + 1
+	return {"total": sum(blocks.values()), "blocks": blocks, "routes": routes, "limit": MAX_BILLS_PER_PDF}
+
+
+@frappe.whitelist()
+def print_run_bills(run: str, block: str | None = None, route: str | None = None):
+	"""One PDF of a run's bills in delivery order, optionally for one block or route (FS-RUN-08)."""
+	doc = readable_run(run)
+	bills = run_bills(doc.name, block or None, route or None)
+	if not bills:
+		frappe.throw(_("No bills to print."))
+	if len(bills) > MAX_BILLS_PER_PDF:
+		frappe.throw(_("{0} bills is too many for one PDF; print one block or route at a time (up to {1}).").format(
+			len(bills), MAX_BILLS_PER_PDF))
+	suffix = "".join(f"-{'no-' + kind if x == '(none)' else frappe.scrub(x)}"
+	                 for kind, x in (("block", block), ("route", route)) if x)
+	send_pdf(pdf_of([b.name for b in bills]), f"{doc.name}{suffix}.pdf")

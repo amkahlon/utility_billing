@@ -5,6 +5,9 @@ frappe.ui.form.on("Bill Run", {
 		utility_billing.setup_approval_form(frm);
 		if (frm.is_new()) return;
 		frm.add_custom_button(__("Open Bills"), () => frappe.set_route("List", "Utility Bill", { bill_run: frm.doc.name }));
+		if (frm.doc.bill_count && frm.doc.calculation_status === "Calculated" && frm.doc.docstatus < 2) {
+			frm.add_custom_button(__("Print Bills"), () => print_run_bills(frm));
+		}
 		const editable = frm.doc.docstatus === 0 && ["Draft", "Rejected", "", undefined].includes(frm.doc.workflow_state);
 		if (editable) {
 			frm.add_custom_button(__("Calculate Bills"), () => {
@@ -38,3 +41,32 @@ frappe.ui.form.on("Bill Run", {
 		return utility_billing.before_workflow_action(frm);
 	},
 });
+
+// Bulk print in delivery order (block, route, property), all bills or one block or route (FS-RUN-08).
+function print_run_bills(frm) {
+	const method = "utility_billing.utility_billing.bill_print";
+	frappe.call({ method: `${method}.run_print_groups`, args: { run: frm.doc.name } }).then(({ message: g }) => {
+		const options = (counts) => Object.entries(counts).map(([k, n]) => ({ value: k, label: `${k} (${n})` }));
+		const d = new frappe.ui.Dialog({
+			title: __("Print Bills"),
+			fields: [
+				{
+					fieldtype: "HTML",
+					options: `<p class="text-muted">${__(
+						"Bills in this run: {0}. They print in delivery order (block, route, property number), up to {1} per PDF.",
+						[g.total, g.limit]
+					)}</p>`,
+				},
+				{ fieldname: "block", fieldtype: "Select", label: __("Block"), options: [{ value: "", label: __("All blocks") }, ...options(g.blocks)] },
+				{ fieldname: "route", fieldtype: "Select", label: __("Route"), options: [{ value: "", label: __("All routes") }, ...options(g.routes)] },
+			],
+			primary_action_label: __("Open PDF"),
+			primary_action(values) {
+				const args = new URLSearchParams({ run: frm.doc.name, block: values.block || "", route: values.route || "" });
+				window.open(`/api/method/${method}.print_run_bills?${args}`);
+				d.hide();
+			},
+		});
+		d.show();
+	});
+}

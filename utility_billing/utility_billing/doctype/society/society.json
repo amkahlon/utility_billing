@@ -70,7 +70,14 @@
   "bank_section",
   "bank_accounts",
   "offices_section",
-  "offices"
+  "offices",
+  "bill_layout_section",
+  "bill_history_months",
+  "print_office_copy",
+  "show_qr_code",
+  "cb_bill_layout",
+  "bill_notices",
+  "payment_instructions"
  ],
  "fields": [
   {
@@ -425,13 +432,55 @@
    "fieldname": "charges_qta",
    "fieldtype": "Check",
    "label": "Charges QTA"
+  },
+  {
+   "fieldname": "bill_layout_section",
+   "fieldtype": "Section Break",
+   "label": "Bill Layout"
+  },
+  {
+   "default": "12",
+   "description": "Earlier bills listed on each bill (1 to 24).",
+   "fieldname": "bill_history_months",
+   "fieldtype": "Int",
+   "label": "Months of History on Bill"
+  },
+  {
+   "default": "1",
+   "description": "A tear-off office/bank copy at the foot of each bill.",
+   "fieldname": "print_office_copy",
+   "fieldtype": "Check",
+   "label": "Print Office Copy"
+  },
+  {
+   "default": "1",
+   "description": "QR code of the reference number, for paying through banks and wallets.",
+   "fieldname": "show_qr_code",
+   "fieldtype": "Check",
+   "label": "Show QR Code"
+  },
+  {
+   "fieldname": "cb_bill_layout",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Printed on every bill, one notice per line.",
+   "fieldname": "bill_notices",
+   "fieldtype": "Small Text",
+   "label": "Notices on Bill"
+  },
+  {
+   "description": "How and where to pay. Bank accounts marked Print on Bill are listed below it.",
+   "fieldname": "payment_instructions",
+   "fieldtype": "Small Text",
+   "label": "Payment Instructions"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 05:36:56.221855",
+ "modified": "2026-11-14 06:22:01.647959",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",
