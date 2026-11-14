@@ -34,12 +34,16 @@ add_to_apps_screen = [
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/utility_billing/css/utility_billing.css"
-# The ?v= number makes browsers fetch the file again: raise it whenever approval.js changes.
-app_include_css = "/assets/utility_billing/css/ub_theme.css?v=2"
-app_include_js = "/assets/utility_billing/js/approval.js?v=4"
+# The ?v= number is worked out from the files' modification times, so browsers fetch a changed file again by themselves.
+from utility_billing.ui_version import ui_version  # noqa: E402
+
+_V = ui_version()
+app_include_css = f"/assets/utility_billing/css/ub_theme.css?v={_V}"
+web_include_css = f"/assets/utility_billing/css/ub_theme.css?v={_V}"
+app_include_js = f"/assets/utility_billing/js/approval.js?v={_V}"
+boot_session = "utility_billing.boot.boot_session"
 
 # include js, css files in header of web template
-# web_include_css = "/assets/utility_billing/css/utility_billing.css"
 # web_include_js = "/assets/utility_billing/js/utility_billing.js"
 
 # include custom scss in every website theme (without file extension ".scss")

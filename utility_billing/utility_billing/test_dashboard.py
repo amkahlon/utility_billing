@@ -152,3 +152,46 @@ class IntegrationTestDashboard(BillingCase):
 		items = frappe.get_doc("Sidebar", "Utility Billing").items
 		self.assertEqual((items[0].label, items[0].link_type, items[0].link_to), ("Dashboard", "Page", "ub-dashboard"))
 		self.assertEqual([i.idx for i in items], list(range(1, len(items) + 1)))
+
+	def test_cards_have_icons_and_sparklines(self):
+		self.october_posted()
+		d = self.get(month="2026-10-01")
+		for card in d["kpis"]:
+			self.assertIn(card["icon"], dashboard.ICONS, card["label"])
+		k = self.cards(d)
+		self.assertEqual(len(k["Billed this cycle"]["spark"]), 12)
+		self.assertEqual(k["Billed this cycle"]["spark"][-1], 22260)
+
+	def test_needs_attention_lists_rule_based_alerts_most_severe_first(self):
+		self.october_posted()
+		with patch.object(dashboard, "nowdate", return_value="2027-03-01"):
+			d = self.get(month="2027-01-01")
+		items = d["attention"]
+		self.assertLessEqual(len(items), 6)
+		for item in items:
+			self.assertEqual(set(item), {"tone", "title", "detail", "route", "options"})
+		self.assertEqual([dashboard.SEVERITY[i["tone"]] for i in items], sorted(dashboard.SEVERITY[i["tone"]] for i in items))
+		self.assertTrue(any("60" in i["title"] or "defaulter" in i["title"].lower() for i in items))
+
+	def test_attention_is_empty_list_for_a_society_with_no_data(self):
+		ensure("Society", "TST-EMPTY", {"society_name": "Empty Society", "short_name": "TST-EMPTY", "energy_charge_type": "TST Energy"})
+		self.assertIsInstance(dashboard.get_dashboard(society="TST-EMPTY", month="2026-10-01")["attention"], list)
+
+
+class UnitTestUiAssets(UnitTestCase):
+	def test_ui_version_is_a_number_that_the_boot_hook_hands_to_the_browser(self):
+		from utility_billing import boot, ui_version
+
+		self.assertTrue(str(ui_version.ui_version()).isdigit())
+		info = frappe._dict()
+		boot.boot_session(info)
+		self.assertEqual(str(info.ub_ui_version), str(ui_version.ui_version()))
+
+	def test_theme_covers_light_and_dark_and_the_login_page(self):
+		import os
+
+		path = os.path.join(frappe.get_app_path("utility_billing"), "public", "css", "ub_theme.css")
+		css = open(path, encoding="utf-8").read()
+		self.assertIn("[data-theme=\"dark\"]", css)
+		self.assertIn("--ub-", css)
+		self.assertIn("login", css)
