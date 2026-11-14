@@ -9,7 +9,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, add_months, cint, flt, formatdate, get_last_day, getdate, nowdate
 
-from utility_billing.utility_billing import mis
+from utility_billing.utility_billing import losses, mis
 
 ALLOWED = set(mis.FINANCE + mis.BILLING + mis.RECOVERY + ["Society Admin"])
 MODES = ("Cash", "Cheque", "Pay Order", "Card", "Bank Transfer", "1Link", "Kuickpay")
@@ -56,6 +56,25 @@ def kpi(label, value, note, tone=MUTED, raw=None):
 	return {"label": label, "value": value, "note": note, "tone": tone, "raw": raw}
 
 
+def line_loss_card(society, month, series):
+	"""AT&C for the month when the DISCO bill (or feeder input units) is recorded; otherwise an honest placeholder."""
+	label = _("Line losses (AT&C)")
+	cur = losses.at_c_for(society, month, series[-1])
+	if not cur:
+		return kpi(label, "—", _("Needs the DISCO bill, not recorded yet"), MUTED)
+	if cur["atc"] is None:
+		return kpi(label, "—", _("Can't be worked out: nothing was billed"), MUTED)
+	prev = losses.at_c_for(society, add_months(month, -1), series[-2]) if len(series) > 1 else None
+	if prev and prev["atc"] is not None:
+		delta = round(cur["atc"] - prev["atc"], 1)
+		note = _("{0} pts vs. last month").format(("+" if delta >= 0 else "−") + f"{abs(delta):.1f}")
+	else:
+		note = _("Line loss {0}%").format(f"{cur['loss_pct']:.1f}")
+	watch, high = losses.levels(society)
+	tone = losses.TONE[losses.status_of(cur["input_kwh"], cur["billed_kwh"], watch, high)]
+	return kpi(label, f"{cur['atc']:.1f}%", note, tone, cur["atc"])
+
+
 def kpis_of(society, month, series, as_of):
 	cur, prev = series[-1], series[-2] if len(series) > 1 else None
 	prev_month_name = getdate(add_months(month, -1)).strftime("%B")
@@ -86,7 +105,7 @@ def kpis_of(society, month, series, as_of):
 		    (GOOD if rate >= 85 else WARN if rate >= 60 else BAD) if cur["bills"] else MUTED, cur["collected"]),
 		kpi(_("Total arrears"), rs(arrears), _("{0} vs. last month").format(signed_rs(delta)) if round(delta) else _("No change vs. last month"),
 		    BAD if round(delta) > 0 else GOOD, arrears),
-		kpi(_("Line losses (AT&C)"), "—", _("Needs the DISCO bill, not recorded yet"), MUTED),
+		line_loss_card(society, month, series),
 		kpi(_("Units billed"), f"{cur['units']:,.0f} kWh", (_("1 connection billed") if cur["bills"] == 1 else _("{0} connections billed").format(f"{cur['bills']:,}")), MUTED, cur["units"]),
 		kpi(_("Defaulters (60+ days)"), f"{defaulters:,}", _("{0} outstanding").format(rs(overdue_60)),
 		    BAD if defaulters else GOOD, defaulters),
@@ -147,13 +166,10 @@ def steps_of(society, month, today):
 
 
 def feeders_of(society, month):
-	rows = mis.sql("""select ifnull(f.feeder_name, %(none)s) name, count(*) connections, sum(b.units) kwh
-		from `tabUtility Bill` b join `tabConnection` c on c.name = b.connection left join `tabFeeder` f on f.name = c.feeder
-		where b.society = %(s)s and b.docstatus = 1 and b.billing_month = %(m)s group by c.feeder, name order by kwh desc""",
-	               {"s": society, "m": month, "none": _("(no feeder)")})
-	total = sum(flt(r.kwh) for r in rows)
-	return [{"name": r.name, "connections": cint(r.connections), "billed_kwh": f"{flt(r.kwh):,.0f}",
-	         "share": f"{mis.pct(r.kwh, total):.1f}%", "status": _("No input data")} for r in rows]
+	"""Loss per feeder: input from the DISCO bill's feeder rows, billed from the bills; "—" where nothing is recorded."""
+	return [{"name": r["name"], "connections": r["connections"], "input_kwh": f"{r['input_kwh']:,.0f}" if r["input_kwh"] else "—",
+	         "billed_kwh": f"{r['billed_kwh']:,.0f}", "loss": f"{r['loss_pct']:.1f}%" if r["loss_pct"] is not None else "—",
+	         "status": _(r["status"]), "tone": r["tone"]} for r in losses.network_losses(society, month, "Feeder")]
 
 
 def channels_of(society, month):
@@ -180,6 +196,7 @@ def get_dashboard(society: str | None = None, month: str | None = None):
 	as_of = min(today, getdate(get_last_day(month)))
 	series = mis.monthly_series(society, mis.last_months(month, 12))
 	steps, footer = steps_of(society, month, today)
+	feeders = feeders_of(society, month)
 	energy = frappe.db.get_value("Society", society, "enable_electricity")
 	return {
 		"society": society, "society_name": frappe.db.get_value("Society", society, "society_name"),
@@ -188,7 +205,7 @@ def get_dashboard(society: str | None = None, month: str | None = None):
 		"months": [{"value": str(m), "label": getdate(m).strftime("%B %Y")} for m in mis.last_months(month if month > today else today, 13)][::-1],
 		"subtitle": _("{0} · {1} billing cycle").format(_("Electricity") if energy else _("Billing"), getdate(month).strftime("%B %Y")),
 		"kpis": kpis_of(society, month, series, as_of), "series": series, "steps": steps, "footer": footer,
-		"feeders": feeders_of(society, month), "channels": channels_of(society, month),
+		"feeders": feeders, "feeders_have_input": any(f["input_kwh"] != "—" for f in feeders), "channels": channels_of(society, month),
 		"user": {"name": frappe.session.user, "full_name": frappe.db.get_value("User", frappe.session.user, "full_name"),
 		         "initials": "".join(w[0] for w in (frappe.db.get_value("User", frappe.session.user, "full_name") or "U").split()[:2]).upper()},
 	}

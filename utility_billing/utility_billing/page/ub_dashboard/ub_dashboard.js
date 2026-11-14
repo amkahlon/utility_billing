@@ -75,8 +75,8 @@ class UtilityBillingDashboard {
 			? d.feeders
 					.map(
 						(f) => `<tr><td><b>${e(f.name)}</b><div class="sub">${f.connections.toLocaleString()} ${__("connections")}</div></td>
-							<td class="num">—</td><td class="num">${e(f.billed_kwh)}</td><td class="num">—</td>
-							<td><span class="ub-pill">${e(f.status)}</span></td></tr>`
+							<td class="num">${e(f.input_kwh)}</td><td class="num">${e(f.billed_kwh)}</td><td class="num">${e(f.loss)}</td>
+							<td><span class="ub-pill ${e(f.tone)}">${e(f.status)}</span></td></tr>`
 					)
 					.join("")
 			: `<tr><td colspan="5" class="ub-empty">${__("No bills in this cycle yet.")}</td></tr>`;
@@ -115,7 +115,7 @@ class UtilityBillingDashboard {
 			<section class="ub-card ub-span2"><h2>${__("Line losses by feeder")}</h2>
 				<div style="overflow-x:auto"><table class="ub-tbl"><thead><tr><th>${__("Feeder")}</th><th class="num">${__("Input kWh")}</th>
 					<th class="num">${__("Billed kWh")}</th><th class="num">${__("Loss")}</th><th>${__("Status")}</th></tr></thead><tbody>${feeders}</tbody></table></div>
-				<p class="ub-empty" style="padding-bottom:0">${__("Input kWh and loss appear once the DISCO bill and the bulk meter units are recorded.")}</p>
+				${d.feeders_have_input ? "" : `<p class="ub-empty" style="padding-bottom:0">${__("Input kWh and loss appear once the DISCO bill and the feeder input units are recorded (DISCO Bill).")}</p>`}
 			</section>
 			<section class="ub-card"><h2>${__("Collections by channel")}</h2><div class="ub-rows">${channels}</div></section>
 		</div>`;

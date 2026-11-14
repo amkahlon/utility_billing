@@ -63,6 +63,10 @@
   "reading_tolerance_percent",
   "cb_reading",
   "estimation_method",
+  "loss_section",
+  "loss_watch_percent",
+  "cb_loss",
+  "loss_high_percent",
   "messaging_section",
   "sms_sender",
   "whatsapp_number",
@@ -605,13 +609,36 @@
    "fieldname": "licence_document",
    "fieldtype": "Attach",
    "label": "Licence or Exemption Document"
+  },
+  {
+   "collapsible": 1,
+   "description": "Used by the line loss reports and the dashboard: below Watch is Normal, from High is High loss.",
+   "fieldname": "loss_section",
+   "fieldtype": "Section Break",
+   "label": "Line Loss Alert Levels"
+  },
+  {
+   "default": "8",
+   "fieldname": "loss_watch_percent",
+   "fieldtype": "Percent",
+   "label": "Watch From (%)"
+  },
+  {
+   "fieldname": "cb_loss",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "12",
+   "fieldname": "loss_high_percent",
+   "fieldtype": "Percent",
+   "label": "High Loss From (%)"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 07:43:07.323560",
+ "modified": "2026-11-14 09:51:35.755451",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

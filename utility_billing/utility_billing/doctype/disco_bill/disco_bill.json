@@ -1,0 +1,282 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-11-14 09:51:35.594177",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "bill_title",
+  "society",
+  "utility",
+  "billing_month",
+  "cb1",
+  "disco_name",
+  "bill_no",
+  "due_date",
+  "bill_copy",
+  "supply_section",
+  "units_kwh",
+  "cb2",
+  "total_amount",
+  "amounts_section",
+  "energy_amount",
+  "fpa_amount",
+  "cb3",
+  "qta_amount",
+  "other_amount",
+  "inputs_section",
+  "inputs",
+  "notes"
+ ],
+ "fields": [
+  {
+   "default": "DISCO-.YYYY.-.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "DISCO-.YYYY.-.####"
+  },
+  {
+   "fieldname": "bill_title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "read_only": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1
+  },
+  {
+   "default": "Electricity",
+   "fieldname": "utility",
+   "fieldtype": "Link",
+   "label": "Utility",
+   "options": "Utility Type",
+   "reqd": 1
+  },
+  {
+   "description": "Any date in the month; stored as the 1st. Match the month of the bills it is compared with.",
+   "fieldname": "billing_month",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Billing Month",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "society.disco_name",
+   "fieldname": "disco_name",
+   "fieldtype": "Data",
+   "label": "DISCO",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bill_no",
+   "fieldtype": "Data",
+   "label": "DISCO Bill No"
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Date",
+   "label": "DISCO Due Date"
+  },
+  {
+   "fieldname": "bill_copy",
+   "fieldtype": "Attach",
+   "label": "Copy of the Bill"
+  },
+  {
+   "fieldname": "supply_section",
+   "fieldtype": "Section Break",
+   "label": "Bulk Supply"
+  },
+  {
+   "description": "The bulk meter units on the DISCO's bill: what entered the society",
+   "fieldname": "units_kwh",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Units Billed by the DISCO (kWh)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Total Payable to the DISCO",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amounts_section",
+   "fieldtype": "Section Break",
+   "label": "Charges on the DISCO's Bill"
+  },
+  {
+   "fieldname": "energy_amount",
+   "fieldtype": "Currency",
+   "label": "Energy Charges"
+  },
+  {
+   "fieldname": "fpa_amount",
+   "fieldtype": "Currency",
+   "label": "FPA Charged"
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "qta_amount",
+   "fieldtype": "Currency",
+   "label": "QTA Charged"
+  },
+  {
+   "fieldname": "other_amount",
+   "fieldtype": "Currency",
+   "label": "Taxes, Duties and Other Charges"
+  },
+  {
+   "description": "From the feeder and transformer check meters, for the line loss reports. Add all feeders to start.",
+   "fieldname": "inputs_section",
+   "fieldtype": "Section Break",
+   "label": "Units Entering Each Feeder or Transformer"
+  },
+  {
+   "fieldname": "inputs",
+   "fieldtype": "Table",
+   "label": "Input Units",
+   "options": "DISCO Input Row"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 09:51:35.594177",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "DISCO Bill",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "society,billing_month,bill_no",
+ "show_title_field_in_link": 1,
+ "sort_field": "billing_month",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "bill_title",
+ "track_changes": 1
+}

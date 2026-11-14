@@ -112,7 +112,7 @@ GROUPS = [
 	              ("DocType", "Account Adjustment"), ("DocType", "Customer Ledger Entry")]),
 	("Accounting", [("DocType", "GL Journal"), ("DocType", "Receivables Reconciliation"), ("DocType", "Ledger Account"),
 	                ("DocType", "Journal Export Layout")]),
-	("Meters and Network", [("DocType", "Meter"), ("DocType", "Transformer"), ("DocType", "Feeder")]),
+	("Meters and Network", [("DocType", "Meter"), ("DocType", "Transformer"), ("DocType", "Feeder"), ("DocType", "DISCO Bill")]),
 	("Reports", []),  # filled from the registry
 	("Setup", [("DocType", "Society"), ("DocType", "Tariff"), ("DocType", "Charge Type"), ("DocType", "Consumer Category"),
 	           ("DocType", "Fee Type"), ("DocType", "Cash Counter"), ("DocType", "Reason Code"),
@@ -125,12 +125,15 @@ def build_sidebar():
 
 	doc = frappe.get_doc("Sidebar", "Utility Billing")
 	doc.items = []
+	doc.append("items", {"type": "Link", "label": "Dashboard", "link_type": "Page", "link_to": "ub-dashboard", "child": 0})
 	for section, links in GROUPS:
 		if section == "Reports":
 			links = [("Report", s["name"]) for s in mis.REPORTS.values()]
 		doc.append("items", {"type": "Section Break", "label": section, "collapsible": 1})
 		for link_type, name in links:
 			doc.append("items", {"type": "Link", "label": name, "link_type": link_type, "link_to": name, "child": 1})
+	for n, i in enumerate(doc.items, start=1):
+		i.idx = n
 	doc.save()
 	print("sidebar sections:", [s for s, _l in GROUPS], "items:", len(doc.items))
 

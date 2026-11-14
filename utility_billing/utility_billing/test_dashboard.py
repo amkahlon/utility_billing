@@ -105,7 +105,9 @@ class IntegrationTestDashboard(BillingCase):
 	def test_feeders_channels_and_chart(self):
 		self.october_posted()
 		d = self.get(month="2026-10-01")
-		self.assertEqual(d["feeders"], [{"name": "(no feeder)", "connections": 1, "billed_kwh": "264", "share": "100.0%", "status": "No input data"}])
+		self.assertEqual(d["feeders"], [{"name": "(no feeder)", "connections": 1, "input_kwh": "—", "billed_kwh": "264", "loss": "—",
+		                                 "status": "No input data", "tone": "slate"}])
+		self.assertFalse(d["feeders_have_input"])
 		self.assertEqual([(c["name"], c["amount"], c["pct"]) for c in d["channels"]], [("Bank Transfer", "Rs 58,366", 100)])
 		self.assertEqual(len(d["series"]), 12)
 		self.assertEqual((d["series"][-1]["month"], d["series"][-1]["billed"], d["series"][-2]["billed"]), ("Oct 2026", 22260, 59470))

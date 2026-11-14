@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Full regression: migrate all sites, unit + integration tests on the test site (with ERPNext) and the ERPNext-free
-# QA site, then the HTTP end-to-end suite against a freshly restarted QA server on port 8001.
+# QA site, then the HTTP end-to-end suite (once, on one society) against a freshly restarted QA server on port 8001.
 # Needs `bench start` running (Redis and the background worker).
 # Usage (inside WSL):  bash ~/frappe-bench/apps/utility_billing/e2e/regression.sh
 set -uo pipefail
@@ -28,8 +28,11 @@ nohup bench --site qa.localhost serve --port 8001 --noreload > "$HOME/qa-serve.l
 echo $! > "$PIDFILE"
 for _ in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:8001/api/method/ping && break; sleep 1; done
 
-echo "== end-to-end on qa.localhost:8001 (run twice)"
-for run in 1 2; do
+# One run on one society is enough for a regression (each run adds a society with a full set of test data); set E2E_RUNS=2
+# to check that the suite can be repeated on the same site.
+RUNS="${E2E_RUNS:-1}"
+echo "== end-to-end on qa.localhost:8001 ($RUNS run)"
+for run in $(seq 1 "$RUNS"); do
   E2E_URL=http://127.0.0.1:8001 env/bin/python apps/utility_billing/e2e/run_e2e.py > "$HOME/e2e-run$run.log" 2>&1 || status=1
   grep -E "^FAIL" "$HOME/e2e-run$run.log" | cut -c1-300
   tail -1 "$HOME/e2e-run$run.log"

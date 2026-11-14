@@ -13,3 +13,4 @@ utility_billing.patches.v0_1.post_bills_to_accounts
 utility_billing.patches.v0_1.default_export_layouts
 utility_billing.patches.v0_1.charge_type_account_codes
 utility_billing.patches.v0_1.default_kpis
+utility_billing.patches.v0_1.default_kpis_losses

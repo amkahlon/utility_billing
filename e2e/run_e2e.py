@@ -1160,6 +1160,57 @@ def t_modern_dashboard(d: Desk):
 	eq(d.get("Page", "ub-dashboard")["title"], "Dashboard", "dashboard page")
 
 
+# ---------------------------------------------------------------- increment 10: DISCO bill, line losses, AT&C, reconciliation
+@case("QA-66", "FS-RPT-08, 30-34, 38: DISCO bill entered by the Accounts Officer; loss, AT&C, transformer and reconciliation reports; dashboard")
+def t_losses(d: Desk):
+	tx = d.get("Transformer", S["transformer"])
+	base = {"doctype": "DISCO Bill", "naming_series": "DISCO-.YYYY.-.####", "society": S["society"], "utility": "Electricity",
+	        "billing_month": "2026-11-20", "units_kwh": "340", "energy_amount": "24000", "fpa_amount": "1200", "qta_amount": "0",
+	        "other_amount": "2600", "inputs": [{"feeder": tx["feeder"], "input_kwh": "340"}, {"transformer": tx["name"], "input_kwh": "330"}]}
+	expect_error(lambda: USERS["cashier"].save_doc(dict(base)))
+	bill = USERS["ao"].save_doc(dict(base))
+	eq((str(bill["billing_month"]), float(bill["total_amount"])), ("2026-11-01", 27800.0), "saved for the month, total worked out")
+	expect_error(lambda: USERS["ao"].save_doc(dict(base)), "already covers")
+	expect_error(lambda: USERS["ao"].save_doc(dict(base, billing_month="2026-12-01", inputs=[{"feeder": tx["feeder"], "transformer": tx["name"], "input_kwh": "1"}])),
+	             "not both")
+
+	# 340 kWh came in, 300 were billed: 40 kWh lost = 11.8%, between the Watch (8%) and High (12%) levels.
+	rows = rows_of(run_report(USERS["bm"], "Line Losses by Feeder and Transformer", month="2026-11-01"))
+	eq((float(rows[0]["input_kwh"]), float(rows[0]["billed_kwh"]), float(rows[0]["loss_kwh"]), float(rows[0]["loss_pct"]), rows[0]["status"]),
+	   (340.0, 300.0, 40.0, 11.8, "Watch"), "whole society")
+	eq((float(rows[1]["input_kwh"]), float(rows[1]["loss_pct"]), rows[1]["status"]), (340.0, 11.8, "Watch"), "feeder")
+	tr = rows_of(run_report(USERS["bm"], "Line Losses by Feeder and Transformer", month="2026-11-01", group_by="Transformer"))
+	eq((float(tr[1]["input_kwh"]), float(tr[1]["loss_pct"])), (330.0, 9.1), "transformer")
+	rank = rows_of(run_report(USERS["gm"], "Highest-Loss Feeders and Loss Trend", month="2026-11-01"))
+	eq((rank[0]["rank"], float(rank[0]["loss_pct"])), (1, 11.8), "ranking")
+	trend = rows_of(run_report(USERS["gm"], "Highest-Loss Feeders and Loss Trend", month="2026-11-01", show="12-Month Trend"))
+	eq((len(trend), trend[-1]["month"], float(trend[-1]["loss_pct"])), (12, "Nov 2026", 11.8), "12-month trend")
+
+	atc = rows_of(run_report(USERS["gm"], "AT&C Losses", month="2026-11-01"))[-1]
+	eq(float(atc["billing_efficiency"]), 88.2, "billing efficiency = 300 / 340")
+	if atc["atc"] is None:
+		raise AssertionError("AT&C wasn't worked out")
+	load = [r for r in rows_of(run_report(USERS["bm"], "Transformer Loading")) if r["transformer"] == tx["name"]][0]
+	eq((load["connections"] >= 1, float(load["kw"]) >= 5), (True, True), "transformer carries the connection")
+
+	rec = [r for r in rows_of(run_report(USERS["ao"], "DISCO Bill vs Resident Billing", from_date="2026-11-01", to_date="2026-11-30")) if r["month"] == "Nov 2026"][0]
+	eq((float(rec["disco_units"]), float(rec["billed_units"]), float(rec["units_difference"])), (340.0, 300.0, 40.0), "units")
+	# Residents were billed energy 21,000 (+ FPA 0) for the electricity group; the DISCO billed the society 27,800.
+	eq((float(rec["disco_total"]), float(rec["billed_amount"]), float(rec["margin"]), float(rec["margin_pct"])), (27800.0, 21000.0, -6800.0, -32.4), "margin")
+	eq((float(rec["disco_fpa"]), float(rec["billed_fpa"]), float(rec["fpa_recovery"])), (1200.0, 0.0, 0.0), "FPA recovery")
+	expect_error(lambda: run_report(USERS["bo"], "DISCO Bill vs Resident Billing", from_date="2026-11-01", to_date="2026-11-30"))
+
+	dash = USERS["mgmt"].call("utility_billing.utility_billing.dashboard.get_dashboard", society=S["society"], month="2026-11-01")
+	card = {k["label"]: k for k in dash["kpis"]}["Line losses (AT&C)"]
+	if card["value"] == "—" or not card["value"].endswith("%"):
+		raise AssertionError(f"dashboard line-loss card still empty: {card}")
+	eq((dash["feeders"][0]["input_kwh"], dash["feeders"][0]["loss"], dash["feeders"][0]["status"], dash["feeders"][0]["tone"]),
+	   ("340", "11.8%", "Watch", "amber"), "dashboard feeder row")
+	eq(dash["feeders_have_input"], True, "feeder note hidden")
+	for desk, name in ((USERS["cashier"], "Line Losses by Feeder and Transformer"), (USERS["reader"], "AT&C Losses")):
+		expect_error(lambda desk=desk, name=name: run_report(desk, name, month="2026-11-01"))
+
+
 # ---------------------------------------------------------------- runner
 def main():
 	d = Desk()

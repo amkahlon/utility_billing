@@ -40,6 +40,9 @@ class Society(Document):
 			frappe.throw(_("Surcharge cap and minimum bill can't be negative."))
 		if not 1 <= cint(self.bill_history_months) <= 24:
 			frappe.throw(_("Months of History on Bill must be from 1 to 24."))
+		watch, high = flt(self.loss_watch_percent), flt(self.loss_high_percent)
+		if not 0 < watch < high <= 100:
+			frappe.throw(_("Line loss alert levels: Watch must be above 0 and below High loss, and High loss at most 100%."))
 		self.validate_logo()
 
 	def normalise_website(self):
