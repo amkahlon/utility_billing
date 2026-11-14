@@ -200,6 +200,30 @@ def aging_for(society, as_of, category=None, block=None):
 	return [(r, allocate_age(comps.get(r.connection, []), r.balance, as_of)) for r in rows]
 
 
+def monthly_series(society, months):
+	"""Per month: bills, units, billed (current bills), payable within due date, collected, collection rate. Shared by the
+	dashboard report and the home dashboard page, so they always agree."""
+	first, last = months[0], get_last_day(months[-1])
+	billed = {month_key(r.m): r for r in sql(
+		"""select billing_month m, count(*) bills, sum(units) units, sum(current_amount) billed, sum(payable_within_due) payable
+		from `tabUtility Bill` where society = %(s)s and docstatus = 1 and billing_month between %(a)s and %(b)s
+		group by billing_month""", {"s": society, "a": first, "b": last})}
+	paid = {r.m: flt(r.collected) for r in sql(
+		"""select date_format(payment_date, '%%Y-%%m-01') m, sum(amount) collected from `tabPayment Receipt`
+		where society = %(s)s and docstatus = 1 and payment_date between %(a)s and %(b)s group by 1""",
+		{"s": society, "a": first, "b": last})}
+	rows = []
+	for m in months:
+		k = month_key(m)
+		b = billed.get(k)
+		collected = paid.get(k, 0)
+		rows.append({"month": getdate(k).strftime("%b %Y"), "bills": cint(b.bills) if b else 0,
+		             "units": flt(b.units) if b else 0, "billed": flt(b.billed) if b else 0,
+		             "payable": flt(b.payable) if b else 0, "collected": collected,
+		             "rate": pct(collected, b.payable) if b else 0})
+	return rows
+
+
 # ================================================================ 1. dashboard (RPT-01)
 @report("dashboard", "Management Dashboard", FINANCE + ["Billing Officer"],
         [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
@@ -208,26 +232,8 @@ def aging_for(society, as_of, category=None, block=None):
 def dashboard(f):
 	s = society_of(f)
 	end = month_start(f.get("month") or nowdate())
-	months = last_months(end, 13)
-	first, last = months[0], get_last_day(end)
-	billed = {month_key(r.m): r for r in sql(
-		"""select billing_month m, count(*) bills, sum(units) units, sum(current_amount) billed, sum(payable_within_due) payable
-		from `tabUtility Bill` where society = %(s)s and docstatus = 1 and billing_month between %(a)s and %(b)s
-		group by billing_month""", {"s": s, "a": first, "b": last})}
-	paid = {r.m: flt(r.collected) for r in sql(
-		"""select date_format(payment_date, '%%Y-%%m-01') m, sum(amount) collected from `tabPayment Receipt`
-		where society = %(s)s and docstatus = 1 and payment_date between %(a)s and %(b)s group by 1""",
-		{"s": s, "a": first, "b": last})}
-	data, labels = [], []
-	for m in months:
-		k = month_key(m)
-		b = billed.get(k)
-		collected = paid.get(k, 0)
-		data.append({"month": getdate(k).strftime("%b %Y"), "bills": cint(b.bills) if b else 0,
-		             "units": flt(b.units) if b else 0, "billed": flt(b.billed) if b else 0,
-		             "payable": flt(b.payable) if b else 0, "collected": collected,
-		             "rate": pct(collected, b.payable) if b else 0})
-		labels.append(data[-1]["month"])
+	data = monthly_series(s, last_months(end, 13))
+	labels = [d["month"] for d in data]
 	cur = data[-1]
 	accounts = account_rows(s)
 	owed = sum(flt(a.balance) for a in accounts if flt(a.balance) > 0)
