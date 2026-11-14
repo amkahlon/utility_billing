@@ -186,7 +186,10 @@ class IntegrationTestServiceRequests(BillingCase):
 
 	def test_disconnection_and_reconnection(self):
 		self.september_posted_with_arrears()  # owes 1,104
-		sr = self.request("DISC", disconnection_reason="Defaulter", effective_date="2026-11-03")
+		with self.assertRaises(frappe.ValidationError) as cm:
+			self.request("DISC", disconnection_reason="Defaulter", requested_on="2026-11-01", effective_date="2026-11-03")
+		self.assertIn("7 days' notice", str(cm.exception))
+		sr = self.request("DISC", disconnection_reason="Defaulter", requested_on="2026-10-20", effective_date="2026-11-03")
 		self.finish(sr)
 		c = frappe.get_doc("Connection", self.conn)
 		self.assertEqual((c.status, str(c.disconnected_on)), ("Disconnected", "2026-11-03"))

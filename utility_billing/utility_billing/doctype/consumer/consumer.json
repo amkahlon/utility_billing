@@ -78,7 +78,8 @@
    "fieldname": "id_number",
    "fieldtype": "Data",
    "in_global_search": 1,
-   "label": "ID Number"
+   "label": "ID Number",
+   "permlevel": 1
   },
   {
    "fieldname": "cb_contact",
@@ -90,13 +91,15 @@
    "in_global_search": 1,
    "in_list_view": 1,
    "label": "Mobile",
-   "options": "Phone"
+   "options": "Phone",
+   "permlevel": 1
   },
   {
    "fieldname": "phone",
    "fieldtype": "Data",
    "label": "Other Phone",
-   "options": "Phone"
+   "options": "Phone",
+   "permlevel": 1
   },
   {
    "fieldname": "email",
@@ -235,7 +238,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 23:00:00.000000",
+ "modified": "2026-11-15 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Consumer",
@@ -328,6 +331,50 @@
    "read": 1,
    "report": 1,
    "role": "Billing Auditor"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Society Admin",
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Billing Manager",
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "General Manager"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Billing Officer",
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Cashier"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Accounts Officer"
   }
  ],
  "row_format": "Dynamic",

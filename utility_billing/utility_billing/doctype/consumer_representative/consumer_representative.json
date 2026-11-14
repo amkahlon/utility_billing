@@ -38,14 +38,16 @@
    "fieldtype": "Data",
    "label": "CNIC or ID",
    "in_list_view": 1,
-   "columns": 2
+   "columns": 2,
+   "permlevel": 1
   },
   {
    "fieldname": "mobile_no",
    "fieldtype": "Data",
    "label": "Mobile",
    "in_list_view": 1,
-   "columns": 1
+   "columns": 1,
+   "permlevel": 1
   },
   {
    "fieldname": "can_pay",
@@ -94,7 +96,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 23:00:00.000000",
+ "modified": "2026-11-15 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Consumer Representative",
