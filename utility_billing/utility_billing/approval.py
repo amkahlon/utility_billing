@@ -395,3 +395,22 @@ def set_rejection_reason(doctype: str, name: str, reason: str):
 	if len(reason) < 5:
 		frappe.throw(_("Write a reason of at least 5 characters."))
 	doc.db_set("rejection_reason", reason, update_modified=False)
+
+
+@frappe.whitelist()
+def set_cancellation_reason(doctype: str, name: str, reason: str):
+	"""Store the reason for reversing an approved document just before the Cancel action is applied (FS-RUN-06)."""
+	doc = frappe.get_doc(doctype, name)
+	doc.check_permission("read")
+	if not doc.meta.get_field("cancellation_reason"):
+		frappe.throw(_("This document doesn't keep a reversal reason."))
+	if doc.get("workflow_state") != APPROVED:
+		frappe.throw(_("Only an approved document can be reversed."))
+	from frappe.model.workflow import get_transitions
+
+	if not any(t.action == "Cancel" for t in get_transitions(doc)):
+		frappe.throw(_("You can't reverse this document."), frappe.PermissionError)
+	reason = (reason or "").strip()
+	if len(reason) < 5:
+		frappe.throw(_("Write a reason of at least 5 characters."))
+	doc.db_set("cancellation_reason", reason, update_modified=False)

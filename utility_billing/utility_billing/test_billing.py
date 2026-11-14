@@ -237,6 +237,7 @@ class IntegrationTestBilling(BillingCase):
 		b.flags.from_bill_run = False
 		with self.assertRaises(frappe.ValidationError):
 			b.cancel()  # bills are cancelled only through their run
+		frappe.db.set_value("Bill Run", run.name, "cancellation_reason", "Run reversed: wrong readings")  # FS-RUN-06 needs a reason
 		act(run, "Cancel", BILLING_MANAGER)
 		b.reload()
 		self.assertEqual((b.docstatus, b.status, b.outstanding_amount), (2, "Cancelled", 0))

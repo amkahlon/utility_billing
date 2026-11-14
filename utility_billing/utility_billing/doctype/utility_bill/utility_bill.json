@@ -48,7 +48,13 @@
   "duplicate_count",
   "last_duplicate_on",
   "print_snapshot",
-  "amended_from"
+  "amended_from",
+  "revision_section",
+  "revision_no",
+  "revises",
+  "cb_rev",
+  "superseded_by",
+  "extended_due_date"
  ],
  "fields": [
   {
@@ -144,7 +150,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nPosted\nCancelled",
+   "options": "Draft\nPosted\nSuperseded\nCancelled",
    "read_only": 1
   },
   {
@@ -328,13 +334,57 @@
    "no_copy": 1,
    "options": "Customer Ledger Entry",
    "read_only": 1
+  },
+  {
+   "fieldname": "revision_section",
+   "fieldtype": "Section Break",
+   "label": "Revision",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "revision_no",
+   "fieldtype": "Int",
+   "label": "Version",
+   "read_only": 1,
+   "default": "1",
+   "allow_on_submit": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "revises",
+   "fieldtype": "Link",
+   "label": "Replaces Bill",
+   "options": "Utility Bill",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "cb_rev",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "superseded_by",
+   "fieldtype": "Link",
+   "label": "Replaced By",
+   "options": "Utility Bill",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "extended_due_date",
+   "fieldtype": "Date",
+   "label": "Extended Due Date",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-14 06:55:34.231885",
+ "modified": "2026-11-14 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Bill",

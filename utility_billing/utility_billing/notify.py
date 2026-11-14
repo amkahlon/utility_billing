@@ -383,6 +383,16 @@ def payment_received(receipt, reversed_=False):
 
 
 @safe
+def bill_revised(bill):
+	"""A revised bill replaces an earlier one: tell the consumer, with the link to the new PDF (FS-BIL-11)."""
+	names = notify("bill.revised", bill.connection, {
+		"bill_month": getdate(bill.billing_month).strftime("%B %Y"), "amount": _money(bill.payable_within_due),
+		"due_date": formatdate(bill.get("extended_due_date") or bill.due_date), "link": bill_link(bill.name)}, reference=("Utility Bill", bill.name))
+	queue_send(names)
+	return names
+
+
+@safe
 def bills_issued(run_name):
 	"""A bill run was posted: one message per bill with the PDF link (FS-NTF-01, 08)."""
 	names = []
@@ -433,7 +443,8 @@ def _unpaid_bills(society, due_date):
 	rows = frappe.db.sql(
 		"""select b.name, b.connection, b.billing_month, b.due_date, b.payable_within_due,
 		          (select e.balance from `tabCustomer Ledger Entry` e where e.connection = b.connection order by e.seq desc limit 1) balance
-		from `tabUtility Bill` b where b.society = %s and b.docstatus = 1 and b.due_date = %s""", (society, due_date), as_dict=True)
+		from `tabUtility Bill` b where b.society = %s and b.docstatus = 1 and b.status = 'Posted'
+		  and ifnull(b.extended_due_date, b.due_date) = %s""", (society, due_date), as_dict=True)
 	return [r for r in rows if flt(r.balance) > 0]
 
 

@@ -302,9 +302,11 @@ class IntegrationTestAccounts(BillingCase):
 		r = self.pay(1000, "2026-11-05")
 		run.reload()
 		with self.assertRaises(frappe.ValidationError):
+			frappe.db.set_value("Bill Run", run.name, "cancellation_reason", "Run reversed: wrong readings")  # FS-RUN-06 needs a reason
 			act(run, "Cancel", BILLING_MANAGER)
 		self.reverse("Payment Receipt", r.name, reason="WRONG-ACC", remarks="Belongs to another house")
 		run.reload()
+		frappe.db.set_value("Bill Run", run.name, "cancellation_reason", "Run reversed: wrong readings")  # FS-RUN-06 needs a reason
 		act(run, "Cancel", BILLING_MANAGER)
 		bill.reload()
 		self.assertEqual(bill.docstatus, 2)

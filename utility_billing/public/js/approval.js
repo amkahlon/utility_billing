@@ -17,27 +17,48 @@ utility_billing.setup_approval_form = function (frm) {
 };
 
 utility_billing.before_workflow_action = function (frm) {
-	if (frm.selected_workflow_action !== "Reject") return;
+	const action = frm.selected_workflow_action;
+	if (action === "Cancel" && frm.fields_dict.cancellation_reason) {
+		return utility_billing.ask_reason(frm, {
+			title: __("Reverse {0}", [__(frm.doctype)]),
+			label: __("Reason for reversing"),
+			description: __("The reason is kept with the document and in the audit log."),
+			button: __("Reverse"),
+			method: "utility_billing.utility_billing.approval.set_cancellation_reason",
+		});
+	}
+	if (action !== "Reject") return;
+	return utility_billing.ask_reason(frm, {
+		title: __("Reject {0}", [__(frm.doctype)]),
+		label: __("Reason for rejecting"),
+		description: __("The submitter sees this reason and can correct and resubmit."),
+		button: __("Reject"),
+		method: "utility_billing.utility_billing.approval.set_rejection_reason",
+	});
+};
+
+// Ask for a reason in a dialog and store it on the server before the workflow action runs.
+utility_billing.ask_reason = function (frm, o) {
 	// Frappe freezes the screen before this runs; lift it so the dialog can be used (D6).
 	frappe.dom.unfreeze();
 	return new Promise((resolve, reject) => {
 		let saved = false;
 		const d = new frappe.ui.Dialog({
-			title: __("Reject {0}", [__(frm.doctype)]),
+			title: o.title,
 			fields: [
 				{
 					fieldname: "reason",
 					fieldtype: "Small Text",
-					label: __("Reason for rejecting"),
-					description: __("The submitter sees this reason and can correct and resubmit."),
+					label: o.label,
+					description: o.description,
 					reqd: 1,
 				},
 			],
-			primary_action_label: __("Reject"),
+			primary_action_label: o.button,
 			primary_action({ reason }) {
 				frappe
 					.call({
-						method: "utility_billing.utility_billing.approval.set_rejection_reason",
+						method: o.method,
 						args: { doctype: frm.doctype, name: frm.doc.name, reason },
 					})
 					.then(() => {

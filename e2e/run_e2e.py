@@ -1437,6 +1437,63 @@ def t_notifications_and_settlement(d: Desk):
 	expect_error(lambda: run_report(cashier, "Message Cost by Channel", from_date=today, to_date=today))
 
 
+@case("QA-69", "FS-BIL-11, FS-WF-01/03/10/12: bulk debit, due date extension, dispute, revised bill refused after payments, corrections register")
+def t_corrections(d: Desk):
+	bo, bm, gm, cashier = USERS["bo"], USERS["bm"], USERS["gm"], USERS["cashier"]
+	conn = S["conn"]["name"]
+	def owed():
+		b = d.call("utility_billing.utility_billing.account.account_summary", connection=conn)["balances"]
+		return round(float(b["current"]) + float(b["arrears"]) + float(b["surcharge"]) + float(b["fees"]) - float(b["credit"]), 2)
+
+	# bulk adjustment: made by a Billing Manager, approved by a General Manager, one ledger entry per account
+	ba = {"doctype": "Bulk Adjustment", "society": S["society"], "audience": "Whole society", "note_type": "Debit Note", "bucket": "Current bill",
+	      "amount": "3000", "reason_code": "BULK-CORRECTION", "remarks": "Group correction approved by management"}
+	expect_error(lambda: cashier.save_doc(dict(ba)))
+	made = bm.save_doc(dict(ba))
+	if int(made["accounts"]) < 1 or made["rows"][0]["result"] != "Will post":
+		raise AssertionError(f"bulk adjustment list: {made['accounts']} {made['rows']}")
+	before = owed()
+	bm.workflow(made, "Submit for Approval")
+	expect_error(lambda: bm.workflow(made, "Approve"))
+	gm.workflow(made, "Approve")
+	done = d.get("Bulk Adjustment", made["name"])
+	eq((done["docstatus"], done["rows"][0]["result"]), (1, "Posted"), "bulk debit posted")
+	eq(owed(), before + 3000, "what the account owes after the bulk debit")
+
+	# due date extension, within the society's limits (7 days, 2 a year) unless a General Manager
+	from datetime import date, timedelta
+
+	bill = d.get("Utility Bill", S["bill"])
+	due = date.fromisoformat(bill["due_date"])
+	ext = {"doctype": "Due Date Extension", "connection": conn, "new_due_date": (due + timedelta(days=5)).isoformat(), "reason_code": "EXT-HARDSHIP"}
+	expect_error(lambda: cashier.save_doc(dict(ext)))
+	saved = bm.save_doc(dict(ext))
+	eq((int(saved["days_extended"]), saved["bill"]), (5, S["bill"]), "extension")
+	eq(d.get("Utility Bill", S["bill"])["extended_due_date"], (due + timedelta(days=5)).isoformat(), "extended due date kept beside the bill")
+	eq(d.get("Utility Bill", S["bill"])["due_date"], bill["due_date"], "the issued bill is not edited")
+	too_long = dict(ext, new_due_date=(due + timedelta(days=14)).isoformat())
+	expect_error(lambda: bm.save_doc(dict(too_long)), "General Manager")
+	eq(int(gm.save_doc(dict(too_long))["days_extended"]), 9, "a General Manager may exceed the limit")
+
+	# dispute: opened by a Billing Officer, decided by a manager
+	dp = {"doctype": "Bill Dispute", "connection": conn, "bill": S["bill"], "disputed_amount": "1000", "reason": "The consumer says the meter ran slow"}
+	opened = bo.save_doc(dict(dp))
+	eq(opened["status"], "Open", "dispute opened")
+	expect_error(lambda: bo.save_doc(dict(dp)), "already disputes")
+	expect_error(lambda: doc_method(bo, opened, "resolve", {"outcome": "Released", "remarks": "an officer may not decide"}))
+	doc_method(bm, opened, "resolve", {"outcome": "Withdrawn", "remarks": "The consumer withdrew the dispute"})
+	eq(d.get("Bill Dispute", opened["name"])["status"], "Withdrawn", "dispute decided")
+
+	# a revised bill is refused once payments came after the bill: use a credit or debit note instead
+	rev = bo.save_doc({"doctype": "Bill Revision", "original_bill": S["bill"], "kind": "Corrected reading", "reason_code": "READ-WRONG",
+	                   "remarks": "The reader mistyped the present reading", "new_present_reading": "1"})
+	expect_error(lambda: bo.workflow(rev, "Submit for Approval"))
+
+	reg = rows_of(run_report(gm, "Corrections Register", from_date="2026-01-01", to_date="2030-12-31"))
+	eq(sorted({r["kind"] for r in reg}), ["Bill dispute", "Bill revision", "Bulk adjustment", "Due date extension"], "corrections register")
+	expect_error(lambda: run_report(cashier, "Corrections Register", from_date="2026-01-01", to_date="2030-12-31"))
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 
