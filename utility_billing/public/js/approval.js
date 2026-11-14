@@ -4,6 +4,49 @@
 
 frappe.provide("utility_billing");
 
+// Impact preview (FS-CFG-07): what a tariff, tax or adjustment would have done to last cycle's bills, in a dialog.
+utility_billing.add_impact_button = function (frm, method) {
+	if (frm.is_new()) return;
+	frm.add_custom_button(__("Impact Preview"), () => {
+		frappe.dom.freeze(__("Applying it to last cycle's bills…"));
+		frappe
+			.xcall(`utility_billing.utility_billing.preview.${method}`, { name: frm.doc.name })
+			.then((r) => {
+				frappe.dom.unfreeze();
+				utility_billing.show_impact(r);
+			})
+			.catch(() => frappe.dom.unfreeze());
+	});
+};
+
+utility_billing.show_impact = function (r) {
+	const e = frappe.utils.escape_html;
+	const money = (v) => format_currency(v || 0);
+	const sign = (v) => (v > 0 ? "+" : "") + money(v);
+	const tone = (v) => (v > 0 ? "var(--red-600, #c0392b)" : v < 0 ? "var(--green-600, #2e7d32)" : "inherit");
+	const rows = (list, key) =>
+		list.length
+			? list.map((x) => `<tr><td>${e(x.consumer_name || x.connection)}<div class="text-muted small">${e(x.connection)} · ${e(x.category || "")}</div></td>
+				<td class="text-right">${money(x.old)}</td><td class="text-right">${money(x.new)}</td>
+				<td class="text-right" style="color:${tone(x.difference)}">${sign(x.difference)}</td></tr>`).join("")
+			: `<tr><td colspan="4" class="text-muted">${__("None")}</td></tr>`;
+	const head = `<tr><th></th><th class="text-right">${__("Last cycle")}</th><th class="text-right">${__("With this")}</th><th class="text-right">${__("Difference")}</th></tr>`;
+	let html = `<p><b>${e(r.what)}</b> ${r.month ? "· " + __("applied to the {0} bills", [e(r.month)]) : ""}</p>`;
+	if (r.message) html += `<p class="text-muted">${e(r.message)}</p>`;
+	else {
+		html += `<p>${__("{0} bills: {1} now, {2} with this: ", [r.bills, money(r.old_total), money(r.new_total)])}
+			<b style="color:${tone(r.difference)}">${sign(r.difference)}${r.percent == null ? "" : " (" + r.percent + "%)"}</b>.
+			${__("{0} bills change.", [r.changed_bills])} ${r.unavailable ? __("{0} bills could not be worked out.", [r.unavailable]) : ""}</p>
+			<h6>${__("By category")}</h6><table class="table table-sm">${head}${r.by_category
+				.map((c) => `<tr><td>${e(c.category)} <span class="text-muted small">${c.bills} ${__("bills")}</span></td><td class="text-right">${money(c.old)}</td>
+				<td class="text-right">${money(c.new)}</td><td class="text-right" style="color:${tone(c.difference)}">${sign(c.difference)}${c.percent == null ? "" : " (" + c.percent + "%)"}</td></tr>`)
+				.join("")}</table>
+			<h6>${__("Biggest rises")}</h6><table class="table table-sm">${head}${rows(r.biggest_rises)}</table>
+			<h6>${__("Biggest falls")}</h6><table class="table table-sm">${head}${rows(r.biggest_falls)}</table>`;
+	}
+	new frappe.ui.Dialog({ title: __("Impact Preview"), size: "large", fields: [{ fieldtype: "HTML", fieldname: "body", options: html }] }).show();
+};
+
 // For any document using the shared approval module: call from refresh, and return
 // utility_billing.before_workflow_action(frm) from the form's before_workflow_action.
 utility_billing.setup_approval_form = function (frm) {

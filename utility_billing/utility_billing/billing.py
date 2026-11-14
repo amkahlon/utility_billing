@@ -3,12 +3,14 @@
 bill_engine.py; this module gathers the inputs from the database and stores the results."""
 
 import json
+from decimal import Decimal
 
 import frappe
 from frappe import _
 from frappe.utils import add_months, flt, getdate, now_datetime
 
 from utility_billing.utility_billing import bill_engine as engine
+from utility_billing.utility_billing import prorata, tax_engine
 from utility_billing.utility_billing import account, bill_print
 from utility_billing.utility_billing import readings
 from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff
@@ -49,6 +51,46 @@ def arrears_of(connection, month):
 	return account.arrears_for_new_bill(connection)
 
 
+def tax_spec(t, month, category, consumer):
+	"""The TaxSpec of a Tax document for a bill, or None when it doesn't apply (not yet or no longer in force, other category,
+	exempt category). Whether the tax is switched on is the caller's business."""
+	month = readings.month_start(month)
+	if (t.effective_from and getdate(t.effective_from) > getdate(month)) or (t.effective_to and getdate(t.effective_to) < getdate(month)):
+		return None
+	if t.categories and category not in {c.consumer_category for c in t.categories}:
+		return None
+	if category in {c.consumer_category for c in t.exempt_categories}:
+		return None
+	rate = flt(t.rate)
+	status = (consumer or {}).get("tax_status") or "Filer"
+	for r in t.status_rates:
+		if r.tax_status == status:
+			rate = flt(r.rate)
+	return tax_engine.TaxSpec(
+		code=t.name, name=t.tax_name, rate=engine.D(rate), applies_to=t.applies_to, groups=tuple(r.charge_group for r in t.charge_rows if r.charge_group),
+		charge_types=tuple(r.charge_type for r in t.charge_rows if r.charge_type), inclusive=bool(frappe.utils.cint(t.inclusive)),
+		order=frappe.utils.cint(t.calculation_order), on_taxes=tuple(r.tax for r in t.on_taxes), rounding=t.rounding_rule or engine.NEAREST)
+
+
+def taxes_for(society, month, category, consumer, extra=None, without=None) -> list:
+	"""The taxes in force for a bill: enabled, effective in the billing month, for this category and consumer (FS-CFG-14).
+	`extra` adds a tax document that isn't switched on yet and `without` leaves one out (the impact preview uses both)."""
+	if consumer and frappe.utils.cint(consumer.get("tax_exempt")):
+		return []
+	specs = []
+	for name in frappe.get_all("Tax", filters={"society": society, "enabled": 1}, pluck="name", order_by="calculation_order, name"):
+		if name == without:
+			continue
+		spec = tax_spec(frappe.get_cached_doc("Tax", name), month, category, consumer)
+		if spec:
+			specs.append(spec)
+	if extra:
+		spec = tax_spec(extra, month, category, consumer)
+		if spec:
+			specs.append(spec)
+	return specs
+
+
 def build_bill(run, connection, override=None) -> dict:
 	"""Utility Bill fields for one connection in a run. Raises BillProblem with a plain reason.
 	`override` (a bill revision) may set units, category and arrears."""
@@ -68,7 +110,7 @@ def build_bill(run, connection, override=None) -> dict:
 
 	category = override.get("category") or conn.consumer_category
 	units = flt(override.get("units")) if override.get("units") is not None else reading.units
-	tariff_name = get_applicable_tariff(run.society, run.utility, category, month)
+	tariff_name = override.get("tariff") or get_applicable_tariff(run.society, run.utility, category, month)
 	if not tariff_name:
 		raise BillProblem(_("No approved tariff for {0} in {1}.").format(category, month_label(month)))
 	tariff = frappe.get_cached_doc("Tariff", tariff_name)
@@ -97,6 +139,13 @@ def build_bill(run, connection, override=None) -> dict:
 		))
 
 	area = flt(frappe.db.get_value("Property", conn.property, "area"))
+	consumer = frappe.db.get_value("Consumer", conn.consumer, ["tax_status", "tax_exempt"], as_dict=True) or {}
+	fraction, fraction_note = None, ""
+	if frappe.utils.cint(society.prorate_part_months) and (conn.connection_date or conn.get("disconnected_on")):
+		try:
+			fraction, fraction_note = prorata.fraction(month, conn.connection_date, conn.get("disconnected_on"))
+		except prorata.NotConnected as e:
+			raise BillProblem(str(e)) from None
 	result = engine.calculate(
 		units,
 		{"method": tariff.pricing_method, "flat_rate": tariff.flat_rate, "slabs": tariff.slabs,
@@ -106,6 +155,7 @@ def build_bill(run, connection, override=None) -> dict:
 		surcharge={"basis": society.surcharge_basis, "rate": society.surcharge_rate,
 		           "fixed_amount": society.surcharge_fixed_amount, "cap": society.surcharge_cap},
 		bill_rounding=society.rounding_rule or engine.NEAREST,
+		taxes=taxes_for(run.society, month, category, consumer), fraction=fraction, fraction_note=fraction_note,
 	)
 	bill = {
 		"doctype": "Utility Bill", "connection": connection, "consumer": conn.consumer,
@@ -116,9 +166,12 @@ def build_bill(run, connection, override=None) -> dict:
 		"lines": [
 			{"label": l.label, "charge_type": l.charge_type or None, "charge_group": l.group, "basis": l.basis,
 			 "quantity": flt(l.quantity), "rate": flt(l.rate), "amount": flt(l.amount), "note": l.note,
-			 "line_order": l.order}
+			 "line_order": l.order, "tax": l.tax or None}
 			for l in result.lines
 		],
+		"taxes": [{"tax": t.code, "tax_name": t.name, "base": flt(t.base), "rate": flt(t.rate), "amount": flt(t.amount), "inclusive": 1 if t.inclusive else 0}
+		          for t in result.taxes],
+		"tax_amount": flt(result.tax_added),
 		"current_amount": flt(result.current), "arrears": flt(result.arrears),
 		"payable_within_due": flt(result.payable_within_due), "surcharge_amount": flt(result.surcharge),
 		"payable_after_due": flt(result.payable_after_due), "outstanding_amount": 0,

@@ -20,6 +20,7 @@
   "consumer_category",
   "status",
   "connection_date",
+  "disconnected_on",
   "supply_section",
   "sanctioned_load_kw",
   "phase",
@@ -181,12 +182,18 @@
    "fieldtype": "Table",
    "label": "Meter History",
    "options": "Connection Meter"
+  },
+  {
+   "fieldname": "disconnected_on",
+   "fieldtype": "Date",
+   "label": "Disconnected On",
+   "description": "Used to bill the fixed charges for part of the last month."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-13 22:38:48.551734",
+ "modified": "2026-11-14 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection",

@@ -16,6 +16,7 @@ frappe.ui.form.on("Tariff", {
 		if (frm.doc.docstatus === 1) {
 			frm.add_custom_button(__("Preview Charge"), () => preview_charge(frm));
 		}
+		utility_billing.add_impact_button(frm, "tariff_impact");
 		utility_billing.render_approval_history(frm);
 		if (frm.doc.workflow_state === "Rejected" && frm.doc.rejection_reason) {
 			frm.dashboard.set_headline_alert(

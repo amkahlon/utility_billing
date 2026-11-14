@@ -1,0 +1,41 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 18:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "tax_status",
+  "rate"
+ ],
+ "fields": [
+  {
+   "fieldname": "tax_status",
+   "fieldtype": "Select",
+   "label": "Tax Status",
+   "options": "Filer\nNon-filer",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 5
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Percent",
+   "label": "Rate (%)",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 5
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Tax Status Rate",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

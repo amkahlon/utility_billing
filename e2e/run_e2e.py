@@ -1494,6 +1494,44 @@ def t_corrections(d: Desk):
 	expect_error(lambda: run_report(cashier, "Corrections Register", from_date="2026-01-01", to_date="2030-12-31"))
 
 
+@case("QA-70", "FS-CFG-07, 14, FS-REC-17, FS-BIL-07: tax saved from the form, impact previews, tax register; part-month setting")
+def t_taxes_and_previews(d: Desk):
+	P = "utility_billing.utility_billing.preview."
+	bm, ao, cashier = USERS["bm"], USERS["ao"], USERS["cashier"]
+	tax = {"doctype": "Tax", "society": S["society"], "tax_name": "Society Duty", "tax_code": f"SD{RUN}", "rate": "10", "applies_to": "Charge groups",
+	       "charge_rows": [{"charge_group": "Society"}], "enabled": "1", "calculation_order": "10"}
+	expect_error(lambda: bm.save_doc(dict(tax, rate="101", tax_code=f"BAD{RUN}")), "between 0 and 100")
+	expect_error(lambda: cashier.save_doc(dict(tax)))
+	saved = bm.save_doc(dict(tax, enabled="0"))  # saved switched off: the preview shows what it would add
+	eq((saved["tax_title"], float(saved["rate"])), ("Society Duty 10%", 10.0), "tax saved from the form")
+	expect_error(lambda: bm.save_doc(dict(tax, tax_name="Other")), "already uses")
+
+	r = bm.call(P + "tax_impact", name=saved["name"])
+	if r["bills"] < 1 or float(r["difference"]) <= 0 or not r["by_category"]:
+		raise AssertionError(f"tax preview: {r}")
+	eq((r["old_total"] + r["difference"] - r["new_total"]) < 0.01, True, "preview totals add up")
+	expect_error(lambda: cashier.call(P + "tax_impact", name=saved["name"]))
+	eq(d.get("Tax", saved["name"])["enabled"], 0, "the preview didn't switch the tax on")
+
+	tariffs = d.s.get(f"{URL}/api/resource/Tariff", params={"filters": json.dumps({"society": S["society"], "docstatus": 1}), "limit_page_length": 5}).json()["data"]
+	same = bm.call(P + "tariff_impact", name=tariffs[0]["name"])
+	eq(float(same["difference"]), 0.0, "an unchanged tariff changes nothing")
+	adjs = d.s.get(f"{URL}/api/resource/Tariff Adjustment", params={"filters": json.dumps({"society": S["society"]}), "limit_page_length": 5}).json()["data"]
+	if adjs:
+		adj = bm.call(P + "adjustment_impact", name=adjs[0]["name"])
+		eq(adj["bills"] >= 0, True, "adjustment preview")
+
+	reg = rows_of(run_report(ao, "Tax Register and Taxes Payable", from_date="2026-01-01", to_date="2030-12-31"))
+	eq(reg, [], "no bill has been issued with a tax yet")
+	expect_error(lambda: run_report(cashier, "Tax Register and Taxes Payable", from_date="2026-01-01", to_date="2030-12-31"))
+
+	soc = d.get("Society", S["society"])
+	eq(int(soc["prorate_part_months"]), 1, "part-month billing is on by default")
+	owner = d.get("Consumer", S["owner"])
+	owner.update({"tax_status": "Non-filer"})
+	eq(d.save_doc(owner)["tax_status"], "Non-filer", "consumer tax status saved")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

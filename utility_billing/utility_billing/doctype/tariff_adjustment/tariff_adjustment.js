@@ -6,6 +6,7 @@ frappe.ui.form.on("Tariff Adjustment", {
 	},
 	refresh(frm) {
 		utility_billing.setup_approval_form(frm);
+		utility_billing.add_impact_button(frm, "adjustment_impact");
 	},
 	billing_month(frm) {
 		// Default reference month: 2 months before the billing month (the DISCO's lag).
