@@ -34,7 +34,8 @@ add_to_apps_screen = [
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/utility_billing/css/utility_billing.css"
-app_include_js = "/assets/utility_billing/js/approval.js"
+# The ?v= number makes browsers fetch the file again: raise it whenever approval.js changes.
+app_include_js = "/assets/utility_billing/js/approval.js?v=4"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/utility_billing/css/utility_billing.css"

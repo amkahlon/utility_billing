@@ -91,3 +91,61 @@ utility_billing.render_approval_history = function (frm, html_field = "approval_
 		.join("");
 	field.$wrapper.html(`<div>${items}</div>`);
 };
+
+// ---- Notifications: read when opened, cleared when acted on (user request, 2026-11-14) ----
+// Frappe only offers "Mark all as read"; opening one notification left it unread and the counter unchanged.
+// Clicking a notification now marks that one read, and the server clears the notifications about a document
+// when someone approves, rejects, withdraws or resubmits it (it sends "ub_notifications_changed" to the
+// affected users). Either way the counter and the list are refreshed from the server.
+utility_billing.notifications_ui = function () {
+	// The sidebar's notification panel keeps the bell's list and counter in its "notifications" tab.
+	const panel = frappe.app && frappe.app.sidebar && frappe.app.sidebar.notifications;
+	return (panel && panel.tabs && panel.tabs.notifications) || null;
+};
+
+utility_billing.refresh_notifications = function () {
+	if (!frappe.session || frappe.session.user === "Guest") return;
+	frappe
+		.xcall("frappe.client.get_list", {
+			doctype: "Notification Log",
+			filters: { for_user: frappe.session.user, read: 0 },
+			fields: ["name"],
+			limit_page_length: 500,
+		})
+		.then((rows) => {
+			const unread = new Set(rows.map((r) => r.name));
+			const ui = utility_billing.notifications_ui();
+			if (ui) {
+				(ui.dropdown_items || []).forEach((n) => (n.read = unread.has(n.name) ? 0 : 1));
+				ui.update_count_badge(unread.size);
+			} else {
+				const $count = $(".notification-count");
+				unread.size
+					? $count.text(unread.size > 99 ? "99+" : unread.size).removeClass("hidden")
+					: $count.addClass("hidden");
+			}
+			$(".notification-item[data-name]").each(function () {
+				$(this).toggleClass("unread", unread.has($(this).attr("data-name")));
+			});
+		});
+};
+
+// Listen in the capture phase: Frappe's panel handles the click itself and the event never bubbles up to the document.
+document.addEventListener(
+	"click",
+	(e) => {
+		const item = e.target.closest && e.target.closest(".notification-item[data-name]");
+		if (!item || !item.classList.contains("unread")) return;
+		item.classList.remove("unread");
+		frappe
+			.xcall("frappe.desk.doctype.notification_log.notification_log.mark_as_read", {
+				docname: item.getAttribute("data-name"),
+			})
+			.then(() => utility_billing.refresh_notifications());
+	},
+	true
+);
+
+$(document).on("startup", () => {
+	frappe.realtime.on("ub_notifications_changed", () => utility_billing.refresh_notifications());
+});
