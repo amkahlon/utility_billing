@@ -42,6 +42,8 @@ EDITORS = {
 	"Receivables Reconciliation": {"System Manager"},
 	# Increment 9: the KPI dictionary
 	"KPI Definition": {"System Manager", "Society Admin", "Billing Manager"},
+	# Increment 10: the DISCO's bill and the feeder input units
+	"DISCO Bill": {"System Manager", "Accounts Officer", "Billing Manager", "Society Admin"},
 }
 SUBMITTERS = {
 	"Tariff": {"System Manager", "General Manager"},

@@ -893,6 +893,155 @@ def pending_approvals(f):
 	                    col("Waiting For", "waiting_for", width=130)], "data": data}
 
 
+# ================================================================ 22-26. line losses and the DISCO bill (increment 10)
+LOSS_ROLES = FINANCE + ["Billing Officer"]
+MONTH_FILTERS = [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+                 dict(fieldname="month", label="Month", fieldtype="Date", default="@month_start")]
+LEVEL_NOTE = "Normal below the society's Watch level, Watch from it, High loss from the High level (Society → Line Loss Alert Levels)."
+
+
+def _losses():
+	from utility_billing.utility_billing import losses  # imported late: losses imports this module
+
+	return losses
+
+
+@report("line_losses", "Line Losses by Feeder and Transformer", LOSS_ROLES,
+        MONTH_FILTERS + [dict(fieldname="group_by", label="Group By", fieldtype="Select", options="Feeder\nTransformer", default="Feeder")],
+        "Units that entered each feeder or transformer against the units billed to the connections on it; and the bulk meter against all consumers.",
+        ref_doctype="DISCO Bill")
+def line_losses(f):
+	L = _losses()
+	s, month, by = society_of(f), month_start(f.get("month") or nowdate()), f.get("group_by") or "Feeder"
+	rows = L.network_losses(s, month, by)
+	data = []
+	whole = L.society_loss(s, month)
+	if whole:
+		data.append({"name": _("Whole society: bulk meter against all consumers"), "connections": sum(r["connections"] for r in rows),
+		             "input_kwh": whole["input_kwh"], "billed_kwh": whole["billed_kwh"], "loss_kwh": whole["loss_kwh"],
+		             "loss_pct": whole["loss_pct"], "status": _(whole["status"])})
+	data += [{"name": r["name"], "connections": r["connections"], "input_kwh": r["input_kwh"] or None, "billed_kwh": r["billed_kwh"],
+	          "loss_kwh": r["loss_kwh"], "loss_pct": r["loss_pct"], "status": _(r["status"])} for r in rows]
+	message = _(LEVEL_NOTE)
+	if not whole:
+		message = _("No DISCO bill or feeder input units are recorded for this month yet (Utility Billing → DISCO Bill). ") + message
+	return {"columns": [col(by, "name", width=240), col("Connections", "connections", "Int", 100), col("Input kWh", "input_kwh", "Float", 120),
+	                    col("Billed kWh", "billed_kwh", "Float", 120), col("Loss kWh", "loss_kwh", "Float", 110),
+	                    col("Loss %", "loss_pct", "Percent", 90), col("Status", "status", width=120)], "data": data, "message": message}
+
+
+@report("loss_ranking", "Highest-Loss Feeders and Loss Trend", LOSS_ROLES,
+        MONTH_FILTERS + [dict(fieldname="group_by", label="Group By", fieldtype="Select", options="Feeder\nTransformer", default="Feeder"),
+                         dict(fieldname="show", label="Show", fieldtype="Select", options="Ranking\n12-Month Trend", default="Ranking")],
+        "Feeders or transformers ranked by loss, or the society's loss month by month for the last 12 months.", ref_doctype="DISCO Bill")
+def loss_ranking(f):
+	L = _losses()
+	s, month = society_of(f), month_start(f.get("month") or nowdate())
+	if f.get("show") == "12-Month Trend":
+		data = []
+		for m in last_months(month, 12):
+			loss = L.society_loss(s, m)
+			data.append({"month": getdate(m).strftime("%b %Y"), "input_kwh": loss["input_kwh"] if loss else None,
+			             "billed_kwh": loss["billed_kwh"] if loss else billed_units_of(s, m), "loss_kwh": loss["loss_kwh"] if loss else None,
+			             "loss_pct": loss["loss_pct"] if loss else None, "status": _(loss["status"]) if loss else _(L.NO_INPUT)})
+		chart = {"data": {"labels": [d["month"] for d in data], "datasets": [{"name": _("Loss %"), "values": [d["loss_pct"] or 0 for d in data]}]},
+		         "type": "line", "fieldtype": "Percent"} if any(d["loss_pct"] is not None for d in data) else None
+		return {"columns": [col("Month", "month", width=110), col("Input kWh", "input_kwh", "Float", 120), col("Billed kWh", "billed_kwh", "Float", 120),
+		                    col("Loss kWh", "loss_kwh", "Float", 110), col("Loss %", "loss_pct", "Percent", 90), col("Status", "status", width=120)],
+		        "data": data, "chart": chart, "message": _(LEVEL_NOTE)}
+	by = f.get("group_by") or "Feeder"
+	ranked = [r for r in L.network_losses(s, month, by) if r["loss_pct"] is not None]
+	data = [{"rank": i, "name": r["name"], "input_kwh": r["input_kwh"], "billed_kwh": r["billed_kwh"], "loss_kwh": r["loss_kwh"],
+	         "loss_pct": r["loss_pct"], "status": _(r["status"])} for i, r in enumerate(ranked, start=1)]
+	chart = {"data": {"labels": [d["name"] for d in data[:10]], "datasets": [{"name": _("Loss %"), "values": [d["loss_pct"] for d in data[:10]]}]},
+	         "type": "bar", "fieldtype": "Percent"} if data else None
+	return {"columns": [col("#", "rank", "Int", 50), col(by, "name", width=240), col("Input kWh", "input_kwh", "Float", 120),
+	                    col("Billed kWh", "billed_kwh", "Float", 120), col("Loss kWh", "loss_kwh", "Float", 110), col("Loss %", "loss_pct", "Percent", 90),
+	                    col("Status", "status", width=120)], "data": data, "chart": chart,
+	        "message": _("Only those with input units recorded are ranked, highest loss first.")}
+
+
+def billed_units_of(society, month):
+	return _losses().billed_units(society, month)
+
+
+@report("atc_losses", "AT&C Losses", LOSS_ROLES, MONTH_FILTERS,
+        "Aggregate technical and commercial losses for the last 12 months: 1 − (billing efficiency × collection efficiency).", ref_doctype="DISCO Bill")
+def atc_losses(f):
+	L = _losses()
+	s, month = society_of(f), month_start(f.get("month") or nowdate())
+	months = last_months(month, 12)
+	series = monthly_series(s, months)
+	data = []
+	for m, row in zip(months, series):
+		r = L.at_c_for(s, m, row)
+		data.append({"month": row["month"], "input_kwh": r["input_kwh"] if r else None, "billed_kwh": r["billed_kwh"] if r else row["units"],
+		             "billing_efficiency": r["billing_efficiency"] if r else None, "payable": row["payable"], "collected": row["collected"],
+		             "collection_efficiency": r["collection_efficiency"] if r else None, "atc": r["atc"] if r else None})
+	chart = {"data": {"labels": [d["month"] for d in data], "datasets": [{"name": _("AT&C %"), "values": [d["atc"] or 0 for d in data]}]},
+	         "type": "line", "fieldtype": "Percent"} if any(d["atc"] is not None for d in data) else None
+	return {"columns": [col("Month", "month", width=110), col("Input kWh", "input_kwh", "Float", 120), col("Billed kWh", "billed_kwh", "Float", 120),
+	                    col("Billing efficiency %", "billing_efficiency", "Percent", 130), col("Payable within due date", "payable", "Currency", 150),
+	                    col("Collected", "collected", "Currency", 120), col("Collection efficiency %", "collection_efficiency", "Percent", 150),
+	                    col("AT&C loss %", "atc", "Percent", 110)], "data": data, "chart": chart,
+	        "message": _("Billing efficiency = units billed ÷ units that entered the society. Collection efficiency = collected in the month ÷ payable within the due date on that month's bills, capped at 100%.")}
+
+
+@report("transformer_loading", "Transformer Loading", LOSS_ROLES, MONTH_FILTERS[:1],
+        "Sanctioned load of the connections on each transformer against its kVA rating.", ref_doctype="Transformer")
+def transformer_loading_report(f):
+	L = _losses()
+	s = society_of(f)
+	rows = sql("""select t.name, t.transformer_code, t.feeder, t.kva_rating, t.location, sum(c.status = 'Active') connections,
+			sum(case when c.status = 'Active' then c.sanctioned_load_kw else 0 end) kw
+		from `tabTransformer` t left join `tabConnection` c on c.transformer = t.name
+		where t.society = %(s)s and t.enabled = 1 group by t.name order by t.transformer_code""", {"s": s})
+	data = []
+	for r in rows:
+		pct_ = L.transformer_loading(r.kw, r.kva_rating)
+		data.append({"transformer": r.name, "feeder": r.feeder, "location": r.location, "kva": flt(r.kva_rating), "connections": cint(r.connections),
+		             "kw": flt(r.kw), "loading": pct_, "status": L.loading_status(pct_) if pct_ is not None else _("No rating")})
+	data.sort(key=lambda r: -(r["loading"] or 0))
+	return {"columns": [col("Transformer", "transformer", "Link", 150, "Transformer"), col("Feeder", "feeder", "Link", 140, "Feeder"),
+	                    col("Location", "location", width=150), col("Rating (kVA)", "kva", "Float", 100), col("Active Connections", "connections", "Int", 120),
+	                    col("Sanctioned Load (kW)", "kw", "Float", 140), col("Loading %", "loading", "Percent", 100), col("Status", "status", width=110)],
+	        "data": data,
+	        "message": _("Loading = sanctioned load of the active connections ÷ (kVA rating × 0.9 power factor). It is an upper bound: metered peak load isn't recorded. Heavy from 80%, overloaded above 100%.")}
+
+
+@report("disco_reconciliation", "DISCO Bill vs Resident Billing", FINANCE,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="from_date", label="From Month", fieldtype="Date", default="@year_start"),
+         dict(fieldname="to_date", label="To Month", fieldtype="Date", default="@today")],
+        "The DISCO's bill (units, amount, FPA, QTA) against what the society billed its residents: difference, margin and FPA/QTA recovery.",
+        ref_doctype="DISCO Bill")
+def disco_reconciliation(f):
+	L = _losses()
+	s = society_of(f)
+	start, end = month_start(f.get("from_date") or add_months(nowdate(), -11)), month_start(f.get("to_date") or nowdate())
+	data, m = [], start
+	while m <= end:
+		r = L.disco_comparison(s, m)
+		if r["disco_bill"] or r["billed_units"]:
+			data.append({"month": getdate(m).strftime("%b %Y"), **r})
+		m = add_months(m, 1)
+	if data:
+		t = total_row("month", _("Total"), [d for d in data if d["disco_bill"]], ("disco_units", "billed_units", "units_difference", "disco_total", "billed_amount",
+		                                                                          "margin", "disco_fpa", "billed_fpa", "disco_qta", "billed_qta"))
+		t["margin_pct"] = pct(t["margin"], t["billed_amount"])
+		t["fpa_recovery"] = pct(t["billed_fpa"], t["disco_fpa"]) if t["disco_fpa"] else None
+		t["qta_recovery"] = pct(t["billed_qta"], t["disco_qta"]) if t["disco_qta"] else None
+		data.append(t)
+	money = lambda label, k: col(label, k, "Currency", 120)  # noqa: E731
+	return {"columns": [col("Month", "month", width=100), col("DISCO Bill", "disco_bill", "Link", 130, "DISCO Bill"), col("DISCO kWh", "disco_units", "Float", 110),
+	                    col("Billed kWh", "billed_units", "Float", 110), col("Difference kWh", "units_difference", "Float", 120),
+	                    money("DISCO Total", "disco_total"), money("Billed (electricity)", "billed_amount"), money("Margin", "margin"),
+	                    col("Margin %", "margin_pct", "Percent", 90), money("DISCO FPA", "disco_fpa"), money("FPA Billed", "billed_fpa"),
+	                    col("FPA Recovered %", "fpa_recovery", "Percent", 110), money("DISCO QTA", "disco_qta"), money("QTA Billed", "billed_qta"),
+	                    col("QTA Recovered %", "qta_recovery", "Percent", 110)], "data": data,
+	        "message": _("Billed (electricity) is every electricity-group bill line (energy, FPA, QTA, per-unit add-ons); fixed society charges aren't DISCO cost. Margin = billed − DISCO total. Revenue against budget needs budgets, which aren't recorded yet.")}
+
+
 # ================================================================ 21. audit log (RPT-42)
 AUDITED = ("Society", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Fee Type", "Charge Type", "Consumer Category",
            "Cash Counter", "Reason Code", "Ledger Account", "Journal Export Layout", "Consumer", "Property", "Connection", "Meter",
