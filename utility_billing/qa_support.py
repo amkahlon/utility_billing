@@ -20,7 +20,10 @@ def mark_setup_complete():
 		},
 	)
 	# The real setup wizard also stores these as site-wide defaults; formatdate() reads them.
-	for key, value in (("date_format", "dd-mm-yyyy"), ("currency", "PKR"), ("country", "Pakistan")):
+	for key, value in (("date_format", "dd-mm-yyyy"), ("currency", "PKR"), ("country", "Pakistan"),
+	                   ("time_zone", "Asia/Karachi")):
 		frappe.db.set_default(key, value)
+	for user in frappe.get_all("User", filters={"name": ["!=", "Guest"]}, pluck="name"):
+		frappe.db.set_value("User", user, "time_zone", "Asia/Karachi", update_modified=False)
 	frappe.db.commit()
 	print("setup marked complete on", frappe.local.site)
