@@ -1023,7 +1023,7 @@ def refunds_register(f):
         [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
          dict(fieldname="from_date", label="From", fieldtype="Date", default="@month_start"),
          dict(fieldname="to_date", label="To", fieldtype="Date", default="@today"),
-         dict(fieldname="kind", label="Kind", fieldtype="Select", options="\nBill revision\nDue date extension\nBill dispute\nBulk adjustment")],
+         dict(fieldname="kind", label="Kind", fieldtype="Select", options="\nBill revision\nDue date extension\nBill dispute\nBulk adjustment\nInstallment plan\nWrite-off")],
         "Revised bills, due date extensions, bill disputes and bulk adjustments: what was corrected, by whom, and the effect.", ref_doctype="Bill Revision")
 def corrections_register(f):
 	s = society_of(f)
@@ -1048,6 +1048,15 @@ def corrections_register(f):
 		data.append({"kind": "Bulk adjustment", "name": r.name, "date": r.d, "connection": None, "consumer_name": f"{cint(r.accounts)} accounts ({r.audience})",
 		             "amount": flt(r.total_amount) * (1 if r.note_type == "Debit Note" else -1), "detail": r.note_type, "status": r.workflow_state,
 		             "by_user": r.requested_by, "reason": r.reason_code})
+	for r in sql("""select name, date(creation) d, connection, consumer_name, amount_to_split, installments, down_payment, plan_status, workflow_state, requested_by
+	               from `tabInstallment Plan` where society = %(s)s and docstatus < 2 and date(creation) between %(a)s and %(b)s""", v):
+		data.append({"kind": "Installment plan", "name": r.name, "date": r.d, "connection": r.connection, "consumer_name": r.consumer_name, "amount": flt(r.amount_to_split),
+		             "detail": f"{cint(r.installments)} installments after a down payment of {flt(r.down_payment):,.0f}", "status": r.plan_status if r.workflow_state == "Approved" else r.workflow_state,
+		             "by_user": r.requested_by, "reason": None})
+	for r in sql("""select name, date(creation) d, connection, consumer_name, amount, workflow_state, requested_by, reason_code, resolution_no
+	               from `tabWrite Off` where society = %(s)s and docstatus < 2 and date(creation) between %(a)s and %(b)s""", v):
+		data.append({"kind": "Write-off", "name": r.name, "date": r.d, "connection": r.connection, "consumer_name": r.consumer_name, "amount": -flt(r.amount),
+		             "detail": f"Board resolution {r.resolution_no}", "status": r.workflow_state, "by_user": r.requested_by, "reason": r.reason_code})
 	if f.get("kind"):
 		data = [d for d in data if d["kind"] == f.kind]
 	data.sort(key=lambda d: (d["date"], d["name"]))
@@ -1149,12 +1158,13 @@ def consumer_census(f):
 # ================================================================ 20. pending approvals (RPT-41)
 PENDING = (("Tariff", "tariff_title", "General Manager"), ("Tariff Adjustment", "adjustment_title", "General Manager"),
            ("Bill Run", "run_title", "Billing Manager"), ("Account Adjustment", "adjustment_title", "General Manager"), ("Refund", "refund_title", "General Manager"),
-           ("Bill Revision", "revision_title", "Billing Manager"), ("Bulk Adjustment", "adjustment_title", "General Manager"))
+           ("Bill Revision", "revision_title", "Billing Manager"), ("Bulk Adjustment", "adjustment_title", "General Manager"),
+           ("Installment Plan", "plan_title", "Billing Manager"), ("Write Off", "writeoff_title", "General Manager"))
 
 
 @report("pending_approvals", "Pending Approvals", APPROVERS,
         [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
-         dict(fieldname="transaction", label="Transaction", fieldtype="Select", options="\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund\nBill Revision\nBulk Adjustment"),
+         dict(fieldname="transaction", label="Transaction", fieldtype="Select", options="\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund\nBill Revision\nBulk Adjustment\nInstallment Plan\nWrite Off"),
          dict(fieldname="older_than", label="Waiting More Than (days)", fieldtype="Int", default="0")],
         "Everything waiting for approval, by type and how long it has waited.", ref_doctype="Tariff")
 def pending_approvals(f):
@@ -1326,7 +1336,7 @@ def disco_reconciliation(f):
 
 
 # ================================================================ 21. audit log (RPT-42)
-AUDITED = ("Society", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Refund", "Bill Revision", "Bulk Adjustment", "Due Date Extension", "Bill Dispute", "Settlement File", "Suspense Payment", "Notification Template", "Messaging Provider", "Fee Type", "Charge Type", "Consumer Category",
+AUDITED = ("Society", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Refund", "Bill Revision", "Bulk Adjustment", "Installment Plan", "Write Off", "Due Date Extension", "Bill Dispute", "Settlement File", "Suspense Payment", "Notification Template", "Messaging Provider", "Fee Type", "Charge Type", "Consumer Category",
            "Cash Counter", "Reason Code", "Ledger Account", "Journal Export Layout", "Consumer", "Property", "Connection", "Meter",
            "Reading Cycle", "Meter Reading", "Cashier Day", "KPI Definition")
 

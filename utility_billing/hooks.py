@@ -121,6 +121,8 @@ scheduler_events = {
 		"utility_billing.utility_billing.gl.daily",
 		# Reminders before the due date and overdue notices (FS-NTF-01)
 		"utility_billing.utility_billing.notify.daily",
+		# Installments paid or missed (FS-WF-05)
+		"utility_billing.utility_billing.plans.daily",
 	],
 }
 
@@ -316,7 +318,7 @@ fixtures = [
 	},
 	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},
 	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit for Approval", "Approve", "Reject", "Withdraw", "Cancel"]]]},
-	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval", "Account Adjustment Approval", "Refund Approval", "Bill Revision Approval", "Bulk Adjustment Approval"]]]},
+	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval", "Account Adjustment Approval", "Refund Approval", "Bill Revision Approval", "Bulk Adjustment Approval", "Installment Plan Approval", "Write Off Approval"]]]},
 	{"dt": "Property Setter", "filters": [["name", "in", ["Utility Bill-main-default_print_format", "Payment Receipt-main-default_print_format"]]]},
 ]
 

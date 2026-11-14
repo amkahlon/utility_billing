@@ -126,6 +126,22 @@ def refund(bal: dict, amount) -> dict:
 	return {**{b: D(0) for b in ALL}, "credit": -amount}
 
 
+def write_off(bal: dict, amount) -> dict:
+	"""Deltas for writing off what is owed in arrears, then surcharge, then fees (never the current bill)."""
+	amount = D(amount)
+	if amount <= 0:
+		raise ValueError("The write-off must be more than zero.")
+	owed = D(bal["arrears"]) + D(bal["surcharge"]) + D(bal["fees"])
+	if amount > owed:
+		raise ValueError(f"Only {owed} is owed in arrears, surcharge and fees.")
+	deltas, left = {b: D(0) for b in ALL}, amount
+	for bucket in ("arrears", "surcharge", "fees"):
+		take = min(left, D(bal[bucket]))
+		deltas[bucket] = -take
+		left -= take
+	return deltas
+
+
 def reverse(bal: dict, deltas: dict) -> dict:
 	"""Deltas that undo an earlier entry's deltas, kept within the rules above."""
 	after = normalise(apply(bal, {b: -D(deltas.get(b)) for b in ALL}))

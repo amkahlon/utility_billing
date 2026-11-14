@@ -31,7 +31,7 @@ def settings(society):
 	s = frappe.get_cached_doc("Society", society)
 	return frappe._dict(
 		receivables=s.receivables_account, surcharge=s.surcharge_income_account, other=s.other_income_account,
-		adjustments=s.adjustments_account, payments={r.mode: r.account for r in s.payment_accounts},
+		adjustments=s.adjustments_account, write_off=s.write_off_account, payments={r.mode: r.account for r in s.payment_accounts},
 	)
 
 
@@ -98,6 +98,9 @@ def lines_for(entry_name):
 		fee_type = frappe.db.get_value("Fee Charge", e.voucher_no, "fee_type")
 		acct = frappe.db.get_value("Fee Type", fee_type, "income_account") or soc.other
 		return [(rec, amount, 0), (need(acct, _("fee {0} (Fee Type → Income Account)").format(fee_type)), 0, amount)]
+	if e.entry_type == "Write-off":
+		expense = need(soc.write_off, _("written-off receivables (Society {0} → Write-off Expense Account)").format(e.society))
+		return [(expense, -amount, 0), (rec, 0, -amount)]  # the amount of a write-off entry is negative: the receivable falls
 	if e.entry_type == "Refund":
 		mode = frappe.db.get_value("Refund", e.voucher_no, "refund_mode")
 		paid_from = need(soc.payments.get(mode), _("{0} payments (Society {1} → Accounting)").format(_(mode), e.society))

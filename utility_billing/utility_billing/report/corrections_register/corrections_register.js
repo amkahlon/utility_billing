@@ -25,7 +25,7 @@ frappe.query_reports["Corrections Register"] = {
   "fieldname": "kind",
   "label": "Kind",
   "fieldtype": "Select",
-  "options": "\nBill revision\nDue date extension\nBill dispute\nBulk adjustment"
+  "options": "\nBill revision\nDue date extension\nBill dispute\nBulk adjustment\nInstallment plan\nWrite-off"
  }
 ],
 };

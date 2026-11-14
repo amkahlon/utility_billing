@@ -91,6 +91,7 @@ class BillResult:
 	payable_after_due: Decimal = Decimal(0)
 	taxes: list = field(default_factory=list)  # tax_engine.TaxLine, inclusive ones too
 	tax_added: Decimal = Decimal(0)
+	installment: Decimal | None = None  # an installment plan's installment due with this bill (FS-BIL-14)
 
 
 def calculate(
@@ -107,6 +108,7 @@ def calculate(
 	taxes: Iterable = (),
 	fraction: Decimal | None = None,
 	fraction_note: str = "",
+	installment: Decimal | None = None,
 ) -> BillResult:
 	"""`tariff`: {"method", "flat_rate", "slabs", "minimum_charge"}; `surcharge`: {"basis",
 	"rate", "fixed_amount", "cap"} with basis "Percentage of current bill" or "Fixed amount".
@@ -182,6 +184,9 @@ def calculate(
 	result = BillResult(lines=lines, current=current, arrears=rnd(arrears, NONE), taxes=tax_lines,
 	                    tax_added=sum((t.amount for t in tax_lines if not t.inclusive), Decimal(0)))
 	result.payable_within_due = result.current + result.arrears
+	if installment is not None:  # under a plan only the installment of the arrears is due now
+		result.installment = rnd(installment, NONE)
+		result.payable_within_due = result.current + result.installment
 	# 7. Surcharge on the current bill only (FS-BIL-04)
 	s = surcharge or {}
 	if s.get("basis") == "Fixed amount":

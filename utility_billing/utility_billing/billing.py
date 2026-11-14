@@ -10,7 +10,7 @@ from frappe import _
 from frappe.utils import add_months, flt, getdate, now_datetime
 
 from utility_billing.utility_billing import bill_engine as engine
-from utility_billing.utility_billing import prorata, tax_engine
+from utility_billing.utility_billing import plans, prorata, tax_engine
 from utility_billing.utility_billing import account, bill_print
 from utility_billing.utility_billing import readings
 from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff
@@ -140,6 +140,13 @@ def build_bill(run, connection, override=None) -> dict:
 
 	area = flt(frappe.db.get_value("Property", conn.property, "area"))
 	consumer = frappe.db.get_value("Consumer", conn.consumer, ["tax_status", "tax_exempt"], as_dict=True) or {}
+	plan_name = installment = installment_no = None
+	if "installment" in override:  # a revised bill keeps the installment of the bill it replaces
+		plan_name, installment, installment_no = override.get("installment_plan"), override["installment"], override.get("installment_no")
+	else:
+		found = plans.installment_for(connection, month)
+		if found:
+			plan_name, installment, installment_no = found[0], flt(found[1].amount), found[1].number
 	fraction, fraction_note = None, ""
 	if frappe.utils.cint(society.prorate_part_months) and (conn.connection_date or conn.get("disconnected_on")):
 		try:
@@ -156,6 +163,7 @@ def build_bill(run, connection, override=None) -> dict:
 		           "fixed_amount": society.surcharge_fixed_amount, "cap": society.surcharge_cap},
 		bill_rounding=society.rounding_rule or engine.NEAREST,
 		taxes=taxes_for(run.society, month, category, consumer), fraction=fraction, fraction_note=fraction_note,
+		installment=engine.D(installment) if installment else None,
 	)
 	bill = {
 		"doctype": "Utility Bill", "connection": connection, "consumer": conn.consumer,
@@ -172,6 +180,8 @@ def build_bill(run, connection, override=None) -> dict:
 		"taxes": [{"tax": t.code, "tax_name": t.name, "base": flt(t.base), "rate": flt(t.rate), "amount": flt(t.amount), "inclusive": 1 if t.inclusive else 0}
 		          for t in result.taxes],
 		"tax_amount": flt(result.tax_added),
+		"installment_due": flt(result.installment) if result.installment is not None else 0, "installment_no": installment_no or 0,
+		"installment_plan": plan_name if result.installment is not None else None,
 		"current_amount": flt(result.current), "arrears": flt(result.arrears),
 		"payable_within_due": flt(result.payable_within_due), "surcharge_amount": flt(result.surcharge),
 		"payable_after_due": flt(result.payable_after_due), "outstanding_amount": 0,
@@ -311,7 +321,7 @@ def post_run(doc):
 		arrears = flt(account.arrears_for_new_bill(bill.connection))
 		if arrears != flt(bill.arrears):
 			bill.arrears = arrears
-			bill.payable_within_due = flt(bill.current_amount) + arrears
+			bill.payable_within_due = flt(bill.current_amount) + (flt(bill.installment_due) if flt(bill.installment_due) else arrears)
 			bill.payable_after_due = bill.payable_within_due + flt(bill.surcharge_amount)
 		bill.status = "Posted"
 		bill.outstanding_amount = bill.payable_within_due
@@ -321,6 +331,7 @@ def post_run(doc):
 		bill.flags.ignore_permissions = True
 		bill.submit()
 		account.post_bill(bill)
+		plans.mark_billed(bill)
 
 
 def check_run_cancellable(doc):

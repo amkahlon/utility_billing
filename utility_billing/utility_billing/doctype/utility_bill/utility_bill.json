@@ -42,6 +42,10 @@
   "surcharge_amount",
   "payable_after_due",
   "outstanding_amount",
+  "installment_section",
+  "installment_due",
+  "installment_no",
+  "installment_plan",
   "account_section",
   "ledger_entry",
   "surcharge_status",
@@ -400,13 +404,41 @@
    "label": "Tax Details",
    "options": "Bill Tax",
    "read_only": 1
+  },
+  {
+   "fieldname": "installment_section",
+   "fieldtype": "Section Break",
+   "label": "Installment plan",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "installment_due",
+   "fieldtype": "Currency",
+   "label": "Installment Due With This Bill",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "installment_no",
+   "fieldtype": "Int",
+   "label": "Installment No",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "installment_plan",
+   "fieldtype": "Link",
+   "label": "Installment Plan",
+   "options": "Installment Plan",
+   "read_only": 1,
+   "no_copy": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-14 18:00:00.000000",
+ "modified": "2026-11-14 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Bill",

@@ -277,7 +277,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 16:00:00.000000",
+ "modified": "2026-11-14 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Bulk Adjustment",
@@ -319,7 +319,8 @@
    "read": 1,
    "report": 1,
    "role": "Billing Manager",
-   "write": 1
+   "write": 1,
+   "submit": 1
   },
   {
    "cancel": 1,
@@ -373,7 +374,9 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Management"
+   "role": "Management",
+   "submit": 1,
+   "write": 1
   },
   {
    "export": 1,
