@@ -98,7 +98,13 @@ app_include_js = "/assets/utility_billing/js/approval.js"
 after_install = "utility_billing.install.after_install"
 
 # Bill print format helper (FS-BIL-08)
-jinja = {"methods": ["utility_billing.utility_billing.bill_print.utility_bill_html"]}
+jinja = {"methods": [
+	"utility_billing.utility_billing.bill_print.utility_bill_html",
+	"utility_billing.utility_billing.account_print.payment_receipt_html",
+]}
+
+# Late payment surcharge the day after the due date + grace days (FS-REC-03)
+scheduler_events = {"daily": ["utility_billing.utility_billing.account.apply_surcharges"]}
 
 # Uninstallation
 # ------------
@@ -292,7 +298,7 @@ fixtures = [
 	},
 	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},
 	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit for Approval", "Approve", "Reject", "Withdraw", "Cancel"]]]},
-	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval"]]]},
-	{"dt": "Property Setter", "filters": [["name", "in", ["Utility Bill-main-default_print_format"]]]},
+	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval", "Account Adjustment Approval"]]]},
+	{"dt": "Property Setter", "filters": [["name", "in", ["Utility Bill-main-default_print_format", "Payment Receipt-main-default_print_format"]]]},
 ]
 

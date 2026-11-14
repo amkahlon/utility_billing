@@ -39,6 +39,11 @@
   "surcharge_amount",
   "payable_after_due",
   "outstanding_amount",
+  "account_section",
+  "ledger_entry",
+  "surcharge_status",
+  "cb_account",
+  "surcharge_entry",
   "print_section",
   "duplicate_count",
   "last_duplicate_on",
@@ -286,13 +291,50 @@
    "no_copy": 1,
    "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "account_section",
+   "fieldtype": "Section Break",
+   "label": "Customer Account"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "ledger_entry",
+   "fieldtype": "Link",
+   "label": "Ledger Entry",
+   "no_copy": 1,
+   "options": "Customer Ledger Entry",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "surcharge_status",
+   "fieldtype": "Select",
+   "label": "Surcharge",
+   "no_copy": 1,
+   "options": "\nNot due yet\nPosted\nNot charged (paid in time)\nReversed (paid in time)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_account",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "surcharge_entry",
+   "fieldtype": "Link",
+   "label": "Surcharge Ledger Entry",
+   "no_copy": 1,
+   "options": "Customer Ledger Entry",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-14 06:22:02.745672",
+ "modified": "2026-11-14 06:55:34.231885",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Bill",

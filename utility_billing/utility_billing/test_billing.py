@@ -104,13 +104,21 @@ class BillingCase(IntegrationTestCase):
 		return frappe.get_doc("Utility Bill", {"bill_run": run.name, "connection": self.conn})
 
 	def september_posted_with_arrears(self):
-		"""Aug 831 units, Sep 811 units; September bill posted, Rs 1,104 left unpaid."""
+		"""Aug 831 units, Sep 811 units; September bill posted and paid on 10-10-2026 except Rs 1,104."""
 		self.month_reading("2026-08-01", 2830)
 		self.month_reading("2026-09-01", 3641)
 		self.fpa("2026-09-01", 0)
 		sep = self.post(self.make_run("2026-09-01", "2026-10-01"))
-		frappe.db.set_value("Utility Bill", self.bill(sep).name, "outstanding_amount", 1104)  # payments come in increment 7
+		self.pay(self.bill(sep).payable_within_due - 1104, "2026-10-10")  # Rs 1,104 left unpaid
 		return sep
+
+	def pay(self, amount, date, txn=None, mode="Bank Transfer"):
+		"""A bank/channel payment recorded by the Administrator (System Manager)."""
+		r = frappe.get_doc({"doctype": "Payment Receipt", "reference_no": self.conn, "payment_channel": "Bank / Channel",
+		                    "payment_date": date, "amount": amount, "mode": mode,
+		                    "channel_txn_id": txn or frappe.generate_hash(length=12)}).insert()
+		r.submit()
+		return r
 
 
 class IntegrationTestBilling(BillingCase):

@@ -74,6 +74,10 @@ class BillRun(Document):
 		billing.post_run(self)
 		approval.notify(self, APPROVER_ROLE)
 
+	def before_cancel(self):
+		# Checked before Frappe marks the run cancelled, so a refused cancel changes nothing.
+		billing.check_run_cancellable(self)
+
 	def on_cancel(self):
 		billing.cancel_run_bills(self)
 		approval.log(self, approval.APPROVED, approval.CANCELLED)

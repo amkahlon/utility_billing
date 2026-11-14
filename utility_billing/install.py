@@ -27,9 +27,35 @@ EXCEPTION_CODES = [
 ]
 
 
+# Why money was reversed or waived (FS-CFG-26): code, description, used for
+REASON_CODES = [
+	("SUR-WAIVE", "Surcharge waived by management", "Waiver / Adjustment"),
+	("BILL-ERROR", "Billing error corrected", "Waiver / Adjustment"),
+	("READ-ERROR", "Wrong meter reading corrected", "Waiver / Adjustment"),
+	("GOODWILL", "Goodwill adjustment approved by management", "Waiver / Adjustment"),
+	("CHQ-BOUNCE", "Cheque or pay order dishonoured", "Payment Reversal"),
+	("WRONG-ACC", "Payment entered on the wrong account", "Payment Reversal"),
+	("WRONG-AMT", "Payment entered with the wrong amount", "Payment Reversal"),
+	("DUP-PAY", "Payment entered twice", "Payment Reversal"),
+	("FEE-ERROR", "Fee charged in error", "Fee Reversal"),
+	("NON-PAY", "Disconnected for non-payment", "Disconnection"),
+	("CONS-REQ", "Disconnected at the consumer's request", "Disconnection"),
+	("SAFETY", "Disconnected for safety", "Disconnection"),
+	("IRRECOV", "Irrecoverable after recovery steps", "Write-off"),
+]
+
+
 def after_install():
 	create_default_utilities()
 	create_default_exception_codes()
+	create_default_reason_codes()
+
+
+def create_default_reason_codes():
+	for code, description, used_for in REASON_CODES:
+		if not frappe.db.exists("Reason Code", code):
+			frappe.get_doc({"doctype": "Reason Code", "code": code, "description": description,
+			                "applies_to": used_for, "enabled": 1}).insert(ignore_permissions=True)
 
 
 def create_default_exception_codes():

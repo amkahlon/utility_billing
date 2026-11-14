@@ -1,0 +1,360 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-11-14 06:55:20.439722",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "connection",
+  "consumer_name",
+  "consumer",
+  "society",
+  "cb1",
+  "posting_date",
+  "posted_on",
+  "period",
+  "seq",
+  "entry_section",
+  "entry_type",
+  "voucher_type",
+  "voucher_no",
+  "amount",
+  "cb2",
+  "reverses",
+  "reversed_by",
+  "remarks",
+  "split_section",
+  "d_current",
+  "d_arrears",
+  "d_surcharge",
+  "cb3",
+  "d_fees",
+  "d_credit",
+  "balance_section",
+  "balance",
+  "current_balance",
+  "arrears_balance",
+  "cb4",
+  "surcharge_balance",
+  "fees_balance",
+  "credit_balance"
+ ],
+ "fields": [
+  {
+   "default": "LE-.YYYY.-.########",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "LE-.YYYY.-.########"
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Account (Reference No)",
+   "options": "Connection",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "label": "Consumer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consumer",
+   "fieldtype": "Link",
+   "label": "Consumer ID",
+   "options": "Consumer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Transaction Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "posted_on",
+   "fieldtype": "Datetime",
+   "label": "Posted On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "period",
+   "fieldtype": "Data",
+   "label": "Accounting Period",
+   "read_only": 1
+  },
+  {
+   "fieldname": "seq",
+   "fieldtype": "Int",
+   "label": "Sequence in Account",
+   "read_only": 1
+  },
+  {
+   "fieldname": "entry_section",
+   "fieldtype": "Section Break",
+   "label": "Transaction"
+  },
+  {
+   "fieldname": "entry_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Type",
+   "options": "Bill\nSurcharge\nPayment\nFee\nCredit Note\nDebit Note\nReversal",
+   "read_only": 1
+  },
+  {
+   "fieldname": "voucher_type",
+   "fieldtype": "Link",
+   "label": "Source Document Type",
+   "options": "DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "voucher_no",
+   "fieldtype": "Dynamic Link",
+   "in_standard_filter": 1,
+   "label": "Source Document",
+   "options": "voucher_type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount (+ charge, \u2212 credit)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reverses",
+   "fieldtype": "Link",
+   "label": "Reverses Entry",
+   "options": "Customer Ledger Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reversed_by",
+   "fieldtype": "Link",
+   "label": "Reversed By Entry",
+   "options": "Customer Ledger Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "split_section",
+   "fieldtype": "Section Break",
+   "label": "Split by Balance"
+  },
+  {
+   "fieldname": "d_current",
+   "fieldtype": "Currency",
+   "label": "Current Bill",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d_arrears",
+   "fieldtype": "Currency",
+   "label": "Arrears",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d_surcharge",
+   "fieldtype": "Currency",
+   "label": "Surcharge",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "d_fees",
+   "fieldtype": "Currency",
+   "label": "Fees",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d_credit",
+   "fieldtype": "Currency",
+   "label": "Credit (advance)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_section",
+   "fieldtype": "Section Break",
+   "label": "Balances After"
+  },
+  {
+   "fieldname": "balance",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "current_balance",
+   "fieldtype": "Currency",
+   "label": "Current Bill",
+   "read_only": 1
+  },
+  {
+   "fieldname": "arrears_balance",
+   "fieldtype": "Currency",
+   "label": "Arrears",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "surcharge_balance",
+   "fieldtype": "Currency",
+   "label": "Surcharge",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fees_balance",
+   "fieldtype": "Currency",
+   "label": "Fees",
+   "read_only": 1
+  },
+  {
+   "fieldname": "credit_balance",
+   "fieldtype": "Currency",
+   "label": "Credit (advance)",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "in_create": 1,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 06:55:20.439722",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Customer Ledger Entry",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "connection,entry_type,voucher_no",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "consumer_name"
+}

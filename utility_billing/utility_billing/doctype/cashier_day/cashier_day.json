@@ -1,0 +1,336 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-11-14 06:55:20.278799",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "day_title",
+  "cash_counter",
+  "society",
+  "cashier",
+  "cb1",
+  "business_date",
+  "status",
+  "opening_float",
+  "totals_section",
+  "receipt_count",
+  "cash_total",
+  "cheque_total",
+  "cb2",
+  "card_total",
+  "total_collected",
+  "reversed_count",
+  "reversed_total",
+  "close_section",
+  "expected_cash",
+  "cash_counted",
+  "difference",
+  "cb3",
+  "deposit_slip_no",
+  "closed_on",
+  "approved_by",
+  "approved_on",
+  "close_remarks"
+ ],
+ "fields": [
+  {
+   "default": "CDAY-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "CDAY-.YYYY.-.#####"
+  },
+  {
+   "fieldname": "day_title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cash_counter",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Cash Counter",
+   "options": "Cash Counter",
+   "reqd": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cashier",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Cashier",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "business_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "read_only": 1
+  },
+  {
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Open\nClosed\nApproved",
+   "read_only": 1
+  },
+  {
+   "fieldname": "opening_float",
+   "fieldtype": "Currency",
+   "label": "Opening Cash (Float)"
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break",
+   "label": "Collections"
+  },
+  {
+   "fieldname": "receipt_count",
+   "fieldtype": "Int",
+   "label": "Receipts",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cash_total",
+   "fieldtype": "Currency",
+   "label": "Cash",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cheque_total",
+   "fieldtype": "Currency",
+   "label": "Cheques and Pay Orders",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "card_total",
+   "fieldtype": "Currency",
+   "label": "Cards",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_collected",
+   "fieldtype": "Currency",
+   "label": "Total Collected",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "reversed_count",
+   "fieldtype": "Int",
+   "label": "Receipts Reversed",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "reversed_total",
+   "fieldtype": "Currency",
+   "label": "Amount Reversed",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "close_section",
+   "fieldtype": "Section Break",
+   "label": "Closing"
+  },
+  {
+   "description": "Opening cash + cash collected \u2212 cash reversed",
+   "fieldname": "expected_cash",
+   "fieldtype": "Currency",
+   "label": "Expected Cash in Drawer",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cash_counted",
+   "fieldtype": "Currency",
+   "label": "Cash Counted",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "difference",
+   "fieldtype": "Currency",
+   "label": "Difference (counted \u2212 expected)",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "deposit_slip_no",
+   "fieldtype": "Data",
+   "label": "Bank Deposit Slip No",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Datetime",
+   "label": "Closed On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "close_remarks",
+   "fieldtype": "Small Text",
+   "label": "Closing Remarks",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 06:55:20.278799",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Cashier Day",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "day_title",
+ "track_changes": 1
+}

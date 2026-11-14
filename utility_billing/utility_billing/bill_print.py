@@ -32,17 +32,30 @@ def history_months(society) -> int:
 	return min(months, MAX_HISTORY_MONTHS) if months > 0 else DEFAULT_HISTORY_MONTHS
 
 
-def bill_history(connection, month, months):
-	"""The connection's earlier posted bills, newest first. Paid date and amount arrive with
-	payments in increment 7; until then they print as blank."""
+def bill_history(connection, month, months, until=None):
+	"""The connection's earlier posted bills, newest first, each with what was paid against it: the
+	payments received from its issue date up to the next bill's issue date (the last one up to
+	`until`, this bill's issue date). Reversed payments don't count."""
 	rows = frappe.get_all(
 		"Utility Bill",
 		filters={"connection": connection, "docstatus": 1, "billing_month": ["<", getdate(month)]},
-		fields=["billing_month", "units", "current_amount", "payable_within_due"],
+		fields=["billing_month", "issue_date", "units", "current_amount", "payable_within_due"],
 		order_by="billing_month desc", limit=months,
 	)
-	return [{"month": str(r.billing_month), "units": flt(r.units), "billed": flt(r.payable_within_due),
-	         "current": flt(r.current_amount), "paid_on": None, "paid": None} for r in rows]
+	payments = frappe.get_all(
+		"Payment Receipt", filters={"connection": connection, "docstatus": 1},
+		fields=["payment_date", "amount"], order_by="payment_date",
+	) if rows else []
+	out, end = [], getdate(until) if until else None
+	for r in rows:
+		start = getdate(r.issue_date)
+		paid = [p for p in payments if getdate(p.payment_date) >= start and (end is None or getdate(p.payment_date) < end)]
+		out.append({"month": str(r.billing_month), "units": flt(r.units), "billed": flt(r.payable_within_due),
+		            "current": flt(r.current_amount),
+		            "paid_on": str(max(p.payment_date for p in paid)) if paid else None,
+		            "paid": sum(flt(p.amount) for p in paid) if paid else None})
+		end = start
+	return out
 
 
 def build_snapshot(bill) -> dict:
@@ -86,7 +99,7 @@ def build_snapshot(bill) -> dict:
 		},
 		"reading": dict(reading, previous_reading_date=str(reading.previous_reading_date or ""),
 		                reading_date=str(reading.reading_date or "")) if reading else None,
-		"history": bill_history(g("connection"), g("billing_month"), history_months(society)),
+		"history": bill_history(g("connection"), g("billing_month"), history_months(society), g("issue_date")),
 	}
 
 
@@ -235,16 +248,32 @@ def download_bill(name: str, duplicate: int = 0):
 
 @frappe.whitelist(methods=["POST"])
 def issue_duplicate(name: str):
-	"""Record a duplicate bill for a consumer who lost theirs (FS-BIL-17). The duplicate bill fee
-	comes with the fee schedule (FS-CFG-24, not built yet)."""
+	"""Record a duplicate bill for a consumer who lost theirs (FS-BIL-17), and charge the society's
+	duplicate bill fee to the account if it has one (FS-CFG-24)."""
 	bill = readable_bill(name)
 	if bill.docstatus != 1:
 		frappe.throw(_("Only a posted bill can have a duplicate."))
 	count = cint(bill.duplicate_count) + 1
 	frappe.db.set_value("Utility Bill", bill.name, {"duplicate_count": count, "last_duplicate_on": now_datetime()},
 	                    update_modified=False)
-	bill.add_comment("Info", _("Duplicate bill {0} issued by {1}.").format(count, frappe.session.user))
+	fee = charge_duplicate_fee(bill)
+	note = _(" Fee {0} charged to the account.").format(fee) if fee else ""
+	bill.add_comment("Info", _("Duplicate bill {0} issued by {1}.").format(count, frappe.session.user) + note)
 	return count
+
+
+def charge_duplicate_fee(bill):
+	"""The society's duplicate bill fee, if it set one (FS-BIL-17, FS-CFG-24)."""
+	fee_type = frappe.db.get_value("Society", bill.society, "duplicate_bill_fee")
+	if not fee_type:
+		return None
+	fee = frappe.get_doc({"doctype": "Fee Charge", "connection": bill.connection, "fee_type": fee_type,
+	                      "source_type": "Utility Bill", "source_name": bill.name,
+	                      "remarks": _("Duplicate of bill {0}").format(bill.name)})
+	fee.flags.ignore_permissions = True
+	fee.insert()
+	fee.submit()
+	return fee.name
 
 
 def run_bills(run, block=None, route=None):

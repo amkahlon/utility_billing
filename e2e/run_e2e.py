@@ -722,6 +722,160 @@ def t_guest_pdf(d: Desk):
 	expect_error(lambda: get_pdf(guest, "print_run_bills", run=S["run"]["name"]))
 
 
+# ---------------------------------------------------------------- increment 7: customer account and payments
+ACC = "utility_billing.utility_billing.account"
+DAY = "utility_billing.utility_billing.doctype.cashier_day.cashier_day"
+APR = "utility_billing.utility_billing.account_print"
+
+
+def owed(desk):
+	return USERS["bo"].call(f"{ACC}.account_summary", connection=S["conn"]["name"])
+
+
+@case("QA-43", "FS-CFG-24/26: fee schedule, duplicate bill fee, cash counter; default reason codes present")
+def t_fee_setup(d: Desk):
+	fee = d.save_doc({"doctype": "Fee Type", "society": S["society"], "fee_name": "Duplicate Bill", "amount": "100"})
+	eq((fee["name"], float(fee["amount"])), (f"{S['society']}-Duplicate Bill", 100.0), "fee type")
+	soc = d.get("Society", S["society"])
+	d.save_doc(dict(soc, duplicate_bill_fee=fee["name"]))
+	S["counter"] = f"Q{RUN}"
+	c = d.save_doc({"doctype": "Cash Counter", "counter_code": S["counter"].lower(), "counter_name": "QA counter",
+	                "society": S["society"]})
+	eq(c["name"], S["counter"], "counter code upper-cased")
+	codes = d.s.get(f"{URL}/api/resource/Reason Code", params={"limit_page_length": 50}).json()["data"]
+	for code in ("CHQ-BOUNCE", "SUR-WAIVE", "FEE-ERROR"):
+		if code not in {x["name"] for x in codes}:
+			raise AssertionError(f"default reason code {code} missing")
+
+
+@case("QA-44", "FS-PAY-03: the cashier opens a day at the counter; a second open day is refused")
+def t_open_day(d: Desk):
+	day = USERS["cashier"].save_doc({"doctype": "Cashier Day", "naming_series": "CDAY-.YYYY.-.#####",
+	                                 "cash_counter": S["counter"], "opening_float": "500"})
+	eq((day["status"], day["cashier"], float(day["opening_float"])), ("Open", EMAIL["cashier"], 500.0), "day opened")
+	S["day"] = day["name"]
+	expect_error(lambda: USERS["cashier"].save_doc({"doctype": "Cashier Day", "naming_series": "CDAY-.YYYY.-.#####",
+	                                                "cash_counter": S["counter"]}), "already has an open day")
+
+
+@case("QA-45", "FS-PAY-01/05/07/13: enquiry, part payment at the counter, numbered receipt, receipt PDF")
+def t_counter_receipt(d: Desk):
+	e = USERS["cashier"].call(f"{ACC}.enquiry", reference_no=S["conn"]["name"])
+	eq((e["bill"], e["payable_within_due"], e["amount_due"]), (S["bill"], 22700.0, 22700.0), "enquiry")
+	r = USERS["cashier"].save_doc({"doctype": "Payment Receipt", "payment_channel": "Counter",
+	                               "reference_no": S["conn"]["name"], "amount": "20000", "mode": "Cash"})
+	r = USERS["cashier"].save_doc(r, action="Submit")
+	eq((r["name"], r["status"], r["cashier_day"]), (f"{S['counter']}-00001", "Posted", S["day"]), "receipt numbered per counter")
+	eq((float(r["alloc_current"]), float(r["balance_after"])), (20000.0, 2700.0), "applied to the current bill")
+	S["receipt1"] = r["name"]
+	reader, text = get_pdf_at(USERS["cashier"], f"{APR}.download_receipt", name=r["name"])
+	for part in ("Payment Receipt", r["name"], "20,000", S["conn"]["name"], "Twenty Thousand"):
+		if part not in text:
+			raise AssertionError(f"{part!r} missing from the receipt PDF")
+
+
+@case("QA-46", "FS-PAY-02/07: cheque needs its number; an overpayment is kept as credit")
+def t_cheque(d: Desk):
+	base = {"doctype": "Payment Receipt", "payment_channel": "Counter", "reference_no": S["conn"]["name"],
+	        "amount": "3000", "mode": "Cheque"}
+	expect_error(lambda: USERS["cashier"].save_doc(dict(base)), "cheque number")
+	r = USERS["cashier"].save_doc(dict(base, instrument_no="778899", bank_name="MBL"))
+	r = USERS["cashier"].save_doc(r, action="Submit")
+	eq((r["name"], float(r["alloc_current"]), float(r["alloc_credit"]), float(r["balance_after"])),
+	   (f"{S['counter']}-00002", 2700.0, 300.0, -300.0), "cheque cleared the bill, Rs 300 credit")
+	S["cheque"] = r["name"]
+
+
+@case("QA-47", "FS-PAY-12: only a Billing Manager reverses a payment, with a reason of the right kind")
+def t_reverse(d: Desk):
+	args = dict(doctype="Payment Receipt", name=S["cheque"], reason_code="CHQ-BOUNCE", remarks="Cheque returned unpaid")
+	expect_error(lambda: USERS["cashier"].call(f"{ACC}.reverse_document", **args))
+	expect_error(lambda: USERS["bm"].call(f"{ACC}.reverse_document", **dict(args, reason_code="SUR-WAIVE")), "isn't an enabled reason")
+	r = USERS["cashier"].s.post(f"{URL}/api/method/frappe.client.cancel", data={"doctype": "Payment Receipt", "name": S["cheque"]})
+	if r.status_code == 200:
+		raise AssertionError("the cashier cancelled a receipt directly")
+	USERS["bm"].call(f"{ACC}.reverse_document", **args)
+	rc = USERS["bm"].get("Payment Receipt", S["cheque"])
+	eq((rc["status"], rc["reversal_reason"], rc["reversed_by"]), ("Reversed", "CHQ-BOUNCE", EMAIL["bm"]), "reversed")
+	eq(owed(d)["balance"], 2700.0, "the reversed cheque is owed again")
+
+
+@case("QA-48", "FS-PAY-06: a bank/channel transaction posts once; cashiers can't record channel payments")
+def t_channel(d: Desk):
+	from datetime import date
+
+	base = {"doctype": "Payment Receipt", "payment_channel": "Bank / Channel", "reference_no": S["conn"]["name"],
+	        "amount": "700", "mode": "1Link", "payment_date": date.today().isoformat(), "channel_txn_id": f"1L-{RUN}"}
+	expect_error(lambda: USERS["cashier"].save_doc(dict(base)))
+	r = USERS["ao"].save_doc(dict(base))
+	r = USERS["ao"].save_doc(r, action="Submit")
+	eq((r["name"][:4], float(r["balance_after"])), ("BNK-", 2000.0), "channel payment posted")
+	expect_error(lambda: USERS["ao"].save_doc(dict(base, amount="5")), "already posted")
+
+
+@case("QA-49", "FS-PAY-03: close the day with cash count and deposit slip; no receipts after; supervisor approves")
+def t_close_day(d: Desk):
+	day = USERS["cashier"].get("Cashier Day", S["day"])
+	eq((day["receipt_count"], float(day["cash_total"]), float(day["reversed_total"]), float(day["expected_cash"])),
+	   (2, 20000.0, 3000.0, 20500.0), "day totals")
+	USERS["cashier"].call(f"{DAY}.close_day", name=S["day"], cash_counted="20500", deposit_slip_no=f"DS-{RUN}")
+	expect_error(lambda: USERS["cashier"].save_doc({"doctype": "Payment Receipt", "payment_channel": "Counter",
+	                                                "reference_no": S["conn"]["name"], "amount": "10", "mode": "Cash"}),
+	             "open your cashier day")
+	expect_error(lambda: USERS["cashier"].call(f"{DAY}.approve_day", name=S["day"]))
+	USERS["ao"].call(f"{DAY}.approve_day", name=S["day"])
+	day = USERS["ao"].get("Cashier Day", S["day"])
+	eq((day["status"], float(day["difference"]), day["approved_by"]), ("Approved", 0.0, EMAIL["ao"]), "day approved")
+
+
+@case("QA-50", "FS-BIL-17/CFG-24: a duplicate bill charges the society's duplicate bill fee")
+def t_duplicate_fee(d: Desk):
+	USERS["cashier"].call(f"{PRT}.issue_duplicate", name=S["bill"])
+	s = owed(d)
+	eq((s["balances"]["fees"], s["balance"]), (100.0, 2100.0), "fee added to the account")
+
+
+@case("QA-51", "FS-REC-16: a credit note waives the fee after General Manager approval")
+def t_credit_note(d: Desk):
+	note = USERS["bo"].save_doc({"doctype": "Account Adjustment", "note_type": "Credit Note", "connection": S["conn"]["name"],
+	                             "against_bill": S["bill"], "bucket": "Fees", "amount": "100", "reason_code": "BILL-ERROR",
+	                             "remarks": "Duplicate fee charged by mistake"})
+	if not note["name"].startswith("CN-"):
+		raise AssertionError(f"credit note numbered {note['name']}")
+	eq(owed(d)["balances"]["fees"], 100.0, "nothing posted before approval")
+	note = USERS["bo"].workflow(note, "Submit for Approval")
+	expect_error(lambda: USERS["bo"].workflow(note, "Approve"))
+	note = USERS["gm"].workflow(note, "Approve")
+	eq((note["docstatus"], owed(d)["balances"]["fees"], owed(d)["balance"]), (1, 0.0, 2000.0), "fee waived")
+
+
+@case("QA-52", "FS-REC-01/12/14: statement PDF with running balance; ledger entries can't be edited")
+def t_statement(d: Desk):
+	_, text = get_pdf_at(USERS["bo"], f"{APR}.download_statement", connection=S["conn"]["name"])
+	for part in ("Account Statement", "Opening balance", f"{S['counter']}-00001", "Reversal", "Credit note",
+	             "Closing balance", "2,000"):
+		if part not in text:
+			raise AssertionError(f"{part!r} missing from the statement")
+	rows = d.s.get(f"{URL}/api/resource/Customer Ledger Entry", params={
+		"filters": json.dumps([["connection", "=", S["conn"]["name"]]]), "fields": json.dumps(["name", "seq"]),
+		"order_by": "seq asc", "limit_page_length": 50}).json()["data"]
+	eq([r["seq"] for r in rows], list(range(1, len(rows) + 1)), "entries numbered in sequence")
+	entry = d.get("Customer Ledger Entry", rows[-1]["name"])
+	expect_error(lambda: d.save_doc(dict(entry, amount="1")))
+
+
+def get_pdf_at(desk, method, **params):
+	"""Like get_pdf, for any whitelisted method path."""
+	from pypdf import PdfReader
+
+	r = desk.s.get(f"{URL}/api/method/{method}", params=params)
+	if r.status_code != 200 or not r.content.startswith(b"%PDF"):
+		data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+		raise ServerError(r.status_code, _message(data) or r.text[:300])
+	reader = PdfReader(io.BytesIO(r.content))
+	return reader, " ".join(" ".join(p.extract_text() for p in reader.pages).split())
+
+
 # ---------------------------------------------------------------- runner
 def main():
 	d = Desk()
@@ -732,6 +886,7 @@ def main():
 	make_user(d, "bo", ["Billing Officer"])
 	make_user(d, "cashier", ["Cashier"])
 	make_user(d, "reader", ["Meter Reader"])
+	make_user(d, "ao", ["Accounts Officer"])
 	results = []
 	for qa_id, req, fn in CASES:
 		try:

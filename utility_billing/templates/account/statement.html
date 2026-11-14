@@ -1,0 +1,70 @@
+{#- Customer account statement (FS-REC-14, FS-CLT-03). Tables only (wkhtmltopdf). -#}
+{%- set c = soc.colour -%}
+<style>
+	.st { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 8.5pt; color: #1d2329; line-height: 1.35; }
+	.st table { border-collapse: collapse; width: 100%; }
+	.st td, .st th { padding: 0; vertical-align: top; }
+	.st .name { font-size: 14pt; font-weight: 700; color: {{ c }}; }
+	.st .muted { color: #5b6670; }
+	.st .small { font-size: 7.5pt; }
+	.st .right { text-align: right; }
+	.st .strong { font-weight: 700; }
+	.st .band td { background: {{ c }}; color: #fff; font-weight: 700; font-size: 10.5pt; padding: 1.5mm 3mm; }
+	.st .kv td { padding: .8mm 2mm; }
+	.st .kv td.k { color: #5b6670; width: 22%; }
+	.st .grid { page-break-inside: auto; }
+	.st .grid tr { page-break-inside: avoid; }
+	.st .grid th { background: #eef2f5; font-size: 7.5pt; color: #3b4650; padding: 1.2mm 2mm; text-align: left; border-bottom: 1px solid #c9d1d8; }
+	.st .grid td { padding: 1mm 2mm; border-bottom: 1px solid #edf0f2; }
+	.st .grid .right { text-align: right; }
+	.st .tot td { background: #eef2f5; font-weight: 700; padding: 1.5mm 2mm; }
+	.st .sp { height: 3mm; }
+	.st .bal td { border: 1px solid #c9d1d8; padding: 1.5mm 2mm; text-align: center; }
+	.st .bal .v { font-size: 10pt; font-weight: 700; }
+</style>
+<div class="st">
+<table><tr>
+	{%- if soc.logo %}<td style="width: 20mm;"><img src="{{ soc.logo }}" style="width: 17mm; height: 17mm;"></td>{% endif %}
+	<td>
+		<div class="name">{{ soc.name | e }}</div>
+		{%- for l in soc.letterhead %}<div class="small muted">{{ l | e }}</div>{% else %}<div class="small muted">{{ (soc.address or "") | e }}</div>{% endfor %}
+	</td>
+	<td class="right small muted" style="width: 45mm;">{{ _("Printed") }} {{ today }}</td>
+</tr></table>
+<div class="sp"></div>
+<table class="band"><tr><td>{{ _("Account Statement") }}</td>
+	<td class="right">{% if d.from_date %}{{ date(d.from_date) }} – {% else %}{{ _("Up to") }} {% endif %}{{ date(d.to_date) }}</td></tr></table>
+<div class="sp"></div>
+<table class="kv">
+	<tr><td class="k">{{ _("Reference No") }}</td><td class="strong">{{ conn.name | e }}</td>
+		<td class="k">{{ _("Consumer") }}</td><td>{{ (conn.consumer_name or "") | e }}</td></tr>
+	<tr><td class="k">{{ _("Property") }}</td><td>{{ (property.property_no or "") | e }}{% if property.block %}, {{ property.block | e }}{% endif %}</td>
+		<td class="k">{{ _("Category") }}</td><td>{{ (category or "") | e }}</td></tr>
+</table>
+<div class="sp"></div>
+<table class="grid">
+	<tr><th style="width: 20mm;">{{ _("Date") }}</th><th>{{ _("Transaction") }}</th><th>{{ _("Document") }}</th>
+		<th class="right">{{ _("Charges") }}</th><th class="right">{{ _("Payments / credits") }}</th><th class="right">{{ _("Balance") }}</th></tr>
+	<tr><td>{% if d.from_date %}{{ date(d.from_date) }}{% endif %}</td><td colspan="4" class="strong">{{ _("Opening balance") }}</td><td class="right strong">{{ money(d.opening) }}</td></tr>
+	{%- for row in d.rows %}
+	<tr>
+		<td style="white-space: nowrap;">{{ date(row.posting_date) }}</td>
+		<td>{{ _(labels.get(row.entry_type, row.entry_type)) }}{% if row.remarks %}<div class="small muted">{{ row.remarks | e }}</div>{% endif %}</td>
+		<td class="small">{{ (row.voucher_no or "") | e }}</td>
+		<td class="right">{% if row.amount > 0 %}{{ money(row.amount) }}{% endif %}</td>
+		<td class="right">{% if row.amount < 0 %}{{ money(-row.amount) }}{% endif %}</td>
+		<td class="right">{{ money(row.running) }}</td>
+	</tr>
+	{%- else %}
+	<tr><td colspan="6" class="muted" style="text-align: center; padding: 4mm;">{{ _("No transactions in this period") }}</td></tr>
+	{%- endfor %}
+	<tr class="tot"><td></td><td colspan="4">{{ _("Closing balance") }}{% if d.closing < 0 %} ({{ _("in credit") }}){% endif %}</td><td class="right">{{ money(d.closing) }}</td></tr>
+</table>
+<div class="sp"></div>
+<div class="small muted" style="margin-bottom: 1mm;">{{ _("Account balances now, by type") }}</div>
+<table class="bal"><tr>
+	{%- for label, key in [(_("Current bill"), "current"), (_("Arrears"), "arrears"), (_("Surcharge"), "surcharge"), (_("Fees"), "fees"), (_("Credit (advance)"), "credit")] %}
+	<td><div class="small muted">{{ label }}</div><div class="v">{{ money(d.balances[key]) }}</div></td>
+	{%- endfor %}
+</tr></table>
+</div>
