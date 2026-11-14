@@ -7,3 +7,4 @@
 utility_billing.patches.v0_1.tariff_title_fixed_date
 utility_billing.patches.v0_1.tariff_workflow_states
 utility_billing.patches.v0_1.default_exception_codes
+utility_billing.patches.v0_1.bill_layout_defaults

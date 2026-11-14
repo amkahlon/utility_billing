@@ -13,6 +13,7 @@ Exit code 0 = all passed.
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import random
@@ -636,6 +637,89 @@ def t_bill_locked(d: Desk):
 	if r.status_code == 200:
 		raise AssertionError("a posted bill was cancelled directly")
 	eq(USERS["cashier"].get("Utility Bill", S["bill"])["status"], "Posted", "cashier can read the posted bill")
+
+
+# ---------------------------------------------------------------- increment 6: bill print
+PRT = "utility_billing.utility_billing.bill_print"
+
+
+def get_pdf(desk, method, **params):
+	"""GET a PDF the way the browser's Print buttons open it; returns (reader, text of all pages).
+	pypdf returns the gaps between words as tabs or line breaks, so the text is joined with single spaces."""
+	from pypdf import PdfReader
+
+	r = desk.s.get(f"{URL}/api/method/{PRT}.{method}", params=params)
+	if r.status_code != 200 or not r.content.startswith(b"%PDF"):
+		data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+		raise ServerError(r.status_code, _message(data) or r.text[:300])
+	reader = PdfReader(io.BytesIO(r.content))
+	return reader, " ".join(" ".join(p.extract_text() for p in reader.pages).split())
+
+
+@case("QA-37", "FS-CFG-19: bill layout settings saved from the form; history months limited to 1-24")
+def t_bill_layout(d: Desk):
+	soc = d.get("Society", S["society"])
+	saved = d.save_doc(dict(soc, bill_history_months="6", print_office_copy="1", show_qr_code="1",
+	                        bill_notices="Pay before the due date.\nLoad shedding schedule at the office.",
+	                        payment_instructions="Pay at any bank branch or through 1Link."))
+	eq((saved["bill_history_months"], saved["print_office_copy"]), (6, 1), "layout saved as numbers")
+	expect_error(lambda: d.save_doc(dict(d.get("Society", S["society"]), bill_history_months="30")), "1 to 24")
+
+
+@case("QA-38", "FS-BIL-08/16, FS-CLT-03: cashier downloads the posted bill as a one-page PDF with every part")
+def t_bill_pdf(d: Desk):
+	bill = d.get("Utility Bill", S["bill"])
+	ref = d.get("Connection", bill["connection"])["reference_no"]
+	reader, text = get_pdf(USERS["cashier"], "download_bill", name=S["bill"])
+	eq(len(reader.pages), 1, "pages")
+	for part in (ref, S["bill"], "Electricity Bill", "November 2026", "Consumer copy", "Office copy", "22,700", "24,970",
+	             "Energy Charges", "21,000", "Payable within due date", "Payable after due date"):
+		if part not in text:
+			raise AssertionError(f"{part!r} missing from the bill PDF")
+	if "DUPLICATE" in text or "DRAFT" in text:
+		raise AssertionError("an original posted bill must not be marked")
+	S["bill_text"] = text
+
+
+@case("QA-39", "FS-BIL-17: a duplicate is issued (recorded), then printed marked DUPLICATE")
+def t_duplicate(d: Desk):
+	expect_error(lambda: get_pdf(USERS["cashier"], "download_bill", name=S["bill"], duplicate="1"), "issue the duplicate")
+	r = USERS["cashier"].s.get(f"{URL}/api/method/{PRT}.issue_duplicate", params={"name": S["bill"]})
+	if r.status_code == 200:
+		raise AssertionError("issuing a duplicate must need a POST, not a link")
+	n = USERS["cashier"].call(f"{PRT}.issue_duplicate", name=S["bill"])
+	eq(n, 1, "first duplicate")
+	_, text = get_pdf(USERS["cashier"], "download_bill", name=S["bill"], duplicate=str(n))
+	if "DUPLICATE 1" not in text:
+		raise AssertionError("duplicate not marked")
+	eq(d.get("Utility Bill", S["bill"])["duplicate_count"], 1, "duplicate recorded on the bill")
+
+
+@case("QA-40", "FS-RUN-08: Billing Officer prints the run's bills in one PDF, by block")
+def t_bulk_print(d: Desk):
+	run = S["run"]["name"]
+	groups = USERS["bo"].call(f"{PRT}.run_print_groups", run=run)
+	eq(groups["total"], 1, "bills in the run")
+	reader, text = get_pdf(USERS["bo"], "print_run_bills", run=run)
+	eq(len(reader.pages), 1, "one page per bill")
+	block = next(iter(groups["blocks"]))
+	get_pdf(USERS["bo"], "print_run_bills", run=run, block=block)
+	expect_error(lambda: get_pdf(USERS["bo"], "print_run_bills", run=run, block="No Such Block"), "no bills")
+
+
+@case("QA-41", "FS-RUN-09: after the society changes its details, the posted bill reprints exactly as issued")
+def t_reprint_exact(d: Desk):
+	soc = d.get("Society", S["society"])
+	d.save_doc(dict(soc, society_name=f"Renamed QA Society {RUN}", bill_notices="A new notice", print_office_copy="0"))
+	_, text = get_pdf(USERS["cashier"], "download_bill", name=S["bill"])
+	eq(text, S["bill_text"], "reprint")
+
+
+@case("QA-42", "Security: a visitor who isn't signed in can't download bills")
+def t_guest_pdf(d: Desk):
+	guest = Desk()
+	expect_error(lambda: get_pdf(guest, "download_bill", name=S["bill"]))
+	expect_error(lambda: get_pdf(guest, "print_run_bills", run=S["run"]["name"]))
 
 
 # ---------------------------------------------------------------- runner

@@ -1,6 +1,6 @@
 # Copyright (c) 2026, SoftVerx. All rights reserved. See license.txt.
 """Society: one client (housing society, compound or estate) with its profile, branding,
-bulk supply and billing parameters (FS-CLT-01..08, FS-CFG-01, 15, 16, 17)."""
+bulk supply, billing parameters and bill layout (FS-CLT-01..08, FS-CFG-01, 15, 16, 17, 19)."""
 
 import re
 
@@ -38,6 +38,8 @@ class Society(Document):
 			frappe.throw(_("Enter the fixed Surcharge Amount."))
 		if flt(self.surcharge_cap) < 0 or flt(self.minimum_bill) < 0:
 			frappe.throw(_("Surcharge cap and minimum bill can't be negative."))
+		if not 1 <= cint(self.bill_history_months) <= 24:
+			frappe.throw(_("Months of History on Bill must be from 1 to 24."))
 		self.validate_logo()
 
 	def normalise_website(self):

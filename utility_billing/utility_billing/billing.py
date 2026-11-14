@@ -2,11 +2,14 @@
 """Bills and bill runs (FS-BIL-01, 03-06, 09-10, 14-15; FS-RUN-01-05). Calculations are in
 bill_engine.py; this module gathers the inputs from the database and stores the results."""
 
+import json
+
 import frappe
 from frappe import _
 from frappe.utils import add_months, flt, getdate, now_datetime
 
 from utility_billing.utility_billing import bill_engine as engine
+from utility_billing.utility_billing import bill_print
 from utility_billing.utility_billing import readings
 from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff
 
@@ -104,7 +107,7 @@ def build_bill(run, connection) -> dict:
 		           "fixed_amount": society.surcharge_fixed_amount, "cap": society.surcharge_cap},
 		bill_rounding=society.rounding_rule or engine.NEAREST,
 	)
-	return {
+	bill = {
 		"doctype": "Utility Bill", "connection": connection, "consumer": conn.consumer,
 		"consumer_name": conn.consumer_name, "property": conn.property, "consumer_category": conn.consumer_category,
 		"society": run.society, "utility": run.utility, "billing_month": month, "issue_date": run.issue_date,
@@ -120,6 +123,8 @@ def build_bill(run, connection) -> dict:
 		"payable_within_due": flt(result.payable_within_due), "surcharge_amount": flt(result.surcharge),
 		"payable_after_due": flt(result.payable_after_due), "outstanding_amount": 0,
 	}
+	bill["print_snapshot"] = json.dumps(bill_print.build_snapshot(bill))
+	return bill
 
 
 # ----- bill run -----
@@ -248,6 +253,8 @@ def post_run(doc):
 		bill = frappe.get_doc("Utility Bill", name)
 		bill.status = "Posted"
 		bill.outstanding_amount = bill.payable_within_due
+		# Freeze what the bill prints as it is now, at posting (FS-RUN-09: reprints match the original).
+		bill.print_snapshot = json.dumps(bill_print.build_snapshot(bill))
 		bill.flags.from_bill_run = True
 		bill.flags.ignore_permissions = True
 		bill.submit()

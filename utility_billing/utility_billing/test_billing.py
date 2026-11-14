@@ -25,7 +25,9 @@ def ensure(doctype, name, data):
 	return name
 
 
-class IntegrationTestBilling(IntegrationTestCase):
+class BillingCase(IntegrationTestCase):
+	"""Shared fixtures (spec test case 1: house N 2308); no tests of its own, so other modules can reuse it."""
+
 	def setUp(self):
 		create_default_utilities()
 		create_default_exception_codes()
@@ -110,7 +112,8 @@ class IntegrationTestBilling(IntegrationTestCase):
 		frappe.db.set_value("Utility Bill", self.bill(sep).name, "outstanding_amount", 1104)  # payments come in increment 7
 		return sep
 
-	# ----- tests -----
+
+class IntegrationTestBilling(BillingCase):
 	def test_case_1_october_bill_end_to_end(self):
 		self.september_posted_with_arrears()
 		self.month_reading("2026-10-01", 3905)
