@@ -104,7 +104,11 @@ jinja = {"methods": [
 ]}
 
 # Late payment surcharge the day after the due date + grace days (FS-REC-03)
-scheduler_events = {"daily": ["utility_billing.utility_billing.account.apply_surcharges"]}
+scheduler_events = {"daily": [
+	"utility_billing.utility_billing.account.apply_surcharges",
+	# Summary journals up to yesterday and a receivables reconciliation (FS-GL-02, 04)
+	"utility_billing.utility_billing.gl.daily",
+]}
 
 # Uninstallation
 # ------------

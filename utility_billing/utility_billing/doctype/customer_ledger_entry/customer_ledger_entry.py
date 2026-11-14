@@ -6,8 +6,8 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
-# Only the link to the entry that reversed it may change after an entry is written.
-MUTABLE = {"reversed_by", "modified", "modified_by"}
+# Only the links to the entry that reversed it and to its GL journal may change after an entry is written.
+MUTABLE = {"reversed_by", "gl_journal", "modified", "modified_by"}
 
 
 class CustomerLedgerEntry(Document):

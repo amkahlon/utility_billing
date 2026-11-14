@@ -74,10 +74,11 @@
    "options": "Nearest rupee\nNo rounding\nRound up\nRound down"
   },
   {
-   "description": "Income account used when posting to accounting",
+   "description": "Where billed amounts of this charge are credited in the summary journals",
    "fieldname": "account_code",
-   "fieldtype": "Data",
-   "label": "Account Code"
+   "fieldtype": "Link",
+   "label": "Income Account",
+   "options": "Ledger Account"
   },
   {
    "default": "0",
@@ -95,7 +96,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-13 22:38:47.887399",
+ "modified": "2026-11-14 07:43:08.496610",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Charge Type",

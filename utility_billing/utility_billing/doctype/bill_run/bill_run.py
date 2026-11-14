@@ -9,7 +9,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, cint, getdate
 
-from utility_billing.utility_billing import approval, billing
+from utility_billing.utility_billing import approval, billing, gl
 from utility_billing.utility_billing.readings import month_start
 
 APPROVER_ROLE = "Billing Manager"
@@ -72,6 +72,7 @@ class BillRun(Document):
 
 	def on_submit(self):
 		billing.post_run(self)
+		gl.after_run_posted(self)
 		approval.notify(self, APPROVER_ROLE)
 
 	def before_cancel(self):

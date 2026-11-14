@@ -33,6 +33,7 @@
   "cb3",
   "total_payable",
   "previous_month_current",
+  "gl_journal",
   "summary",
   "problems_section",
   "problems",
@@ -324,13 +325,22 @@
    "no_copy": 1,
    "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "gl_journal",
+   "fieldtype": "Link",
+   "label": "GL Journal",
+   "no_copy": 1,
+   "options": "GL Journal",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-14 05:36:55.743194",
+ "modified": "2026-11-14 07:43:08.240137",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Bill Run",

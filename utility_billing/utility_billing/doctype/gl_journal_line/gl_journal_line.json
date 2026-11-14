@@ -1,0 +1,73 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-11-14 07:43:06.499780",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "account",
+  "account_name",
+  "debit",
+  "credit",
+  "narration"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Account",
+   "options": "Ledger Account",
+   "read_only": 1
+  },
+  {
+   "columns": 3,
+   "fieldname": "account_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Account Name",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "debit",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Debit",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "credit",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Credit",
+   "read_only": 1
+  },
+  {
+   "columns": 3,
+   "fieldname": "narration",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Narration",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-14 07:43:06.499780",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "GL Journal Line",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

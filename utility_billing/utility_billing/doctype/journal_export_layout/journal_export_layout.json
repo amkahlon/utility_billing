@@ -1,0 +1,177 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "field:layout_name",
+ "creation": "2026-11-14 07:43:06.864449",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "layout_name",
+  "file_format",
+  "cb1",
+  "date_format",
+  "include_header",
+  "description",
+  "columns_section",
+  "columns"
+ ],
+ "fields": [
+  {
+   "fieldname": "layout_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Layout Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "CSV",
+   "fieldname": "file_format",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "File Format",
+   "options": "CSV\nExcel",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "dd-mm-yyyy",
+   "fieldname": "date_format",
+   "fieldtype": "Select",
+   "label": "Date Format",
+   "options": "dd-mm-yyyy\nmm/dd/yyyy\nyyyy-mm-dd\ndd/mm/yyyy"
+  },
+  {
+   "default": "1",
+   "fieldname": "include_header",
+   "fieldtype": "Check",
+   "label": "First Row is Column Headers"
+  },
+  {
+   "description": "For example which software and import screen this layout is for",
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "columns_section",
+   "fieldtype": "Section Break",
+   "label": "Columns (one row per journal line)"
+  },
+  {
+   "fieldname": "columns",
+   "fieldtype": "Table",
+   "label": "Columns",
+   "options": "Journal Export Column",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 07:43:06.864449",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Journal Export Layout",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

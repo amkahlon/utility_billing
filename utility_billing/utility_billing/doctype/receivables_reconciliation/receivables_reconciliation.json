@@ -1,0 +1,217 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-11-14 07:43:07.125170",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "society",
+  "as_of",
+  "status",
+  "cb1",
+  "customer_accounts_total",
+  "receivables_posted",
+  "difference",
+  "details_section",
+  "not_journaled_count",
+  "not_journaled_amount",
+  "cb2",
+  "unexplained",
+  "notes"
+ ],
+ "fields": [
+  {
+   "default": "REC-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "REC-.YYYY.-.#####"
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1
+  },
+  {
+   "fieldname": "as_of",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "As Of",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Result",
+   "options": "Matched\nTiming differences\nDifference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "customer_accounts_total",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Customer Accounts Total (subledger)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "receivables_posted",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Receivables in Journals",
+   "read_only": 1
+  },
+  {
+   "fieldname": "difference",
+   "fieldtype": "Currency",
+   "label": "Difference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Explained By"
+  },
+  {
+   "fieldname": "not_journaled_count",
+   "fieldtype": "Int",
+   "label": "Ledger Entries Not Yet in a Journal",
+   "read_only": 1
+  },
+  {
+   "fieldname": "not_journaled_amount",
+   "fieldtype": "Currency",
+   "label": "Their Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "unexplained",
+   "fieldtype": "Currency",
+   "label": "Unexplained Difference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "in_create": 1,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 07:43:07.125170",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Receivables Reconciliation",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "as_of",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "society"
+}
