@@ -50,9 +50,10 @@ def assert_not_maker(doc, user: str):
 # ----- approval levels by amount (FS-ACC-04, FS-WF-04) -----
 # For these documents the Society's "Approval Levels by Amount" table says who approves up to which amount. With no rows for a
 # document type the default approver applies, so nothing changes until a society sets levels.
-AMOUNT_FIELD = {"Account Adjustment": "amount", "Refund": "amount", "Bulk Adjustment": "total_amount", "Write Off": "amount", "Installment Plan": "amount_to_split"}
+AMOUNT_FIELD = {"Account Adjustment": "amount", "Refund": "amount", "Bulk Adjustment": "total_amount", "Write Off": "amount", "Installment Plan": "amount_to_split",
+                "Security Deposit": "amount"}
 DEFAULT_APPROVER = {"Account Adjustment": "General Manager", "Refund": "General Manager", "Bulk Adjustment": "General Manager",
-                    "Write Off": "General Manager", "Installment Plan": "Billing Manager"}
+                    "Write Off": "General Manager", "Installment Plan": "Billing Manager", "Security Deposit": "General Manager"}
 
 
 def required_roles(doc) -> list[str] | None:

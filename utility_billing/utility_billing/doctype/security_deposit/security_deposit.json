@@ -1,0 +1,384 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 23:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "deposit_title",
+  "workflow_state",
+  "connection",
+  "consumer_name",
+  "society",
+  "cb1",
+  "deposit_type",
+  "amount",
+  "mode",
+  "reference_no",
+  "posting_date",
+  "remarks",
+  "posting_section",
+  "balance_before",
+  "balance_after",
+  "cb2",
+  "ledger_entry",
+  "gl_journal",
+  "amended_from",
+  "approval_section",
+  "requested_by",
+  "requested_on",
+  "cb_approval",
+  "approved_by",
+  "approved_on",
+  "changes_since_last_submission",
+  "rejection_reason",
+  "approval_history_section",
+  "approval_history_html",
+  "approval_log",
+  "submitted_snapshot"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "SD-.YYYY.-.#####",
+   "default": "SD-.YYYY.-.#####",
+   "hidden": 1
+  },
+  {
+   "fieldname": "deposit_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Approval Status",
+   "no_copy": 1,
+   "options": "Workflow State",
+   "read_only": 1
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Connection",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "label": "Consumer",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "deposit_type",
+   "fieldtype": "Select",
+   "label": "What",
+   "options": "Received\nRefunded\nOffset Against Arrears",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Paid By",
+   "options": "Cash\nCheque\nPay Order\nCard\nBank Transfer",
+   "depends_on": "eval:doc.deposit_type!='Offset Against Arrears'",
+   "description": "How the deposit was received or is paid back."
+  },
+  {
+   "fieldname": "reference_no",
+   "fieldtype": "Data",
+   "label": "Receipt, Cheque or Transfer No"
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "reqd": 1,
+   "default": "Today"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "posting_section",
+   "fieldtype": "Section Break",
+   "label": "Deposit held"
+  },
+  {
+   "fieldname": "balance_before",
+   "fieldtype": "Currency",
+   "label": "Held Before",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_after",
+   "fieldtype": "Currency",
+   "label": "Held After",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ledger_entry",
+   "fieldtype": "Link",
+   "label": "Account Ledger Entry",
+   "options": "Customer Ledger Entry",
+   "read_only": 1,
+   "description": "Only an offset against arrears touches the customer's account."
+  },
+  {
+   "fieldname": "gl_journal",
+   "fieldtype": "Link",
+   "label": "Journal",
+   "options": "GL Journal",
+   "read_only": 1,
+   "no_copy": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "Security Deposit",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "Approval"
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Submitted for Approval By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requested_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_approval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "depends_on": "eval:doc.changes_since_last_submission",
+   "fieldname": "changes_since_last_submission",
+   "fieldtype": "Small Text",
+   "label": "Changes Since Last Submission",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.rejection_reason",
+   "fieldname": "rejection_reason",
+   "fieldtype": "Small Text",
+   "label": "Rejection Reason",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_history_section",
+   "fieldtype": "Section Break",
+   "label": "Approval History"
+  },
+  {
+   "fieldname": "approval_history_html",
+   "fieldtype": "HTML",
+   "label": "Approval History View"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approval_log",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "no_copy": 1,
+   "options": "Approval Log",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "submitted_snapshot",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Submitted Snapshot",
+   "no_copy": 1,
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 23:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Security Deposit",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "naming_series:",
+ "is_submittable": 1,
+ "title_field": "deposit_title",
+ "show_title_field_in_link": 1,
+ "search_fields": "connection,consumer_name",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1,
+   "submit": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "submit": 1,
+   "write": 1,
+   "cancel": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management",
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

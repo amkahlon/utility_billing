@@ -51,7 +51,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Type",
-   "options": "Bill Run\nDaily Transactions",
+   "options": "Bill Run\nDaily Transactions\nSecurity Deposit",
    "read_only": 1
   },
   {
@@ -160,7 +160,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 07:43:06.598361",
+ "modified": "2026-11-14 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "GL Journal",

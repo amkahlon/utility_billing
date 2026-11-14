@@ -27,7 +27,9 @@
   "total_units",
   "close_section",
   "closed_by",
-  "closed_on"
+  "closed_on",
+  "routes_section",
+  "route_assignments"
  ],
  "fields": [
   {
@@ -149,12 +151,25 @@
    "fieldtype": "Datetime",
    "label": "Closed On",
    "read_only": 1
+  },
+  {
+   "fieldname": "routes_section",
+   "fieldtype": "Section Break",
+   "label": "Routes and readers",
+   "collapsible": 1,
+   "description": "Who reads which route this cycle. The reading sheet follows the routes' order and each reading shows its reader (FS-MST-09)."
+  },
+  {
+   "fieldname": "route_assignments",
+   "fieldtype": "Table",
+   "label": "Reader for Each Route",
+   "options": "Cycle Route Assignment"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-13 23:24:54.206815",
+ "modified": "2026-11-14 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Reading Cycle",

@@ -32,6 +32,7 @@ def settings(society):
 	return frappe._dict(
 		receivables=s.receivables_account, surcharge=s.surcharge_income_account, other=s.other_income_account,
 		adjustments=s.adjustments_account, write_off=s.write_off_account, payments={r.mode: r.account for r in s.payment_accounts},
+		deposits=s.get("deposit_liability_account"),
 	)
 
 
@@ -101,6 +102,9 @@ def lines_for(entry_name):
 	if e.entry_type == "Write-off":
 		expense = need(soc.write_off, _("written-off receivables (Society {0} → Write-off Expense Account)").format(e.society))
 		return [(expense, -amount, 0), (rec, 0, -amount)]  # the amount of a write-off entry is negative: the receivable falls
+	if e.entry_type == "Deposit offset":
+		held = need(soc.deposits, _("security deposits held (Society {0} → Security Deposits Held Account)").format(e.society))
+		return [(held, -amount, 0), (rec, 0, -amount)]  # the liability falls, the receivable falls
 	if e.entry_type == "Refund":
 		mode = frappe.db.get_value("Refund", e.voucher_no, "refund_mode")
 		paid_from = need(soc.payments.get(mode), _("{0} payments (Society {1} → Accounting)").format(_(mode), e.society))
@@ -143,6 +147,34 @@ def build_journal(society, entry_names, journal_type, posting_date, narration, b
 	for name in entry_names:
 		frappe.db.set_value("Customer Ledger Entry", name, "gl_journal", j.name, update_modified=False)
 	return j
+
+
+def deposit_journal(sd, reverse=False):
+	"""A deposit received or paid back moves cash or bank against the deposits held (a liability); the customer's account is untouched
+	(FS-MST-10). `reverse` makes the opposite journal when the deposit document is cancelled. Raises MissingAccount (nothing saved)."""
+	soc = settings(sd.society)
+	held = need(soc.deposits, _("security deposits held (Society {0} → Security Deposits Held Account)").format(sd.society))
+	money = need(soc.payments.get(sd.mode), _("{0} payments (Society {1} → Accounting)").format(_(sd.mode or ""), sd.society))
+	amount = flt(sd.amount)
+	pairs = [(money, amount, 0), (held, 0, amount)] if sd.deposit_type == "Received" else [(held, amount, 0), (money, 0, amount)]
+	if reverse:
+		pairs = [(a, cr, dr) for a, dr, cr in pairs]
+	narration = (_("Cancelled: ") if reverse else "") + _("Security deposit {0} {1} ({2})").format(_(sd.deposit_type).lower(), sd.connection, sd.name)
+	lines = [{"account": a, "account_name": frappe.db.get_value("Ledger Account", a, "account_name"), "debit": dr, "credit": cr,
+	          "narration": narration[:140]} for a, dr, cr in pairs]
+	j = frappe.get_doc({
+		"doctype": "GL Journal", "journal_type": "Security Deposit", "society": sd.society, "posting_date": frappe.utils.nowdate() if reverse else sd.posting_date,
+		"narration": narration, "entry_count": 1, "lines": lines, "total_debit": amount, "total_credit": amount, "receivables_change": 0,
+		"journal_title": f"{sd.society} Security Deposit {formatdate(sd.posting_date)} {sd.name}" + (" cancelled" if reverse else ""),
+	})
+	j.flags.from_gl = True
+	j.insert(ignore_permissions=True)
+	return j
+
+
+def pending_deposits(society):
+	return frappe.get_all("Security Deposit", filters={"society": society, "docstatus": 1, "deposit_type": ["in", ["Received", "Refunded"]],
+	                                                   "gl_journal": ["is", "not set"]}, pluck="name")
 
 
 def make_bill_run_journal(run_name):
@@ -201,6 +233,14 @@ def make_journals_for(society, up_to=None):
 		j = make_bill_run_journal(run)
 		if j:
 			made.append(j.name)
+	for name in pending_deposits(society):  # deposits whose journal waited for an account mapping
+		sd = frappe.get_doc("Security Deposit", name)
+		try:
+			j = deposit_journal(sd)
+		except MissingAccount:
+			continue  # still waits; the reconciliation is not affected (deposits don't touch receivables)
+		sd.db_set("gl_journal", j.name, update_modified=False)
+		made.append(j.name)
 	up_to = getdate(up_to or nowdate())
 	rows = frappe.db.sql(
 		"""select distinct date(posted_on) from `tabCustomer Ledger Entry`

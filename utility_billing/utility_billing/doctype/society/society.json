@@ -127,6 +127,7 @@
   "min_down_payment_percent",
   "cb_arr",
   "write_off_account",
+  "deposit_liability_account",
   "approval_levels"
  ],
  "fields": [
@@ -826,13 +827,20 @@
    "options": "By days\nOff",
    "default": "By days",
    "description": "By days: the units are split between the old and the new tariff by the days of the reading period under each, and fixed charges follow the days (FS-CFG-05, FS-BIL-02)."
+  },
+  {
+   "fieldname": "deposit_liability_account",
+   "fieldtype": "Link",
+   "label": "Security Deposits Held (Liability) Account",
+   "options": "Ledger Account",
+   "description": "Where security deposits are held as a liability (FS-MST-10)."
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 22:00:00.000000",
+ "modified": "2026-11-14 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

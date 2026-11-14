@@ -31,7 +31,9 @@
   "security_deposit",
   "meters_section",
   "current_meter",
-  "meters"
+  "meters",
+  "flags_section",
+  "connection_flags"
  ],
  "fields": [
   {
@@ -163,7 +165,9 @@
   {
    "fieldname": "security_deposit",
    "fieldtype": "Currency",
-   "label": "Security Deposit"
+   "label": "Security Deposit",
+   "read_only": 1,
+   "description": "The balance of the Security Deposit entries; use Security Deposit to receive, refund or offset it."
   },
   {
    "fieldname": "meters_section",
@@ -188,12 +192,25 @@
    "fieldtype": "Date",
    "label": "Disconnected On",
    "description": "Used to bill the fixed charges for part of the last month."
+  },
+  {
+   "fieldname": "flags_section",
+   "fieldtype": "Section Break",
+   "label": "Flags",
+   "collapsible": 1,
+   "description": "Special cases: staff, exempt, under dispute, court case, bill on hold. Each flag can hold the bill, the surcharge or recovery (FS-MST-14)."
+  },
+  {
+   "fieldname": "connection_flags",
+   "fieldtype": "Table",
+   "label": "Flags",
+   "options": "Connection Flag Row"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 18:00:00.000000",
+ "modified": "2026-11-14 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection",

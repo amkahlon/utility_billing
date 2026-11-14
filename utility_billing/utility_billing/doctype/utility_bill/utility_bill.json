@@ -331,7 +331,7 @@
    "fieldtype": "Select",
    "label": "Surcharge",
    "no_copy": 1,
-   "options": "\nNot due yet\nPosted\nNot charged (paid in time)\nReversed (paid in time)",
+   "options": "\nNot due yet\nPosted\nNot charged (paid in time)\nReversed (paid in time)\nNot charged (flagged)",
    "read_only": 1
   },
   {
@@ -484,7 +484,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-14 22:00:00.000000",
+ "modified": "2026-11-14 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Bill",

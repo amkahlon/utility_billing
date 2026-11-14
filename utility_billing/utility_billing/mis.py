@@ -1192,6 +1192,62 @@ def period_close_status(f):
 	                    col("Failed Checks", "failed", "Int", 110), col("Reopened", "reopened", "Int", 90)], "data": data, "message": msg}
 
 
+# ================================================================ 17g. consumers (increment 17; FS-MST-10, 15)
+@report("consumer_statement", "Consumer Statement (All Accounts)", BILLING + ["Accounts Officer", "Cashier", "Recovery Officer"],
+        [dict(fieldname="consumer", label="Consumer", fieldtype="Link", options="Consumer", reqd=1),
+         dict(fieldname="from_date", label="From", fieldtype="Date"),
+         dict(fieldname="to_date", label="To", fieldtype="Date", default="@today")],
+        "One statement over every account of a consumer: each entry by date with the account's balance after it, and the total owed.",
+        ref_doctype="Customer Ledger Entry")
+def consumer_statement(f):
+	from utility_billing.utility_billing import consumer360  # noqa: PLC0415
+
+	if not f.get("consumer"):
+		return {"columns": [col("Date", "posting_date", "Date", 100)], "data": [], "message": _("Choose a consumer.")}
+	rows = consumer360.combined_statement(f.consumer, f.get("from_date"), f.get("to_date"))
+	last = {}
+	for r in rows:
+		last[r["connection"]] = flt(r["balance"])
+	data = [{"posting_date": r["posting_date"], "connection": r["connection"], "entry": _(r["entry_type"]), "voucher": r["voucher_no"],
+	         "remarks": r["remarks"], "amount": flt(r["amount"]), "balance": flt(r["balance"])} for r in rows]
+	summary = [{"value": len(last), "label": _("Accounts"), "datatype": "Int"},
+	           {"value": round(sum(last.values()), 2), "label": _("Owed on all accounts"), "datatype": "Currency", "indicator": "Red" if sum(last.values()) > 0 else "Green"}]
+	return {"columns": [col("Date", "posting_date", "Date", 100), col("Account", "connection", "Link", 130, "Connection"), col("Entry", "entry", width=150),
+	                    col("Document", "voucher", width=150), col("Remarks", "remarks", width=200), col("Amount", "amount", "Currency", 120),
+	                    col("Account Balance", "balance", "Currency", 130)],
+	        "data": data, "summary": summary,
+	        "message": _("Each account keeps its own balance; Owed on all accounts adds the last balance of each.")}
+
+
+@report("deposits_held", "Security Deposits Held", FINANCE + ["Billing Officer"],
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="as_of", label="As Of", fieldtype="Date", default="@today")],
+        "Security deposit held per account (received less refunded and offset), with what the account owes, for the liability and for closures.",
+        ref_doctype="Security Deposit")
+def deposits_held(f):
+	s = society_of(f)
+	as_of = getdate(f.get("as_of") or nowdate())
+	rows = sql("""select d.connection, max(d.consumer_name) consumer_name,
+	                     sum(case when d.deposit_type = 'Received' then d.amount else 0 end) received,
+	                     sum(case when d.deposit_type = 'Refunded' then d.amount else 0 end) refunded,
+	                     sum(case when d.deposit_type = 'Offset Against Arrears' then d.amount else 0 end) offset_amount,
+	                     max(d.posting_date) last_date
+	              from `tabSecurity Deposit` d where d.society = %(s)s and d.docstatus = 1 and d.posting_date <= %(d)s group by d.connection order by d.connection""",
+	           {"s": s, "d": as_of})
+	data = []
+	for r in rows:
+		held = round(flt(r.received) - flt(r.refunded) - flt(r.offset_amount), 2)
+		owed = flt(sql("select sum(amount) v from `tabCustomer Ledger Entry` where connection = %(c)s and posting_date <= %(d)s", {"c": r.connection, "d": as_of})[0].v)
+		data.append({"connection": r.connection, "consumer_name": r.consumer_name, "received": flt(r.received), "refunded": flt(r.refunded),
+		             "offset": flt(r.offset_amount), "held": held, "owed": round(owed, 2), "last_date": r.last_date})
+	if data:
+		data.append(total_row("connection", _("Total"), data, ("received", "refunded", "offset", "held", "owed")))
+	return {"columns": [col("Account", "connection", "Link", 130, "Connection"), col("Consumer", "consumer_name", width=170), col("Received", "received", "Currency", 110),
+	                    col("Refunded", "refunded", "Currency", 110), col("Offset", "offset", "Currency", 110), col("Held", "held", "Currency", 110),
+	                    col("Account Owes", "owed", "Currency", 120), col("Last Movement", "last_date", "Date", 110)], "data": data,
+	        "message": _("Held is the society's liability to the consumers; it should agree with the Security Deposits Held account in the journals.")}
+
+
 # ================================================================ 18. credit balances (RPT-26)
 @report("credit_balances", "Credit Balances and Advance Payments", RECOVERY, AGE_FILTERS[:1] + AGE_FILTERS[2:],
         "Accounts holding credit: money paid in advance or in excess.", ref_doctype="Customer Ledger Entry")

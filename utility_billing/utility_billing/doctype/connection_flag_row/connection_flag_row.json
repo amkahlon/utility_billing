@@ -1,0 +1,58 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 23:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "flag",
+  "from_date",
+  "to_date",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "flag",
+   "fieldtype": "Link",
+   "label": "Flag",
+   "options": "Connection Flag Type",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To",
+   "in_list_view": 1,
+   "columns": 2,
+   "description": "Empty: until it is removed."
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Data",
+   "label": "Why",
+   "in_list_view": 1,
+   "columns": 3
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 23:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Connection Flag Row",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

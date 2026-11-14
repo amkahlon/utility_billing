@@ -12,7 +12,7 @@ from frappe import _
 from frappe.utils import add_days, cint, flt, getdate, now_datetime, nowdate
 
 from utility_billing.utility_billing import account_engine as engine
-from utility_billing.utility_billing import periods
+from utility_billing.utility_billing import flags, periods
 
 FIELDS = {"current": "current_balance", "arrears": "arrears_balance", "surcharge": "surcharge_balance",
           "fees": "fees_balance", "credit": "credit_balance"}
@@ -180,6 +180,9 @@ def apply_surcharges(as_of=None, society=None):
 			continue
 		if frappe.db.exists("Bill Dispute", {"bill": bill.name, "status": "Open"}):
 			continue  # the surcharge is held while the bill is in dispute (FS-WF-10)
+		if flags.effect(bill.connection, flags.NO_SURCHARGE, bill.due_date, deadline):  # staff, exempt, court case (FS-MST-14)
+			bill.db_set("surcharge_status", "Not charged (flagged)", update_modified=False)
+			continue
 		if flt(bill.surcharge_amount) <= 0 or paid_in_time(bill, deadline):
 			bill.db_set("surcharge_status", "Not charged (paid in time)", update_modified=False)
 			continue
@@ -263,6 +266,15 @@ def post_refund(refund):
 		frappe.throw(_("Refund refused: {0}").format(e))
 	return post(refund.connection, "Refund", deltas, "Refund", refund.name, nowdate(),
 	            _("Refund to {0} by {1}").format(refund.payee_name, _(refund.refund_mode)))
+
+
+def post_deposit_offset(sd):
+	"""A security deposit applied to what the account owes, like a payment from the deposit (FS-MST-10)."""
+	lock(sd.connection)
+	before = balances(sd.connection)
+	deltas = engine.payment(before, engine.D(sd.amount), posting_order(sd.society))
+	return post(sd.connection, "Deposit offset", deltas, "Security Deposit", sd.name, sd.posting_date,
+	            _("Security deposit applied to the account"))
 
 
 def post_write_off(wo):

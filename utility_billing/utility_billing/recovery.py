@@ -19,7 +19,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, formatdate, getdate, now_datetime, nowdate
 
-from utility_billing.utility_billing import dashboard, mis, notify
+from utility_billing.utility_billing import dashboard, flags, mis, notify
 from utility_billing.utility_billing import recovery_engine as engine
 
 RUNNERS = ["Recovery Officer", "Billing Manager", "General Manager", "Society Admin"]
@@ -83,6 +83,7 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 	disputed = frappe.db.sql("""select connection, sum(disputed_amount) a from `tabBill Dispute` where society = %s and status = 'Open' group by connection""",
 	                         society, as_dict=True)
 	disputed = {d.connection: flt(d.a) for d in disputed}  # money in dispute is left out of recovery (FS-WF-10)
+	flagged = flags.held(society, flags.HOLD_RECOVERY, as_of)
 	rows = []
 	for r, parts in mis.aging_for(society, as_of, category, block):
 		overdue, oldest = overdue_view(parts)
@@ -98,6 +99,8 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 		hold = engine.on_hold(case.status, case.promise_date, as_of) if case else None
 		if not hold and r.connection in plan_accounts:
 			hold = "Installment plan active"
+		if not hold and r.connection in flagged:
+			hold = _("Flag: {0}").format(flagged[r.connection])  # a flag that holds recovery (FS-MST-14)
 		nxt = None if hold else engine.next_stage(rules.stages, oldest, done)
 		rows.append({
 			"connection": r.connection, "consumer_name": r.consumer_name, "property_no": r.property_no, "block": r.block,
