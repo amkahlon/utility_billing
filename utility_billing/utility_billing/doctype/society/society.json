@@ -128,7 +128,14 @@
   "cb_arr",
   "write_off_account",
   "deposit_liability_account",
-  "approval_levels"
+  "approval_levels",
+  "approvals_section",
+  "remind_after_days",
+  "escalate_after_days",
+  "escalate_to_role",
+  "cb_rules",
+  "disconnection_notice_days",
+  "reconnection_fee_type"
  ],
  "fields": [
   {
@@ -834,13 +841,57 @@
    "label": "Security Deposits Held (Liability) Account",
    "options": "Ledger Account",
    "description": "Where security deposits are held as a liability (FS-MST-10)."
+  },
+  {
+   "fieldname": "approvals_section",
+   "fieldtype": "Section Break",
+   "label": "Waiting approvals and service rules",
+   "collapsible": 1,
+   "description": "Reminders and escalation of items waiting for approval (FS-ACC-07); disconnection notice and reconnection fee (FS-CFG-18)."
+  },
+  {
+   "fieldname": "remind_after_days",
+   "fieldtype": "Int",
+   "label": "Remind the Approver After (days)",
+   "default": "2"
+  },
+  {
+   "fieldname": "escalate_after_days",
+   "fieldtype": "Int",
+   "label": "Escalate After (days)",
+   "default": "5"
+  },
+  {
+   "fieldname": "escalate_to_role",
+   "fieldtype": "Link",
+   "label": "Escalate To",
+   "options": "Role",
+   "default": "Management"
+  },
+  {
+   "fieldname": "cb_rules",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "disconnection_notice_days",
+   "fieldtype": "Int",
+   "label": "Disconnection Notice (days)",
+   "default": "7",
+   "description": "A disconnection takes effect at least this many days after it is requested, except for safety."
+  },
+  {
+   "fieldname": "reconnection_fee_type",
+   "fieldtype": "Link",
+   "label": "Reconnection Fee",
+   "options": "Fee Type",
+   "description": "Charged on a reconnection request when its type has no fee of its own."
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 23:00:00.000000",
+ "modified": "2026-11-15 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

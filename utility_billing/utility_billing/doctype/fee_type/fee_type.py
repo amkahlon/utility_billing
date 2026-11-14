@@ -13,5 +13,5 @@ class FeeType(Document):
 
 	def validate(self):
 		self.amount = flt(self.amount)
-		if self.amount <= 0:
+		if self.amount < 0 or (self.amount == 0 and frappe.utils.cint(self.enabled)):  # a fee not yet in use may wait for its amount
 			frappe.throw(_("Enter the fee amount."))

@@ -54,6 +54,14 @@ class ServiceRequest(Document):
 		for field in NEEDS.get(self.kind, ()):
 			if not self.get(field):
 				frappe.throw(_("Enter {0} for a {1} request.").format(_(self.meta.get_label(field)), _(self.kind).lower()))
+		if self.kind == sr_mod.DISC and self.disconnection_reason != "Safety":  # the notice period, except for safety (FS-CFG-18, WF-22)
+			notice = frappe.utils.cint(frappe.db.get_value("Society", self.society, "disconnection_notice_days"))
+			earliest = frappe.utils.add_days(self.requested_on or frappe.utils.nowdate(), notice)
+			if not self.effective_date:
+				self.effective_date = earliest
+			elif frappe.utils.getdate(self.effective_date) < frappe.utils.getdate(earliest):
+				frappe.throw(_("The society gives {0} days' notice: the disconnection can take effect on {1} at the earliest.").format(
+					notice, frappe.utils.formatdate(earliest)))
 		if self.kind == sr_mod.DETECT:
 			self.assessed_units = round(flt(self.assessed_load_kw) * flt(self.hours_per_day) * flt(self.assessed_days), 2)
 			self.assessed_amount = round(self.assessed_units * flt(self.rate_per_unit), 2)

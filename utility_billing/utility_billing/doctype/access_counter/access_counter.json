@@ -1,0 +1,32 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cash_counter"
+ ],
+ "fields": [
+  {
+   "fieldname": "cash_counter",
+   "fieldtype": "Link",
+   "label": "Cash Counter",
+   "options": "Cash Counter",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 8
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Access Counter",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

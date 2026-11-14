@@ -48,6 +48,9 @@ def run(key, filters=None):
 	spec = REPORTS[key]
 	f = frappe._dict(filters or {})
 	out = spec["fn"](f)
+	from utility_billing.utility_billing import access  # noqa: PLC0415
+
+	access.mask_rows(out["data"])  # CNIC and phone numbers for roles that don't need them (FS-ACC-11)
 	return out["columns"], out["data"], out.get("message"), out.get("chart"), out.get("summary")
 
 
@@ -1338,6 +1341,75 @@ def service_requests(f):
 	                    col("Open", "open", "Int", 80), col("Late", "late", "Int", 80), col("Completed", "completed", "Int", 100),
 	                    col("Rejected or Cancelled", "rejected", "Int", 150), col("Average Days", "avg_days", "Float", 110),
 	                    col("Within Standard %", "within", "Percent", 140)], "data": data}
+
+
+# ================================================================ 17i. access and revenue (increment 19; FS-ACC-01, 09, 12, FS-REC-18)
+def our_doctypes():
+	return frappe.get_all("DocType", filters={"module": "Utility Billing", "istable": 0, "issingle": 0}, pluck="name", order_by="name")
+
+
+@report("users_rights", "Users, Roles and Rights", AUDIT + ["Society Admin"],
+        [dict(fieldname="user", label="User (email)", fieldtype="Data"),  # a Link to User isn't readable by an auditor
+         dict(fieldname="role", label="Role", fieldtype="Select",
+              options="\nSociety Admin\nBilling Manager\nGeneral Manager\nBilling Officer\nMeter Reader\nCashier\nRecovery Officer\nAccounts Officer\nManagement\nBilling Auditor\nSystem Manager"),
+         dict(fieldname="doctype", label="Screen (name)", fieldtype="Data")],
+        "Who can do what: each user, their roles and the societies they work in, and the actions they have on each screen.", ref_doctype="User Access")
+def users_rights(f):
+	from frappe.permissions import get_role_permissions  # noqa: PLC0415
+
+	from utility_billing.utility_billing import security  # noqa: PLC0415
+
+	ours = {"Society Admin", "Billing Manager", "General Manager", "Billing Officer", "Meter Reader", "Cashier", "Recovery Officer",
+	        "Accounts Officer", "Management", "Billing Auditor", "System Manager"}
+	users = frappe.get_all("User", filters={"enabled": 1, "user_type": "System User", "name": ["not in", ["Administrator", "Guest"]],
+	                                        **({"name": f.user} if f.get("user") else {})}, fields=["name", "full_name", "last_login"], order_by="name")
+	doctypes = [f.doctype] if f.get("doctype") else our_doctypes()
+	actions = ("read", "create", "write", "submit", "cancel", "delete", "print", "export")
+	data = []
+	for u in users:
+		roles = sorted(set(frappe.get_roles(u.name)) & ours)
+		if f.get("role") and f.role not in roles:
+			continue
+		if not roles:
+			continue
+		scope = frappe.get_all("User Permission", filters={"user": u.name, "allow": "Society"}, pluck="for_value")
+		for dt in doctypes:
+			perms = get_role_permissions(frappe.get_meta(dt), user=u.name)
+			have = [a for a in actions if perms.get(a)]
+			if not have:
+				continue
+			data.append({"user": u.name, "full_name": u.full_name, "roles": ", ".join(roles), "societies": ", ".join(scope) or _("All"),
+			             "doctype": dt, "rights": ", ".join(_(a.capitalize()) for a in have), "last_login": u.last_login})
+	bad = [s["check"] for s in security.status() if not s["ok"]]
+	msg = _("Sign-in security not yet as recommended: {0}.").format("; ".join(bad)) if bad else _("Sign-in security is as recommended.")
+	return {"columns": [col("User", "user", "Link", 190, "User"), col("Name", "full_name", width=140), col("Roles", "roles", width=220),
+	                    col("Societies", "societies", width=160), col("Screen", "doctype", "Link", 170, "DocType"), col("Can", "rights", width=300),
+	                    col("Last Sign-in", "last_login", "Datetime", 150)], "data": data, "message": msg}
+
+
+@report("revenue_by_charge", "Revenue by Utility and Charge", FINANCE,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="from_date", label="From", fieldtype="Date", default="@month_start"),
+         dict(fieldname="to_date", label="To", fieldtype="Date", default="@today")],
+        "Revenue from the customer subledger by utility and charge: bill lines of bills issued in the period, plus surcharge and fees posted in it.")
+def revenue_by_charge(f):
+	s = society_of(f)
+	a, z = getdate(f.get("from_date") or month_start(nowdate())), getdate(f.get("to_date") or nowdate())
+	rows = sql("""select b.utility, ifnull(nullif(l.charge_group, ''), 'Other') grp, l.label, count(distinct b.name) bills, sum(l.amount) amount
+	              from `tabBill Line` l join `tabUtility Bill` b on b.name = l.parent and l.parenttype = 'Utility Bill'
+	              where b.society = %(s)s and b.docstatus = 1 and b.issue_date between %(a)s and %(z)s group by 1, 2, 3 order by 1, 2, 3""",
+	           {"s": s, "a": a, "z": z})
+	data = [{"utility": r.utility, "group": _(r.grp), "charge": r.label, "bills": r.bills, "amount": flt(r.amount)} for r in rows]
+	for etype, label in (("Surcharge", _("Late payment surcharge")), ("Fee", _("Fees"))):
+		amt = flt(sql("""select sum(amount) v from `tabCustomer Ledger Entry` where society = %(s)s and entry_type = %(t)s
+		                and ifnull(reversed_by, '') = '' and posting_date between %(a)s and %(z)s""", {"s": s, "t": etype, "a": a, "z": z})[0].v)
+		if amt:
+			data.append({"utility": _("All"), "group": _("Account charges"), "charge": label, "bills": None, "amount": amt})
+	if data:
+		data.append(total_row("utility", _("Total"), data, ("amount",)))
+	return {"columns": [col("Utility", "utility", width=120), col("Group", "group", width=140), col("Charge", "charge", width=220),
+	                    col("Bills", "bills", "Int", 80), col("Amount", "amount", "Currency", 140)], "data": data,
+	        "message": _("Bill lines of the bills issued in the period (taxes included as their own lines), and the surcharge and fees posted in it, not reversed.")}
 
 
 # ================================================================ 18. credit balances (RPT-26)

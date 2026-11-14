@@ -108,8 +108,9 @@ def demand(sr):
 		                       "expires_on": sr.expires_on if sr.kind == TEMP else None})
 		conn.insert(ignore_permissions=True)
 		values["connection"] = sr.connection = conn.name
-	if t.fee_type and sr.connection:
-		fee = frappe.get_doc({"doctype": "Fee Charge", "connection": sr.connection, "fee_type": t.fee_type, "source_type": "Service Request",
+	fee_type = t.fee_type or (frappe.db.get_value("Society", sr.society, "reconnection_fee_type") if sr.kind == RECON else None)  # FS-CFG-18
+	if fee_type and sr.connection:
+		fee = frappe.get_doc({"doctype": "Fee Charge", "connection": sr.connection, "fee_type": fee_type, "source_type": "Service Request",
 		                      "source_name": sr.name, "remarks": _("{0} ({1})").format(t.type_name, sr.name)})
 		fee.flags.ignore_permissions = True
 		fee.insert()
@@ -161,6 +162,8 @@ def check_step(sr, step, values):
 		if sr.security_deposit and frappe.db.get_value("Security Deposit", sr.security_deposit, "docstatus") != 1:
 			frappe.throw(_("The security deposit {0} is not received and approved yet.").format(sr.security_deposit))
 	elif step.step_kind == "Field":
+		if sr.kind == DISC and sr.effective_date and getdate(sr.effective_date) > getdate(nowdate()):
+			frappe.throw(_("The notice period runs until {0}; the supply can't be cut before then.").format(frappe.utils.formatdate(sr.effective_date)))
 		lat, lng = values.get("latitude"), values.get("longitude")
 		if (lat and not lng) or (lng and not lat):
 			frappe.throw(_("Enter both latitude and longitude, or neither."))

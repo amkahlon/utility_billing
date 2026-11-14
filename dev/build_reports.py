@@ -105,6 +105,7 @@ def build_reports():
 
 
 GROUPS = [
+	("Approvals", [("Page", "ub-approvals", "Approval Inbox"), ("DocType", "Approval Delegation"), ("DocType", "User Access")]),
 	("Consumers", [("Page", "ub-consumer-360", "Consumer 360"), ("DocType", "Consumer"), ("DocType", "Property"), ("DocType", "Connection"),
 	               ("DocType", "Security Deposit")]),
 	("Meter Readings", [("DocType", "Reading Cycle"), ("DocType", "Meter Reading"), ("DocType", "Reading Route")]),

@@ -1726,7 +1726,10 @@ def t_network_and_requests(d: Desk):
 	nd = bo.save_doc({"doctype": "Service Request", "request_type": f"{soc}-NODUES", "connection": conn})
 	expect_error(lambda: bo.call(f"{P}.servicereq.advance", request=nd["name"], step="1"), "owes")
 	eq(bo.get("Service Request", nd["name"])["status"], "Open", "a refused step changes nothing")
-	disc = bo.save_doc({"doctype": "Service Request", "request_type": f"{soc}-DISC", "connection": conn, "disconnection_reason": "Defaulter"})
+	expect_error(lambda: bo.save_doc({"doctype": "Service Request", "request_type": f"{soc}-DISC", "connection": conn, "disconnection_reason": "Defaulter",
+	                                  "requested_on": "2026-11-01", "effective_date": "2026-11-02"}), "notice")
+	disc = bo.save_doc({"doctype": "Service Request", "request_type": f"{soc}-DISC", "connection": conn, "disconnection_reason": "Defaulter",
+	                    "requested_on": "2026-10-20", "effective_date": "2026-11-01"})
 	expect_error(lambda: bo.call(f"{P}.servicereq.advance", request=disc["name"], step="1"))  # approved by a Billing Manager
 	bm.call(f"{P}.servicereq.advance", request=disc["name"], step="1", remarks="Three notices unanswered")
 	expect_error(lambda: bm.call(f"{P}.servicereq.advance", request=disc["name"], step="2"))  # the field step is a Recovery Officer's
@@ -1736,6 +1739,52 @@ def t_network_and_requests(d: Desk):
 	eq(anon.call(f"{P}.servicereq.verify_certificate", code="NOPE1234"), {"valid": False}, "certificate check is public")
 	rep = rows_of(run_report(bm, "Service Requests and Service Standards", society=soc, from_date="2026-01-01", to_date="2030-12-31"))
 	eq(rep[-1]["completed"], 2, "service standards report")
+
+
+@case("QA-75", "FS-ACC-01/06/07/09/11/12, FS-CFG-27: user access, approval inbox, delegation, masking, rights, security status, society template")
+def t_access(d: Desk):
+	P = "utility_billing.utility_billing"
+	bo, bm, gm, aud = USERS["bo"], USERS["bm"], USERS["gm"], USERS["auditor"]
+	conn = S["conn"]["name"]
+	consumer = bo.get("Connection", conn)["consumer"]
+
+	# an auditor limited to this society sees only it; CNIC and phone are masked for them
+	ua = d.save_doc({"doctype": "User Access", "user": EMAIL["auditor"], "societies": [{"society": S["society"]}]})
+	try:
+		socs = aud.s.get(f"{URL}/api/resource/Society", params={"limit_page_length": 0}).json()["data"]
+		eq([x["name"] for x in socs], [S["society"]], "auditor sees one society")
+		v = aud.call(f"{P}.consumer360.view", consumer=consumer)
+		if v["consumer"]["mobile_no"] and "*" not in v["consumer"]["mobile_no"]:
+			raise AssertionError(f"mobile number not masked for the auditor: {v['consumer']['mobile_no']}")
+	finally:
+		d.s.delete(f"{URL}/api/resource/User Access/{ua['name']}")
+
+	# the approval inbox approves in bulk; the maker doesn't see their own item
+	adj = bo.save_doc({"doctype": "Account Adjustment", "note_type": "Debit Note", "connection": conn, "bucket": "Arrears", "amount": "250",
+	                   "reason_code": "BILL-ERROR", "remarks": "Inbox test adjustment"})
+	bo.workflow(adj, "Submit for Approval")
+	eq(adj["name"] in {r["name"] for r in gm.call(f"{P}.access.inbox")}, True, "in the inbox")
+	out = gm.call(f"{P}.access.bulk", items=json.dumps([{"doctype": "Account Adjustment", "name": adj["name"]}]), action="Approve")
+	eq((out["done"], out["failed"]), ([adj["name"]], []), "bulk approve")
+
+	# a delegation lends the General Manager role to the Billing Manager, and cancelling takes it back
+	dlg = gm.save_doc({"doctype": "Approval Delegation", "delegator": EMAIL["gm"], "delegate": EMAIL["bm"], "from_date": __import__("datetime").date.today().isoformat(),
+	                   "to_date": "2030-01-01", "reason": "Leave"})
+	eq(gm.get("Approval Delegation", dlg["name"])["status"], "Active", "delegation active")
+	gm.call(f"{P}.access.cancel_delegation", name=dlg["name"])
+	eq(gm.get("Approval Delegation", dlg["name"])["status"], "Cancelled", "delegation cancelled")
+
+	# security status is visible; only a System Manager applies the policy (not applied here: it would switch on two-factor sign-in)
+	if not gm.call(f"{P}.security.get_status"):
+		raise AssertionError("no security status")
+	expect_error(lambda: gm.call(f"{P}.security.apply_policy"))
+	rights = rows_of(run_report(aud, "Users, Roles and Rights", user=EMAIL["bo"], doctype="Consumer"))
+	eq("Create" in rights[0]["rights"], True, "rights report")
+
+	# a new society from the template
+	made = d.call(f"{P}.templates.new_society", society_name=f"Template Society {RUN}", short_name=f"TP{RUN}")
+	eq((made["society"], len(made["to_do"])), (f"TP{RUN}", 5), "society from template")
+	expect_error(lambda: bo.call(f"{P}.templates.new_society", society_name="No", short_name=f"NO{RUN}"))
 
 
 def _notice_pdf(desk, run):

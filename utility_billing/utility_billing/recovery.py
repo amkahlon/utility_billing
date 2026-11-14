@@ -19,7 +19,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, formatdate, getdate, now_datetime, nowdate
 
-from utility_billing.utility_billing import dashboard, flags, mis, notify
+from utility_billing.utility_billing import access, dashboard, flags, mis, notify
 from utility_billing.utility_billing import recovery_engine as engine
 
 RUNNERS = ["Recovery Officer", "Billing Manager", "General Manager", "Society Admin"]
@@ -84,11 +84,15 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 	                         society, as_dict=True)
 	disputed = {d.connection: flt(d.a) for d in disputed}  # money in dispute is left out of recovery (FS-WF-10)
 	flagged = flags.held(society, flags.HOLD_RECOVERY, as_of)
+	see = access.sees_personal()
+	blocks = access.blocks_of(society=society)  # a recovery officer limited to some blocks sees only those (FS-ACC-01)
 	rows = []
 	for r, parts in mis.aging_for(society, as_of, category, block):
 		overdue, oldest = overdue_view(parts)
 		r.balance = flt(r.balance) - disputed.get(r.connection, 0)
 		if overdue <= 0 or r.balance <= 0:
+			continue
+		if blocks and (r.block or "") not in blocks:
 			continue
 		if not include_all and flt(r.balance) < rules.min_amount:
 			continue
@@ -104,7 +108,7 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 		nxt = None if hold else engine.next_stage(rules.stages, oldest, done)
 		rows.append({
 			"connection": r.connection, "consumer_name": r.consumer_name, "property_no": r.property_no, "block": r.block,
-			"category": r.category, "mobile_no": r.mobile_no, "owed": flt(r.balance), "overdue": overdue, "oldest": oldest,
+			"category": r.category, "mobile_no": r.mobile_no if see else access.mask(r.mobile_no), "owed": flt(r.balance), "overdue": overdue, "oldest": oldest,
 			"defaulter": engine.is_defaulter(r.balance, oldest, rules.min_amount, rules.min_days),
 			"last_stage": next((s for s in reversed(engine.STAGES) if s in done), None), "stages_done": done,
 			"next_stage": nxt[0] if nxt else None, "next_channel": nxt[1] if nxt else None, "hold": hold,

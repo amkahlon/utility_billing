@@ -124,6 +124,8 @@ scheduler_events = {
 		"utility_billing.utility_billing.notify.daily",
 		# Installments paid or missed (FS-WF-05)
 		"utility_billing.utility_billing.plans.daily",
+		# Reminders and escalation of waiting approvals; delegations start and end (FS-ACC-07)
+		"utility_billing.utility_billing.access.daily",
 	],
 }
 

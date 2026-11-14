@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, getdate, nowdate
 
-from utility_billing.utility_billing import account, flags
+from utility_billing.utility_billing import access, account, flags
 
 STAFF = {"System Manager", "Society Admin", "Billing Manager", "General Manager", "Billing Officer", "Cashier", "Recovery Officer",
          "Accounts Officer", "Management", "Billing Auditor"}
@@ -31,7 +31,7 @@ def search(text: str, limit: int = 20):
 		where c.consumer_name like %(l)s or c.id_number like %(l)s or c.mobile_no like %(l)s or c.phone like %(l)s
 		   or k.reference_no like %(l)s or k.current_meter like %(l)s or p.property_no like %(l)s
 		order by c.consumer_name limit %(n)s""", {"l": like, "n": int(limit)}, as_dict=True)
-	return rows
+	return access.mask_rows(rows)
 
 
 def _connections(consumer):
@@ -79,6 +79,8 @@ def view(consumer: str):
 			filters["plan_status"] = "Active"
 		for n in frappe.get_all(dt, filters=filters, pluck="name", limit=10):
 			open_items.append({"doctype": dt, "name": n, "label": _(label)})
+	if not access.sees_personal():
+		c.id_number, c.mobile_no = access.mask(c.id_number), access.mask(c.mobile_no)
 	return {
 		"consumer": {"name": c.name, "consumer_name": c.consumer_name, "consumer_type": c.consumer_type, "id_type": c.id_type, "id_number": c.id_number,
 		             "mobile_no": c.mobile_no, "email": c.email, "address": c.address, "preferred_language": c.preferred_language,
