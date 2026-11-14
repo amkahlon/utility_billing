@@ -1,0 +1,60 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "step_name",
+  "step_kind",
+  "role",
+  "days"
+ ],
+ "fields": [
+  {
+   "fieldname": "step_name",
+   "fieldtype": "Data",
+   "label": "Step",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "step_kind",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "Office\nDocument check\nApproval\nPayment\nField",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2,
+   "description": "Document check: every required document attached. Approval: by another user than the one who raised the request. Payment: the demand (fee and deposit) paid. Field: a visit with reading, photo and location."
+  },
+  {
+   "fieldname": "role",
+   "fieldtype": "Link",
+   "label": "Done By",
+   "options": "Role",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "days",
+   "fieldtype": "Int",
+   "label": "Days Allowed",
+   "in_list_view": 1,
+   "columns": 2
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Service Step Template",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

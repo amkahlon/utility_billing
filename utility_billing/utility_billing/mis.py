@@ -1248,6 +1248,98 @@ def deposits_held(f):
 	        "message": _("Held is the society's liability to the consumers; it should agree with the Security Deposits Held account in the journals.")}
 
 
+# ================================================================ 17h. network (increment 18; FS-MST-25, 26, 27)
+@report("common_area_allocation", "Common Area Costs and Sharing", FINANCE + ["Billing Officer"],
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="month", label="Month", fieldtype="Date", default="@month_start")],
+        "Each common-area facility: what its meter used and cost in the month, how the cost is shared and the share per account.",
+        ref_doctype="Common Area Facility")
+def common_area_allocation(f):
+	from utility_billing.utility_billing import network  # noqa: PLC0415
+
+	s = society_of(f)
+	rows = network.allocation(s, f.get("month") or nowdate())
+	data = [{**r, "kind": _(r["kind"]), "method": _(r["method"])} for r in rows]
+	if data:
+		data.append(total_row("facility_name", _("Total"), data, ("units", "amount")))
+	return {"columns": [col("Facility", "facility_name", width=170), col("Kind", "kind", width=110), col("Units", "units", "Float", 90),
+	                    col("Cost", "amount", "Currency", 110), col("Shared", "method", width=190), col("Accounts", "accounts", "Int", 90),
+	                    col("Per Account (equal share)", "per_account", "Currency", 170), col("Per Unit of Basis", "rate", "Float", 130)],
+	        "data": data,
+	        "message": _("Cost is the facility's own bill for the month. By area and by units: an account's share is Per Unit of Basis × its area or units. Bills don't carry these shares yet.")}
+
+
+@report("asset_register", "Asset Register and Maintenance", BILLING + ["Society Admin"],
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="asset_type", label="Kind", fieldtype="Select",
+              options="\nMeter\nTransformer\nFeeder\nGrid Station\nLine Section\nPole\nCable\nPump\nStreetlight\nGenerator\nOther"),
+         dict(fieldname="status", label="Status", fieldtype="Select", options="\nIn store\nIn service\nUnder repair\nRetired")],
+        "Every asset with its make, dates, warranty, status, last maintenance and when the next is due.", ref_doctype="Network Asset")
+def asset_register(f):
+	from utility_billing.utility_billing import network  # noqa: PLC0415
+
+	s = society_of(f)
+	filters = {"society": s}
+	for k in ("asset_type", "status"):
+		if f.get(k):
+			filters[k] = f.get(k)
+	today = getdate(nowdate())
+	data = []
+	for a in frappe.get_all("Network Asset", filters=filters, fields=["name", "asset_name", "asset_type", "status", "make", "model", "serial_no",
+	                                                                   "installation_date", "warranty_until", "next_maintenance", "purchase_cost"],
+	                        order_by="asset_type, asset_name"):
+		last = frappe.db.get_value("Network Asset Maintenance", {"parent": a.name}, "maintenance_date", order_by="maintenance_date desc")
+		data.append({**a, "last_maintenance": last, "flag": network.maintenance_status(a.next_maintenance, a.warranty_until, today)})
+	link = f"/api/method/utility_billing.utility_billing.network.geojson?society={quote(s)}"
+	return {"columns": [col("Asset", "name", "Link", 110, "Network Asset"), col("Name", "asset_name", width=160), col("Kind", "asset_type", width=110),
+	                    col("Status", "status", width=100), col("Make / Model", "make", width=130), col("Serial No", "serial_no", width=120),
+	                    col("Installed", "installation_date", "Date", 100), col("Warranty Until", "warranty_until", "Date", 110),
+	                    col("Last Maintenance", "last_maintenance", "Date", 120), col("Next Due", "next_maintenance", "Date", 100),
+	                    col("Attention", "flag", width=170), col("Cost", "purchase_cost", "Currency", 110)],
+	        "data": data,
+	        "message": _("The society's network on a map: download {0} and open it in a GIS or Google My Maps.").format(f'<a href="{link}">GeoJSON</a>')}
+
+
+@report("service_requests", "Service Requests and Service Standards", BILLING + ["Recovery Officer", "Society Admin"],
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="from_date", label="Requested From", fieldtype="Date", default="@month_start"),
+         dict(fieldname="to_date", label="Requested To", fieldtype="Date", default="@today")],
+        "Requests by type: received, open, late, completed, rejected, and the average days to complete against the service standard.",
+        ref_doctype="Service Request")
+def service_requests(f):
+	s = society_of(f)
+	a, z = getdate(f.get("from_date") or month_start(nowdate())), getdate(f.get("to_date") or nowdate())
+	today = getdate(nowdate())
+	acc = OrderedDict()
+	for r in sql("""select r.request_type, t.type_name, t.days_allowed, r.status, r.requested_on, r.due_by, r.completed_on
+	               from `tabService Request` r join `tabService Request Type` t on t.name = r.request_type
+	               where r.society = %(s)s and r.requested_on between %(a)s and %(z)s order by t.type_name""", {"s": s, "a": a, "z": z}):
+		row = acc.setdefault(r.request_type, {"type_name": r.type_name, "standard": cint(r.days_allowed), "received": 0, "open": 0, "late": 0,
+		                                      "completed": 0, "rejected": 0, "days": []})
+		row["received"] += 1
+		if r.status in ("Open", "In Progress"):
+			row["open"] += 1
+			if r.due_by and getdate(r.due_by) < today:
+				row["late"] += 1
+		elif r.status == "Completed":
+			row["completed"] += 1
+			row["days"].append((getdate(r.completed_on) - getdate(r.requested_on)).days)
+		elif r.status in ("Rejected", "Cancelled"):
+			row["rejected"] += 1
+	data = []
+	for row in acc.values():
+		days = row.pop("days")
+		row["avg_days"] = round(sum(days) / len(days), 1) if days else None
+		row["within"] = pct(sum(1 for d in days if not row["standard"] or d <= row["standard"]), len(days)) if days else None
+		data.append(row)
+	if data:
+		data.append(total_row("type_name", _("Total"), data, ("received", "open", "late", "completed", "rejected")))
+	return {"columns": [col("Request", "type_name", width=230), col("Standard (days)", "standard", "Int", 120), col("Received", "received", "Int", 90),
+	                    col("Open", "open", "Int", 80), col("Late", "late", "Int", 80), col("Completed", "completed", "Int", 100),
+	                    col("Rejected or Cancelled", "rejected", "Int", 150), col("Average Days", "avg_days", "Float", 110),
+	                    col("Within Standard %", "within", "Percent", 140)], "data": data}
+
+
 # ================================================================ 18. credit balances (RPT-26)
 @report("credit_balances", "Credit Balances and Advance Payments", RECOVERY, AGE_FILTERS[:1] + AGE_FILTERS[2:],
         "Accounts holding credit: money paid in advance or in excess.", ref_doctype="Customer Ledger Entry")
@@ -1348,14 +1440,21 @@ def line_losses(f):
 		data.append({"name": _("Whole society: bulk meter against all consumers"), "connections": sum(r["connections"] for r in rows),
 		             "input_kwh": whole["input_kwh"], "billed_kwh": whole["billed_kwh"], "loss_kwh": whole["loss_kwh"],
 		             "loss_pct": whole["loss_pct"], "status": _(whole["status"])})
+	# the engineers' estimate of technical loss on each feeder, from its line sections weighted by length (FS-MST-24)
+	est = {}
+	if by == "Feeder":
+		for e in sql("""select feeder, sum(length_km * estimated_loss_percent) / nullif(sum(length_km), 0) pct from `tabLine Section`
+		               where society = %(s)s and enabled = 1 group by feeder""", {"s": s}):
+			est[e.feeder] = round(flt(e.pct), 2) if e.pct is not None else None
 	data += [{"name": r["name"], "connections": r["connections"], "input_kwh": r["input_kwh"] or None, "billed_kwh": r["billed_kwh"],
-	          "loss_kwh": r["loss_kwh"], "loss_pct": r["loss_pct"], "status": _(r["status"])} for r in rows]
+	          "loss_kwh": r["loss_kwh"], "loss_pct": r["loss_pct"], "status": _(r["status"]), "technical_pct": est.get(r["item"])} for r in rows]
 	message = _(LEVEL_NOTE)
 	if not whole:
 		message = _("No DISCO bill or feeder input units are recorded for this month yet (Utility Billing → DISCO Bill). ") + message
 	return {"columns": [col(by, "name", width=240), col("Connections", "connections", "Int", 100), col("Input kWh", "input_kwh", "Float", 120),
 	                    col("Billed kWh", "billed_kwh", "Float", 120), col("Loss kWh", "loss_kwh", "Float", 110),
-	                    col("Loss %", "loss_pct", "Percent", 90), col("Status", "status", width=120)], "data": data, "message": message}
+	                    col("Loss %", "loss_pct", "Percent", 90), col("Status", "status", width=120)] +
+	                   ([col("Estimated Technical Loss %", "technical_pct", "Percent", 190)] if by == "Feeder" else []), "data": data, "message": message}
 
 
 @report("loss_ranking", "Highest-Loss Feeders and Loss Trend", LOSS_ROLES,

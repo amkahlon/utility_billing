@@ -113,6 +113,7 @@ GROUPS = [
 	              ("DocType", "Account Adjustment"), ("DocType", "Refund"), ("DocType", "Settlement File"),
 	              ("DocType", "Suspense Payment"), ("DocType", "Customer Ledger Entry")]),
 	("Messages", [("DocType", "Message Log"), ("DocType", "Broadcast"), ("DocType", "Notification Template"), ("DocType", "Messaging Provider")]),
+	("Service Requests", [("DocType", "Service Request"), ("DocType", "Service Request Type")]),
 	("Corrections", [("DocType", "Bill Revision"), ("DocType", "Due Date Extension"), ("DocType", "Bill Dispute"), ("DocType", "Bulk Adjustment"),
 	               ("DocType", "Installment Plan"), ("DocType", "Write Off")]),
 	("Recovery", [("Page", "ub-recovery", "Defaulters and Recovery"), ("DocType", "Recovery Case"), ("DocType", "Recovery Run"),
@@ -120,7 +121,8 @@ GROUPS = [
 	("Period Control", [("DocType", "Billing Period"), ("DocType", "Year End Close"), ("DocType", "Run Snapshot")]),
 	("Accounting", [("DocType", "GL Journal"), ("DocType", "Receivables Reconciliation"), ("DocType", "Ledger Account"),
 	                ("DocType", "Journal Export Layout")]),
-	("Meters and Network", [("DocType", "Meter"), ("DocType", "Transformer"), ("DocType", "Feeder"), ("DocType", "DISCO Bill")]),
+	("Meters and Network", [("DocType", "Meter"), ("DocType", "Grid Station"), ("DocType", "Feeder"), ("DocType", "Line Section"),
+	                        ("DocType", "Transformer"), ("DocType", "Common Area Facility"), ("DocType", "Network Asset"), ("DocType", "DISCO Bill")]),
 	("Reports", []),  # filled from the registry
 	("Setup", [("DocType", "Society"), ("DocType", "Tariff"), ("DocType", "Charge Type"), ("DocType", "Tax"), ("DocType", "Consumer Category"),
 	           ("DocType", "Fee Type"), ("DocType", "Cash Counter"), ("DocType", "Reason Code"),

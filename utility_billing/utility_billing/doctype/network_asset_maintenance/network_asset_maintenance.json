@@ -1,0 +1,72 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "maintenance_date",
+  "kind",
+  "done_by",
+  "cost",
+  "notes",
+  "next_due"
+ ],
+ "fields": [
+  {
+   "fieldname": "maintenance_date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "Inspection\nPreventive\nRepair\nReplacement\nCalibration",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "done_by",
+   "fieldtype": "Data",
+   "label": "Done By",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "cost",
+   "fieldtype": "Currency",
+   "label": "Cost",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Data",
+   "label": "What Was Done",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "next_due",
+   "fieldtype": "Date",
+   "label": "Next Due",
+   "in_list_view": 1,
+   "columns": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Network Asset Maintenance",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

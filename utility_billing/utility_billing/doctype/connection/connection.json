@@ -21,6 +21,7 @@
   "status",
   "connection_date",
   "disconnected_on",
+  "expires_on",
   "supply_section",
   "sanctioned_load_kw",
   "phase",
@@ -205,12 +206,18 @@
    "fieldtype": "Table",
    "label": "Flags",
    "options": "Connection Flag Row"
+  },
+  {
+   "fieldname": "expires_on",
+   "fieldtype": "Date",
+   "label": "Temporary Until",
+   "description": "A temporary or construction connection ends on this date (FS-WF-30)."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 23:00:00.000000",
+ "modified": "2026-11-15 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection",

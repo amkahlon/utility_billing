@@ -1696,6 +1696,48 @@ def t_master_data(d: Desk):
 	eq((rep[0]["connection"], rep[0]["held"]), (conn, 3000), "deposits held")
 
 
+@case("QA-74", "FS-MST-23 to 27, FS-WF-00/22/29/31: grid station, feeder, line section, asset, map; service requests step by step")
+def t_network_and_requests(d: Desk):
+	P = "utility_billing.utility_billing"
+	bo, bm, rec = USERS["bo"], USERS["bm"], USERS["rec"]
+	conn = S["conn"]["name"]
+	soc = S["society"]
+
+	gs = bm.save_doc({"doctype": "Grid Station", "society": soc, "station_code": f"G{RUN}", "station_name": "Main grid", "capacity_mva": "20",
+	                  "latitude": "31.4504", "longitude": "74.2786"})
+	expect_error(lambda: bm.save_doc({"doctype": "Grid Station", "society": soc, "station_code": f"H{RUN}", "station_name": "Bad", "latitude": "31.4"}),
+	             "both latitude and longitude")
+	fd = bm.save_doc({"doctype": "Feeder", "society": soc, "feeder_code": f"F{RUN}", "feeder_name": "Feeder A", "grid_station": gs["name"]})
+	bm.save_doc({"doctype": "Line Section", "society": soc, "section_code": f"L{RUN}", "feeder": fd["name"], "length_km": "2.5",
+	             "estimated_loss_percent": "4"})
+	asset = bo.save_doc({"doctype": "Network Asset", "society": soc, "asset_name": "Pump motor", "asset_type": "Pump", "status": "In service",
+	                     "maintenance": [{"maintenance_date": "2026-06-01", "kind": "Preventive", "next_due": "2026-12-01"}]})
+	eq(asset["next_maintenance"], "2026-12-01", "next maintenance")
+	geo = bm.call(f"{P}.network.geojson", society=soc)
+	if not any(f["properties"]["kind"] == "Grid station" for f in geo["features"]):
+		raise AssertionError("the grid station is not on the map export")
+
+	# service requests: the standard types, a contact update, a disconnection with maker-checker
+	bm.call(f"{P}.servicereq.set_up_types", society=soc)
+	sr = bo.save_doc({"doctype": "Service Request", "request_type": f"{soc}-CONTACT", "connection": conn, "new_mobile": "0300-5550000"})
+	bo.call(f"{P}.servicereq.advance", request=sr["name"], step="1", remarks="Asked at the counter")
+	eq((bo.get("Service Request", sr["name"])["status"], bo.get("Consumer", bo.get("Connection", conn)["consumer"])["mobile_no"]),
+	   ("Completed", "0300-5550000"), "contact updated")
+	nd = bo.save_doc({"doctype": "Service Request", "request_type": f"{soc}-NODUES", "connection": conn})
+	expect_error(lambda: bo.call(f"{P}.servicereq.advance", request=nd["name"], step="1"), "owes")
+	eq(bo.get("Service Request", nd["name"])["status"], "Open", "a refused step changes nothing")
+	disc = bo.save_doc({"doctype": "Service Request", "request_type": f"{soc}-DISC", "connection": conn, "disconnection_reason": "Defaulter"})
+	expect_error(lambda: bo.call(f"{P}.servicereq.advance", request=disc["name"], step="1"))  # approved by a Billing Manager
+	bm.call(f"{P}.servicereq.advance", request=disc["name"], step="1", remarks="Three notices unanswered")
+	expect_error(lambda: bm.call(f"{P}.servicereq.advance", request=disc["name"], step="2"))  # the field step is a Recovery Officer's
+	rec.call(f"{P}.servicereq.advance", request=disc["name"], step="2", reading="2500", latitude="31.45", longitude="74.27")
+	eq((bo.get("Service Request", disc["name"])["status"], bo.get("Connection", conn)["status"]), ("Completed", "Disconnected"), "disconnected")
+	anon = Desk()
+	eq(anon.call(f"{P}.servicereq.verify_certificate", code="NOPE1234"), {"valid": False}, "certificate check is public")
+	rep = rows_of(run_report(bm, "Service Requests and Service Standards", society=soc, from_date="2026-01-01", to_date="2030-12-31"))
+	eq(rep[-1]["completed"], 2, "service standards report")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

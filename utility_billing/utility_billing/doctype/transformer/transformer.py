@@ -6,6 +6,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
 
+from utility_billing.utility_billing import network
+
 
 class Transformer(Document):
 	def validate(self):
@@ -14,3 +16,4 @@ class Transformer(Document):
 			frappe.throw(_("Feeder {0} belongs to society {1}.").format(self.feeder, feeder_society))
 		if flt(self.kva_rating) < 0:
 			frappe.throw(_("Rating can't be negative."))
+		network.check_location(self)
