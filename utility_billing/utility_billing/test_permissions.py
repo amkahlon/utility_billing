@@ -29,7 +29,7 @@ SUBMITTERS = {
 	"Tariff": {"System Manager", "General Manager"},
 	"Tariff Adjustment": {"System Manager", "General Manager"},
 	"Bill Run": {"System Manager", "Billing Manager"},
-	"Utility Bill": {"System Manager"},
+	"Utility Bill": set(),  # posted and cancelled only by its bill run, never by a user
 }
 
 

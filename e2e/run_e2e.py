@@ -571,6 +571,73 @@ def t_close(d: Desk):
 	expect_error(lambda: USERS["reader"].save_doc(dict(r, present_reading="310")), "closed")
 
 
+# ---------------------------------------------------------------- increment 5: adjustments, bills, bill runs
+BIL = "utility_billing.utility_billing.billing"
+
+
+@case("QA-33", "FS-CFG-09: FPA for November defaults to September units; GM approves")
+def t_fpa(d: Desk):
+	for name, basis, order in ((f"Energy {RUN}", "Per Unit", 10), (f"FPA {RUN}", "Per Unit", 20)):
+		d.save_doc({"doctype": "Charge Type", "charge_name": name, "charge_group": "Electricity", "calculation_basis": basis,
+		            "bill_order": str(order), "bill_label": name.split(" ")[0] + " Charges", "rounding_rule": "Nearest rupee"})
+	soc = d.get("Society", S["society"])
+	d.save_doc(dict(soc, energy_charge_type=f"Energy {RUN}", charges_fpa=1))
+	adj = USERS["bm"].save_doc({"doctype": "Tariff Adjustment", "naming_series": "ADJ-.YYYY.-.####", "adjustment_type": "FPA",
+	                            "society": S["society"], "utility": "Electricity", "billing_month": "2026-11-15",
+	                            "rate_per_unit": "1.30", "charge_type": f"FPA {RUN}"})
+	eq((adj["billing_month"], adj["reference_month"]), ("2026-11-01", "2026-09-01"), "reference month = billing month - 2")
+	adj = USERS["bm"].workflow(adj, "Submit for Approval")
+	adj = USERS["gm"].workflow(adj, "Approve")
+	eq((adj["docstatus"], adj["workflow_state"]), (1, "Approved"), "FPA approved")
+
+
+@case("QA-34", "FS-RUN-01/02/05: Billing Officer calculates the November run")
+def t_run_calculate(d: Desk):
+	run = USERS["bo"].save_doc({"doctype": "Bill Run", "naming_series": "BRUN-.YYYY.-.####", "society": S["society"],
+	                            "utility": "Electricity", "billing_month": "2026-11-01", "issue_date": "2026-12-01"})
+	eq(run["due_date"], "2026-12-15", "due date = issue + 14 days")
+	USERS["bo"].call(f"{BIL}.calculate_run", run=run["name"])
+	run = USERS["bo"].get("Bill Run", run["name"])
+	eq((run["calculation_status"], run["bill_count"]), ("Calculated", 1), "one bill calculated")
+	S["run"] = run
+	bills = USERS["bo"].s.get(f"{URL}/api/resource/Utility Bill", params={
+		"filters": json.dumps([["bill_run", "=", run["name"]]]), "fields": json.dumps(["name"])}).json()["data"]
+	bill = USERS["bo"].get("Utility Bill", bills[0]["name"])
+	lines = [(l["label"], float(l["amount"])) for l in sorted(bill["lines"], key=lambda l: l["idx"])]
+	# 300 units x 70; FPA on September units (no reading on the new meter that month -> 0, explained); Service 1,700
+	# Lines follow each charge type's Order on Bill: Service was set to 10 (same as Energy) in QA-06, FPA is 20.
+	eq(lines, [("Energy Charges", 21000.0), (f"Service {RUN}", 1700.0), ("FPA Charges", 0.0)], "bill lines")
+	fpa = next(l for l in bill["lines"] if l["label"] == "FPA Charges")
+	eq(fpa.get("note"), "No reading for September 2026", "FPA explained")
+	eq((float(bill["current_amount"]), float(bill["surcharge_amount"]), float(bill["payable_after_due"])),
+	   (22700.0, 2270.0, 24970.0), "totals with 10% surcharge on the current bill")
+	S["bill"] = bill["name"]
+	run = USERS["bo"].save_doc(dict(USERS["bo"].get("Bill Run", run["name"]), issue_date="2026-12-02"))
+	eq(run["calculation_status"], "Not calculated", "changing the issue date needs recalculation")
+	expect_error(lambda: USERS["bo"].workflow(run, "Submit for Approval"), "calculate")
+	USERS["bo"].call(f"{BIL}.calculate_run", run=run["name"])
+
+
+@case("QA-35", "FS-ACC-05: Billing Officer submits, Billing Manager approves, bills are posted")
+def t_run_post(d: Desk):
+	run = USERS["bo"].workflow(S["run"], "Submit for Approval")
+	expect_error(lambda: USERS["bo"].workflow(run, "Approve"))
+	run = USERS["bm"].workflow(run, "Approve")
+	eq((run["docstatus"], run["workflow_state"]), (1, "Approved"), "run approved")
+	bill = USERS["bm"].get("Utility Bill", S["bill"])
+	eq((bill["docstatus"], bill["status"], float(bill["outstanding_amount"])), (1, "Posted", 22700.0), "bill posted")
+
+
+@case("QA-36", "FS-BIL-10: a posted bill can't be changed or cancelled on its own")
+def t_bill_locked(d: Desk):
+	bill = d.get("Utility Bill", S["bill"])
+	expect_error(lambda: d.save_doc(dict(bill, current_amount="1"), action="Update"))
+	r = d.s.post(f"{URL}/api/method/frappe.client.cancel", data={"doctype": "Utility Bill", "name": S["bill"]})
+	if r.status_code == 200:
+		raise AssertionError("a posted bill was cancelled directly")
+	eq(USERS["cashier"].get("Utility Bill", S["bill"])["status"], "Posted", "cashier can read the posted bill")
+
+
 # ---------------------------------------------------------------- runner
 def main():
 	d = Desk()
