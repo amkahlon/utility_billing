@@ -9,7 +9,7 @@ from frappe import _
 from frappe.utils import add_months, flt, getdate, now_datetime
 
 from utility_billing.utility_billing import bill_engine as engine
-from utility_billing.utility_billing import bill_print
+from utility_billing.utility_billing import account, bill_print
 from utility_billing.utility_billing import readings
 from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff
 
@@ -44,13 +44,9 @@ def approved_adjustment(society, utility, month, adjustment_type):
 
 
 def arrears_of(connection, month):
-	"""Outstanding of the connection's earlier posted bills (reduced by payments in increment 7)."""
-	rows = frappe.get_all(
-		"Utility Bill",
-		filters={"connection": connection, "docstatus": 1, "billing_month": ["<", readings.month_start(month)]},
-		pluck="outstanding_amount",
-	)
-	return sum(flt(x) for x in rows)
+	"""Everything the account owes before this bill (arrears, unpaid current bill, surcharge, fees,
+	less credit), from the customer account (increment 7)."""
+	return account.arrears_for_new_bill(connection)
 
 
 def build_bill(run, connection) -> dict:
@@ -251,6 +247,13 @@ def post_run(doc):
 	"""On approval: post every draft bill of the run (FS-BIL-10: posted bills never change)."""
 	for name in frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 0}, pluck="name"):
 		bill = frappe.get_doc("Utility Bill", name)
+		# Payments may have arrived between calculation and approval: arrears are taken from the account
+		# as it stands at posting, so the bill never asks for money already paid.
+		arrears = flt(account.arrears_for_new_bill(bill.connection))
+		if arrears != flt(bill.arrears):
+			bill.arrears = arrears
+			bill.payable_within_due = flt(bill.current_amount) + arrears
+			bill.payable_after_due = bill.payable_within_due + flt(bill.surcharge_amount)
 		bill.status = "Posted"
 		bill.outstanding_amount = bill.payable_within_due
 		# Freeze what the bill prints as it is now, at posting (FS-RUN-09: reprints match the original).
@@ -258,11 +261,18 @@ def post_run(doc):
 		bill.flags.from_bill_run = True
 		bill.flags.ignore_permissions = True
 		bill.submit()
+		account.post_bill(bill)
+
+
+def check_run_cancellable(doc):
+	for name in frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 1}, pluck="name"):
+		account.check_bill_reversible(frappe.get_doc("Utility Bill", name))
 
 
 def cancel_run_bills(doc):
 	for name in frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 1}, pluck="name"):
 		bill = frappe.get_doc("Utility Bill", name)
+		account.reverse_bill(bill)
 		bill.flags.from_bill_run = True
 		bill.flags.ignore_permissions = True
 		bill.cancel()

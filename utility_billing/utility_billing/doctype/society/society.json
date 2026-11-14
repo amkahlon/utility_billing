@@ -58,6 +58,7 @@
   "cb_surcharge",
   "surcharge_fixed_amount",
   "surcharge_cap",
+  "surcharge_rule",
   "reading_section",
   "reading_tolerance_percent",
   "cb_reading",
@@ -77,7 +78,12 @@
   "show_qr_code",
   "cb_bill_layout",
   "bill_notices",
-  "payment_instructions"
+  "payment_instructions",
+  "payments_section",
+  "allow_part_payment",
+  "allow_overpayment",
+  "cb_payments",
+  "duplicate_bill_fee"
  ],
  "fields": [
   {
@@ -474,13 +480,50 @@
    "fieldname": "payment_instructions",
    "fieldtype": "Small Text",
    "label": "Payment Instructions"
+  },
+  {
+   "fieldname": "payments_section",
+   "fieldtype": "Section Break",
+   "label": "Payments and Fees"
+  },
+  {
+   "default": "1",
+   "fieldname": "allow_part_payment",
+   "fieldtype": "Check",
+   "label": "Allow Part Payments"
+  },
+  {
+   "default": "1",
+   "description": "An amount above the balance is kept as credit and used on the next bill",
+   "fieldname": "allow_overpayment",
+   "fieldtype": "Check",
+   "label": "Allow Overpayments"
+  },
+  {
+   "fieldname": "cb_payments",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Charged to the account each time a duplicate bill is issued; leave empty for none",
+   "fieldname": "duplicate_bill_fee",
+   "fieldtype": "Link",
+   "label": "Duplicate Bill Fee",
+   "options": "Fee Type"
+  },
+  {
+   "default": "Not paid in full by the due date",
+   "description": "Checked the day after the due date + grace days, by the date the consumer paid. 'Nothing paid' waives the surcharge if any payment was made by then.",
+   "fieldname": "surcharge_rule",
+   "fieldtype": "Select",
+   "label": "Surcharge Applies When",
+   "options": "Not paid in full by the due date\nNothing paid by the due date"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 06:22:01.647959",
+ "modified": "2026-11-14 07:05:58.524521",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

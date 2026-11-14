@@ -24,12 +24,25 @@ EDITORS = {
 	"Bill Run": {"System Manager", "Billing Officer", "Billing Manager"},
 	# Bills are created and posted only by bill runs (ignore_permissions there); nobody edits them.
 	"Utility Bill": {"System Manager"},
+	# Increment 7: customer accounts and payments
+	"Reason Code": {"System Manager", "Society Admin", "Billing Manager"},
+	"Fee Type": {"System Manager", "Society Admin", "Billing Manager"},
+	"Cash Counter": {"System Manager", "Society Admin", "Billing Manager"},
+	"Cashier Day": {"System Manager", "Cashier"},
+	# Ledger entries are written only by account.py (and can't be changed or deleted by anyone).
+	"Customer Ledger Entry": {"System Manager"},
+	"Payment Receipt": {"System Manager", "Cashier", "Accounts Officer"},
+	"Fee Charge": {"System Manager", "Cashier", "Billing Officer", "Billing Manager"},
+	"Account Adjustment": {"System Manager", "Billing Officer", "Billing Manager", "General Manager"},
 }
 SUBMITTERS = {
 	"Tariff": {"System Manager", "General Manager"},
 	"Tariff Adjustment": {"System Manager", "General Manager"},
 	"Bill Run": {"System Manager", "Billing Manager"},
 	"Utility Bill": set(),  # posted and cancelled only by its bill run, never by a user
+	"Payment Receipt": {"System Manager", "Cashier", "Accounts Officer"},  # reversals: account.reverse_document
+	"Fee Charge": {"System Manager", "Cashier", "Billing Officer", "Billing Manager"},
+	"Account Adjustment": {"System Manager", "General Manager"},
 }
 
 
@@ -42,7 +55,7 @@ class IntegrationTestPermissions(IntegrationTestCase):
 				with self.subTest(doctype=dt, role=p.role):
 					can_edit = bool(p.write or p.create)
 					self.assertEqual(can_edit, p.role in editors, f"{dt}/{p.role} write/create")
-					if p.role in READ_ONLY:
+					if p.role in READ_ONLY and p.role not in editors:
 						self.assertTrue(p.read, f"{dt}/{p.role} should read")
 						self.assertFalse(p.delete or p.submit or p.cancel, f"{dt}/{p.role} is read-only")
 					self.assertEqual(bool(p.delete), p.role == "System Manager", f"{dt}/{p.role} delete")

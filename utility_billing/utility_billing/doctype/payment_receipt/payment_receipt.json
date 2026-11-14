@@ -1,0 +1,467 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "creation": "2026-11-14 06:55:33.145691",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "receipt_section",
+  "reference_no",
+  "payment_channel",
+  "cash_counter",
+  "cashier_day",
+  "cb1",
+  "payment_date",
+  "amount",
+  "mode",
+  "status",
+  "instrument_section",
+  "instrument_no",
+  "instrument_date",
+  "cb_inst",
+  "bank_name",
+  "channel_txn_id",
+  "account_section",
+  "connection",
+  "consumer_name",
+  "society",
+  "cb2",
+  "latest_bill",
+  "bill_due_date",
+  "payable_within_due",
+  "payable_after_due",
+  "balance_before",
+  "allocation_section",
+  "alloc_current",
+  "alloc_arrears",
+  "alloc_surcharge",
+  "cb3",
+  "alloc_fees",
+  "alloc_credit",
+  "balance_after",
+  "ledger_entry",
+  "reversal_section",
+  "reversal_reason",
+  "reversal_remarks",
+  "cb4",
+  "reversed_by",
+  "reversed_on",
+  "remarks",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "receipt_section",
+   "fieldtype": "Section Break",
+   "label": "Payment"
+  },
+  {
+   "description": "Scan the bill's QR code or type the 10-digit reference number",
+   "fieldname": "reference_no",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Reference No",
+   "reqd": 1
+  },
+  {
+   "default": "Counter",
+   "fieldname": "payment_channel",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Received At",
+   "options": "Counter\nBank / Channel",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.payment_channel=='Counter'",
+   "fieldname": "cash_counter",
+   "fieldtype": "Link",
+   "label": "Cash Counter",
+   "options": "Cash Counter",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.payment_channel=='Counter'",
+   "fieldname": "cashier_day",
+   "fieldtype": "Link",
+   "label": "Cashier Day",
+   "options": "Cashier Day",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Today",
+   "description": "For bank and channel payments, the date the consumer paid (decides the surcharge)",
+   "fieldname": "payment_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Payment Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount Received",
+   "reqd": 1
+  },
+  {
+   "default": "Cash",
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Mode",
+   "options": "Cash\nCheque\nPay Order\nCard\nBank Transfer\n1Link\nKuickpay",
+   "reqd": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Draft\nPosted\nReversed",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.mode!='Cash'",
+   "fieldname": "instrument_section",
+   "fieldtype": "Section Break",
+   "label": "Instrument"
+  },
+  {
+   "fieldname": "instrument_no",
+   "fieldtype": "Data",
+   "label": "Cheque / Pay Order / Card / Transaction No"
+  },
+  {
+   "fieldname": "instrument_date",
+   "fieldtype": "Date",
+   "label": "Instrument Date"
+  },
+  {
+   "fieldname": "cb_inst",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bank_name",
+   "fieldtype": "Data",
+   "label": "Bank"
+  },
+  {
+   "description": "Bank or channel's own ID; a payment with the same ID is never posted twice",
+   "fieldname": "channel_txn_id",
+   "fieldtype": "Data",
+   "label": "Channel Transaction ID",
+   "no_copy": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "account_section",
+   "fieldtype": "Section Break",
+   "label": "Account"
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Connection",
+   "options": "Connection",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Consumer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "latest_bill",
+   "fieldtype": "Link",
+   "label": "Latest Bill",
+   "options": "Utility Bill",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bill_due_date",
+   "fieldtype": "Date",
+   "label": "Due Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payable_within_due",
+   "fieldtype": "Currency",
+   "label": "Payable Within Due Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payable_after_due",
+   "fieldtype": "Currency",
+   "label": "Payable After Due Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_before",
+   "fieldtype": "Currency",
+   "label": "Account Balance Before",
+   "read_only": 1
+  },
+  {
+   "fieldname": "allocation_section",
+   "fieldtype": "Section Break",
+   "label": "How the Payment Was Applied"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "alloc_current",
+   "fieldtype": "Currency",
+   "label": "Current Bill",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "alloc_arrears",
+   "fieldtype": "Currency",
+   "label": "Arrears",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "alloc_surcharge",
+   "fieldtype": "Currency",
+   "label": "Surcharge",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "alloc_fees",
+   "fieldtype": "Currency",
+   "label": "Fees",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "alloc_credit",
+   "fieldtype": "Currency",
+   "label": "Kept as Credit (advance)",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "balance_after",
+   "fieldtype": "Currency",
+   "label": "Account Balance After",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "ledger_entry",
+   "fieldtype": "Link",
+   "label": "Ledger Entry",
+   "no_copy": 1,
+   "options": "Customer Ledger Entry",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.docstatus==2",
+   "fieldname": "reversal_section",
+   "fieldtype": "Section Break",
+   "label": "Reversal"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reversal_reason",
+   "fieldtype": "Link",
+   "label": "Reason",
+   "no_copy": 1,
+   "options": "Reason Code",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reversal_remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reversed_by",
+   "fieldtype": "Link",
+   "label": "Reversed By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reversed_on",
+   "fieldtype": "Datetime",
+   "label": "Reversed On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Payment Receipt",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-11-14 06:55:33.145691",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Payment Receipt",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier",
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer",
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "reference_no,consumer_name,payment_date",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "consumer_name",
+ "track_changes": 1
+}

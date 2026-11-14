@@ -1,0 +1,71 @@
+{#- Payment receipt (FS-PAY-01, FS-CLT-03). Tables only (wkhtmltopdf). -#}
+{%- set c = soc.colour -%}
+<style>
+	.rc { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 9pt; color: #1d2329; position: relative; line-height: 1.35; }
+	.rc table { border-collapse: collapse; width: 100%; }
+	.rc td, .rc th { padding: 0; vertical-align: top; }
+	.rc .name { font-size: 13pt; font-weight: 700; color: {{ c }}; }
+	.rc .muted { color: #5b6670; }
+	.rc .small { font-size: 7.5pt; }
+	.rc .right { text-align: right; }
+	.rc .strong { font-weight: 700; }
+	.rc .band td { background: {{ c }}; color: #fff; font-weight: 700; font-size: 10.5pt; padding: 1.5mm 3mm; }
+	.rc .kv td { padding: 1mm 2mm; border-bottom: 1px solid #edf0f2; }
+	.rc .kv td.k { color: #5b6670; width: 34%; }
+	.rc .amount td { background: #eef6f1; padding: 2.5mm 3mm; font-size: 14pt; font-weight: 700; color: #14532d; }
+	.rc .grid th { background: #eef2f5; font-size: 7.5pt; color: #3b4650; padding: 1mm 2mm; text-align: left; }
+	.rc .grid td { padding: 1mm 2mm; border-bottom: 1px solid #edf0f2; }
+	.rc .grid .right { text-align: right; }
+	.rc .wm { position: absolute; top: 45mm; left: 0; width: 100%; text-align: center; font-size: 54pt; font-weight: 700;
+		color: rgba(180, 35, 24, .14); -webkit-transform: rotate(-22deg); transform: rotate(-22deg); }
+	.rc .tag { display: inline-block; border: 1.5px solid #b42318; color: #b42318; font-weight: 700; padding: .5mm 2mm; letter-spacing: 1px; }
+	.rc .sp { height: 2.5mm; }
+</style>
+<div class="rc">
+{%- if watermark %}<div class="wm">{{ watermark | e }}</div>{% endif %}
+<table><tr>
+	{%- if soc.logo %}<td style="width: 17mm;"><img src="{{ soc.logo }}" style="width: 15mm; height: 15mm;"></td>{% endif %}
+	<td>
+		<div class="name">{{ soc.name | e }}</div>
+		{%- for l in soc.letterhead %}<div class="small muted">{{ l | e }}</div>{% else %}<div class="small muted">{{ (soc.address or "") | e }}</div>{% endfor %}
+	</td>
+	<td class="right" style="width: 32mm;">{% if watermark %}<span class="tag">{{ watermark | e }}</span>{% endif %}</td>
+</tr></table>
+<div class="sp"></div>
+<table class="band"><tr><td>{{ _("Payment Receipt") }}</td><td class="right">{{ r.name | e }}</td></tr></table>
+<div class="sp"></div>
+<table><tr>
+	<td>
+		<table class="kv">
+			<tr><td class="k">{{ _("Date") }}</td><td class="strong">{{ date(r.payment_date) }}</td></tr>
+			<tr><td class="k">{{ _("Reference No") }}</td><td class="strong">{{ (r.connection or "") | e }}</td></tr>
+			<tr><td class="k">{{ _("Consumer") }}</td><td>{{ (r.consumer_name or "") | e }}</td></tr>
+			{%- if r.latest_bill %}<tr><td class="k">{{ _("Bill") }}</td><td>{{ r.latest_bill | e }}{% if r.bill_due_date %} · {{ _("due") }} {{ date(r.bill_due_date) }}{% endif %}</td></tr>{% endif %}
+			<tr><td class="k">{{ _("Paid by") }}</td><td>{{ _(r.mode) }}{% if r.instrument_no %} {{ r.instrument_no | e }}{% endif %}{% if r.bank_name %}, {{ r.bank_name | e }}{% endif %}{% if r.channel_txn_id %} · {{ _("Txn") }} {{ r.channel_txn_id | e }}{% endif %}</td></tr>
+			<tr><td class="k">{{ _("Received at") }}</td><td>{% if counter %}{{ counter | e }} ({{ r.cash_counter | e }}) · {{ cashier | e }}{% else %}{{ _("Bank / Channel") }}{% endif %}</td></tr>
+		</table>
+	</td>
+	{%- if qr %}<td style="width: 24mm; padding-left: 2mm;"><img src="{{ qr }}" style="width: 22mm; height: 22mm;"></td>{% endif %}
+</tr></table>
+<div class="sp"></div>
+<table class="amount"><tr><td>{{ _("Amount received") }}</td><td class="right">Rs {{ money(r.amount) }}</td></tr></table>
+<div class="small muted" style="padding: 1mm 3mm;">{{ words | e }}</div>
+{%- if r.docstatus == 1 or r.docstatus == 2 %}
+<div class="sp"></div>
+<table class="grid">
+	<tr><th>{{ _("Applied to") }}</th><th class="right">{{ _("Amount (Rs)") }}</th></tr>
+	{%- for label, v in [(_("Current bill"), r.alloc_current), (_("Arrears"), r.alloc_arrears), (_("Surcharge"), r.alloc_surcharge), (_("Fees"), r.alloc_fees), (_("Kept as credit (advance)"), r.alloc_credit)] if v %}
+	<tr><td>{{ label }}</td><td class="right">{{ money(v) }}</td></tr>
+	{%- endfor %}
+	<tr><td class="strong">{% if r.balance_after < 0 %}{{ _("Credit on account after this payment") }}{% else %}{{ _("Balance still owed") }}{% endif %}</td>
+		<td class="right strong">{{ money(r.balance_after if r.balance_after >= 0 else -r.balance_after) }}</td></tr>
+</table>
+{%- endif %}
+{%- if r.docstatus == 2 %}
+<div class="small" style="margin-top: 2mm; color: #8f1d12;">{{ _("Reversed on") }} {{ date(r.reversed_on) }}: {{ (r.reversal_remarks or "") | e }} ({{ (r.reversal_reason or "") | e }})</div>
+{%- endif %}
+<div class="small muted" style="margin-top: 4mm; text-align: center;">
+	{{ _("Computer-generated receipt; no signature needed.") }}
+	{%- set contact = [soc.phone, soc.email] | select | list %}{% if contact %}<br>{% for x in contact %}{{ x | e }}{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}
+</div>
+</div>
