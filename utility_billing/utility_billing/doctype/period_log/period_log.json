@@ -1,0 +1,54 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "action",
+  "by_user",
+  "on",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "action",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "Closed\nReopened",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "by_user",
+   "fieldtype": "Link",
+   "label": "By",
+   "options": "User",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "on",
+   "fieldtype": "Datetime",
+   "label": "On",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Period Log",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50
+}

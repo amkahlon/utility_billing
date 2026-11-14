@@ -109,32 +109,56 @@ def calculate(
 	fraction: Decimal | None = None,
 	fraction_note: str = "",
 	installment: Decimal | None = None,
+	segments: Iterable[dict] | None = None,
 ) -> BillResult:
 	"""`tariff`: {"method", "flat_rate", "slabs", "minimum_charge"}; `surcharge`: {"basis",
 	"rate", "fixed_amount", "cap"} with basis "Percentage of current bill" or "Fixed amount".
 	`taxes`: tax_engine.TaxSpec list (none by default). `fraction`: share of a part month to charge for the fixed and
 	per-area charges (FS-BIL-07), with its note.
+	`segments`: when a tariff changes in the middle of the reading period (FS-CFG-05, FS-BIL-02), a list of
+	{"units", "tariff", "charges", "fraction", "note"}, one per tariff in force; the energy and the tariff's own charges are worked
+	out for each on its share of the units and of the days, and `units`, `tariff`, `charges` and `fraction` are not used.
 	"""
-	frac = D(fraction) if fraction is not None else Decimal(1)
-	u = D(units)
+	frac_all = D(fraction) if fraction is not None else Decimal(1)
 	lines: list[Line] = []
+	segs = [dict(s) for s in segments] if segments else [
+		{"units": units, "tariff": tariff, "charges": charges, "fraction": frac_all, "note": fraction_note}]
 
-	# 1. Energy
-	e = calculate_energy(u, tariff.get("method"), flat_rate=tariff.get("flat_rate"), slabs=tariff.get("slabs") or (),
-	                     minimum_charge=tariff.get("minimum_charge"))
-	energy_note = "; ".join(f"{fmt(x['units'])} × {fmt(x['rate'])}" for x in e.lines)
-	if e.minimum_applied:
-		energy_note += f" (minimum charge {fmt(e.amount)})"
-	avg_rate = (e.amount / u) if u else D(tariff.get("flat_rate"))
-	lines.append(Line(energy.charge_type, energy.label, energy.group, energy.order, PER_UNIT, u,
-	                  avg_rate.quantize(Decimal("0.0001")), rnd(e.amount, energy.rounding), energy_note))
-	energy_amount = rnd(e.amount, energy.rounding)
+	for seg in segs:
+		u, trf, frac, seg_note = D(seg["units"]), seg["tariff"], D(seg["fraction"]), seg.get("note") or ""
+		# 1. Energy
+		e = calculate_energy(u, trf.get("method"), flat_rate=trf.get("flat_rate"), slabs=trf.get("slabs") or (),
+		                     minimum_charge=trf.get("minimum_charge"))
+		energy_note = "; ".join(f"{fmt(x['units'])} × {fmt(x['rate'])}" for x in e.lines)
+		if e.minimum_applied:
+			energy_note += f" (minimum charge {fmt(e.amount)})"
+		if len(segs) > 1 and seg_note:
+			energy_note = f"{seg_note}: {energy_note}"
+		avg_rate = (e.amount / u) if u else D(trf.get("flat_rate"))
+		lines.append(Line(energy.charge_type, energy.label, energy.group, energy.order, PER_UNIT, u,
+		                  avg_rate.quantize(Decimal("0.0001")), rnd(e.amount, energy.rounding), energy_note))
+		energy_amount = rnd(e.amount, energy.rounding)
 
-	charges = list(charges)
-	# 2. Per-unit add-ons
-	for c in (c for c in charges if c.basis == PER_UNIT):
-		lines.append(Line(c.charge_type, c.label, c.group, c.order, PER_UNIT, u, D(c.rate), rnd(u * D(c.rate), c.rounding),
-		                  f"{fmt(u)} × {fmt(c.rate)}"))
+		seg_charges = list(seg["charges"])
+		split_note = seg_note if len(segs) > 1 else fraction_note
+		# 2. Per-unit add-ons
+		for c in (c for c in seg_charges if c.basis == PER_UNIT):
+			lines.append(Line(c.charge_type, c.label, c.group, c.order, PER_UNIT, u, D(c.rate), rnd(u * D(c.rate), c.rounding),
+			                  f"{fmt(u)} × {fmt(c.rate)}" + (f"; {seg_note}" if len(segs) > 1 and seg_note else "")))
+		# 4. Fixed, one-off and per-area charges
+		for c in (c for c in seg_charges if c.basis in (FIXED, ONE_OFF)):
+			part = frac if c.basis == FIXED else (Decimal(1) if len(segs) == 1 or seg is segs[0] else Decimal(0))  # one-off: once
+			if part == 0 and c.basis == ONE_OFF:
+				continue
+			lines.append(Line(c.charge_type, c.label, c.group, c.order, c.basis, D(1), D(c.rate), rnd(D(c.rate) * part, c.rounding),
+			                  split_note if part != 1 else ""))
+		for c in (c for c in seg_charges if c.basis == PER_AREA):
+			lines.append(Line(c.charge_type, c.label, c.group, c.order, PER_AREA, D(area), D(c.rate),
+			                  rnd(D(area) * D(c.rate) * frac, c.rounding), f"{fmt(area)} × {fmt(c.rate)}" + (f"; {split_note}" if frac != 1 else "")))
+		# 5. Percentage charges: % of the energy charge
+		for c in (c for c in seg_charges if c.basis == PERCENT):
+			lines.append(Line(c.charge_type, c.label, c.group, c.order, PERCENT, energy_amount, D(c.rate),
+			                  rnd(energy_amount * D(c.rate) / 100, c.rounding), f"{fmt(c.rate)}% of energy {fmt(energy_amount)}"))
 	# 3. Adjustments (FPA/QTA) on their reference units
 	for a in adjustments:
 		c = a.charge
@@ -148,18 +172,6 @@ def calculate(
 			continue
 		lines.append(Line(c.charge_type, c.label, c.group, c.order, PER_UNIT, D(a.units), D(a.rate),
 		                  rnd(D(a.units) * D(a.rate), c.rounding), f"{a.reference} units {fmt(a.units)} × {fmt(a.rate)}"))
-	# 4. Fixed, one-off and per-area charges
-	for c in (c for c in charges if c.basis in (FIXED, ONE_OFF)):
-		part = frac if c.basis == FIXED else Decimal(1)  # one-off charges are never pro-rated
-		lines.append(Line(c.charge_type, c.label, c.group, c.order, c.basis, D(1), D(c.rate), rnd(D(c.rate) * part, c.rounding),
-		                  fraction_note if part != 1 else ""))
-	for c in (c for c in charges if c.basis == PER_AREA):
-		lines.append(Line(c.charge_type, c.label, c.group, c.order, PER_AREA, D(area), D(c.rate),
-		                  rnd(D(area) * D(c.rate) * frac, c.rounding), f"{fmt(area)} × {fmt(c.rate)}" + (f"; {fraction_note}" if frac != 1 else "")))
-	# 5. Percentage charges: % of the energy charge
-	for c in (c for c in charges if c.basis == PERCENT):
-		lines.append(Line(c.charge_type, c.label, c.group, c.order, PERCENT, energy_amount, D(c.rate),
-		                  rnd(energy_amount * D(c.rate) / 100, c.rounding), f"{fmt(c.rate)}% of energy {fmt(energy_amount)}"))
 
 	current = sum((l.amount for l in lines), Decimal(0))
 	# 6. Minimum bill

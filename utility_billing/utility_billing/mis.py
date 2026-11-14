@@ -17,7 +17,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, add_months, cint, flt, formatdate, get_first_day, get_last_day, getdate, nowdate
 
-from utility_billing.utility_billing import tariff_engine
+from utility_billing.utility_billing import allocation, tariff_engine
 
 REPORTS: dict[str, dict] = OrderedDict()
 
@@ -1083,15 +1083,22 @@ def tax_register(f):
 	                     b.payable_within_due payable from `tabBill Tax` bt join `tabUtility Bill` b on b.name = bt.parent
 	              where b.society = %(s)s and b.docstatus = 1 and b.status = 'Posted' and b.billing_month between %(a)s and %(z)s and bt.amount != 0""",
 	            {"s": s, "a": a, "z": z})
-	pays = defaultdict(list)
-	for e in sql("""select connection, posting_date, -amount paid from `tabCustomer Ledger Entry` where society = %(s)s and entry_type = 'Payment'
-	               and ifnull(reversed_by, '') = '' and posting_date <= %(as_of)s""", {"s": s, "as_of": as_of}):
-		pays[e.connection].append((getdate(e.posting_date), flt(e.paid)))
+	# exact: each account's payments up to the date are allocated oldest bill first (allocation.py)
+	paid = {e.connection: flt(e.paid) for e in sql(
+		"""select connection, sum(-amount) paid from `tabCustomer Ledger Entry` where society = %(s)s and entry_type = 'Payment'
+		   and ifnull(reversed_by, '') = '' and posting_date <= %(as_of)s group by connection""", {"s": s, "as_of": as_of})}
+	everything = defaultdict(list)
+	for x in sql("""select name, connection, current_amount from `tabUtility Bill` where society = %(s)s and docstatus = 1 and status = 'Posted'
+	               and billing_month <= %(z)s order by connection, issue_date, name""", {"s": s, "z": z}):
+		everything[x.connection].append((x.name, flt(x.current_amount)))
+	fraction = {}
+	for conn, rows in everything.items():
+		for (name, _amt), sh in zip(rows, allocation.shares(paid.get(conn, 0), [amt for _n, amt in rows]), strict=True):
+			fraction[name] = float(sh)
 	by_cat = f.get("group_by") == "Tax and Category"
 	acc = OrderedDict()
 	for b in bills:
-		received = sum(x for d, x in pays.get(b.connection, []) if d >= getdate(b.issue_date))
-		share = min(1.0, received / flt(b.payable)) if flt(b.payable) else 0.0
+		share = fraction.get(b.bill, 0.0)
 		k = (b.tax, b.category if by_cat else "")
 		row = acc.setdefault(k, {"tax": b.tax_name, "category": b.category if by_cat else None, "inclusive": cint(b.inclusive), "bills": 0, "base": 0.0, "billed": 0.0, "collected": 0.0})
 		row["bills"] += 1
@@ -1108,9 +1115,81 @@ def tax_register(f):
 		data.append(total_row("tax", _("Total"), data, ("bills", "base", "billed", "collected", "to_collect")))
 	return {"columns": [col("Tax", "tax", width=170)] + ([col("Category", "category", width=140)] if by_cat else []) +
 	                   [col("How", "kind", width=140), col("Bills", "bills", "Int", 80), col("Charged On", "base", "Currency", 130),
-	                    col("Tax Billed", "billed", "Currency", 120), col("Collected (estimate)", "collected", "Currency", 150), col("Still To Collect", "to_collect", "Currency", 130)],
+	                    col("Tax Billed", "billed", "Currency", 120), col("Collected", "collected", "Currency", 130), col("Still To Collect", "to_collect", "Currency", 130)],
 	        "data": data,
-	        "message": _("Payments go to the account, not to one bill, so the collected figure assumes each bill is paid in the share of the payments received since it was issued, up to the bill's payable amount.")}
+	        "message": _("Payments go to the account, so each account's payments up to the date are allocated to its bills oldest first, each bill taking up to its own charges (surcharge and fees take none); a bill's tax counts as collected in the share of the bill that way paid.")}
+
+
+# ================================================================ 17f. period control (increment 16; FS-RUN-10, FS-RUN-11)
+DELIVERY_STATUSES = ("Printed", "Handed to Distributor", "Delivered", "Sent by Message", "Returned", "Not Delivered")
+
+
+@report("bill_delivery_status", "Bill Delivery Status", BILLING + ["Meter Reader"],
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="bill_run", label="Bill Run", fieldtype="Link", options="Bill Run"),
+         dict(fieldname="from_date", label="Issued From", fieldtype="Date", default="@month_start"),
+         dict(fieldname="to_date", label="Issued To", fieldtype="Date", default="@today"),
+         dict(fieldname="status", label="Delivery Status", fieldtype="Select", options="\nNot recorded\n" + "\n".join(DELIVERY_STATUSES))],
+        "Where each issued bill stands: printed, handed to a distributor, delivered, sent by message, by block and route.", ref_doctype="Utility Bill")
+def bill_delivery_status(f):
+	s = society_of(f)
+	cond, values = ["b.society = %(s)s", "b.docstatus = 1"], {"s": s}
+	if f.get("bill_run"):
+		cond.append("b.bill_run = %(run)s")
+		values["run"] = f.bill_run
+	else:
+		cond.append("b.issue_date between %(a)s and %(z)s")
+		values.update(a=getdate(f.get("from_date") or month_start(nowdate())), z=getdate(f.get("to_date") or nowdate()))
+	if f.get("status"):
+		cond.append("ifnull(nullif(b.delivery_status, ''), 'Not recorded') = %(st)s")
+		values["st"] = f.status
+	rows = sql(f"""select {BLOCK} block, ifnull(nullif(c.route, ''), '(none)') route, ifnull(nullif(b.delivery_status, ''), 'Not recorded') st,
+	                      ifnull(max(b.distributor), '') distributor, count(*) n, max(b.delivery_date) last_date
+	               from `tabUtility Bill` b left join `tabProperty` p on p.name = b.property left join `tabConnection` c on c.name = b.connection
+	               where {' and '.join(cond)} group by block, route, st order by block, route""", values)
+	acc = OrderedDict()
+	for r in rows:
+		a = acc.setdefault((r.block, r.route), {"block": r.block, "route": r.route, "bills": 0, "not_recorded": 0, "distributor": "", "last_date": None,
+		                                         **{frappe.scrub(x): 0 for x in DELIVERY_STATUSES}})
+		a["bills"] += r.n
+		a["not_recorded" if r.st == "Not recorded" else frappe.scrub(r.st)] += r.n
+		a["distributor"] = a["distributor"] or r.distributor
+		a["last_date"] = max(filter(None, [a["last_date"], r.last_date]), default=None)
+	data = list(acc.values())
+	for d in data:
+		d["pending"] = d["bills"] - d["delivered"] - d["sent_by_message"] - d["returned"] - d["not_delivered"]
+	if data:
+		data.append(total_row("block", _("Total"), data, ("bills", "not_recorded", "pending", *[frappe.scrub(x) for x in DELIVERY_STATUSES])))
+	return {"columns": [col("Block", "block", width=120), col("Route", "route", width=120), col("Bills", "bills", "Int", 80),
+	                    col("Not Recorded", "not_recorded", "Int", 110), col("Printed", "printed", "Int", 90), col("With Distributor", "handed_to_distributor", "Int", 120),
+	                    col("Delivered", "delivered", "Int", 90), col("Sent by Message", "sent_by_message", "Int", 120), col("Returned", "returned", "Int", 90),
+	                    col("Not Delivered", "not_delivered", "Int", 110), col("Still Out", "pending", "Int", 90), col("Distributor", "distributor", width=130),
+	                    col("Last Update", "last_date", "Date", 100)],
+	        "data": data,
+	        "message": _("Still Out = bills not yet delivered, sent by message, returned or marked not delivered (printed, with a distributor, or not recorded).")}
+
+
+@report("period_close_status", "Period Close Status", FINANCE,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="year", label="Year", fieldtype="Int")],
+        "Each month: open or closed, who closed it and when, the checks that failed or warned, and reopenings.", ref_doctype="Billing Period")
+def period_close_status(f):
+	s = society_of(f)
+	cond, values = ["society = %(s)s"], {"s": s}
+	if f.get("year"):
+		cond.append("year(period_start) = %(y)s")
+		values["y"] = cint(f.year)
+	data = []
+	for p in sql(f"select name, period_start, status, closed_by, closed_on from `tabBilling Period` where {' and '.join(cond)} order by period_start", values):
+		checks = frappe.get_all("Period Check", filters={"parent": p.name}, fields=["result"])
+		reopened = frappe.db.count("Period Log", {"parent": p.name, "action": "Reopened"})
+		data.append({"period": p.name, "month": p.period_start, "status": p.status, "closed_by": p.closed_by, "closed_on": p.closed_on,
+		             "warnings": sum(1 for c in checks if c.result == "Warning"), "failed": sum(1 for c in checks if c.result == "Failed"), "reopened": reopened})
+	years = sql("select name, year_start, year_end, status, closing_balance from `tabYear End Close` where society = %(s)s order by year_start", {"s": s})
+	msg = _("Year end: {0}.").format("; ".join(f"{formatdate(y.year_start)} to {formatdate(y.year_end)} {y.status.lower()} (owed {flt(y.closing_balance):,.0f})" for y in years)) if years else None
+	return {"columns": [col("Period", "period", "Link", 120, "Billing Period"), col("Month", "month", "Date", 100), col("Status", "status", width=80),
+	                    col("Closed By", "closed_by", "Link", 150, "User"), col("Closed On", "closed_on", "Datetime", 150), col("Warnings", "warnings", "Int", 90),
+	                    col("Failed Checks", "failed", "Int", 110), col("Reopened", "reopened", "Int", 90)], "data": data, "message": msg}
 
 
 # ================================================================ 18. credit balances (RPT-26)

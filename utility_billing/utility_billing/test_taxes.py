@@ -160,7 +160,14 @@ class IntegrationTestTaxes(BillingCase):
 		cols, data, msg, *_ = mis.run("tax_register", {"society": SOC, "from_date": "2026-10-01", "to_date": "2026-10-31", "as_of": "2026-11-14"})
 		(row, total) = data
 		self.assertEqual((row["tax"], row["bills"], row["base"], row["billed"], row["kind"]), ("Society Duty", 1, 2_700, 270, "Added to bill"))
-		self.assertEqual(row["collected"], round(270 * 11_000 / 23_634, 2))  # the share of the bill paid since it was issued
+		# exact (increment 16): all payments pay the oldest bills first, each up to its own charges
+		left = -sum(frappe.get_all("Customer Ledger Entry", filters={"connection": self.conn, "entry_type": "Payment"}, pluck="amount"))
+		share = 0
+		for b in frappe.get_all("Utility Bill", filters={"connection": self.conn, "docstatus": 1}, fields=["name", "current_amount"], order_by="issue_date, name"):
+			take = min(left, b.current_amount)
+			left -= take
+			share = take / b.current_amount
+		self.assertEqual(row["collected"], round(270 * share, 2))
 		self.assertEqual((total["billed"], row["to_collect"]), (270, round(270 - row["collected"], 2)))
 		by_cat = mis.run("tax_register", {"society": SOC, "from_date": "2026-10-01", "to_date": "2026-10-31", "group_by": "Tax and Category"})[1]
 		self.assertEqual(by_cat[0]["category"], self.cat)

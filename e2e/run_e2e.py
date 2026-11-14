@@ -1596,6 +1596,56 @@ def t_arrangements(d: Desk):
 		raise AssertionError("corrections register lacks plans and write-offs")
 
 
+@case("QA-72", "FS-RUN-10/11/12/13, FS-ACC-10: month close and lock, year end, delivery tracking, run snapshot")
+def t_period_controls(d: Desk):
+	P = "utility_billing.utility_billing"
+	bo, bm, gm, ao = USERS["bo"], USERS["bm"], USERS["gm"], USERS["ao"]
+	conn = S["conn"]["name"]
+
+	# the run posted in QA-35 left a snapshot taken before it was posted
+	run = S["run"]["name"]
+	snaps = bm.s.get(f"{URL}/api/resource/Run Snapshot", params={"filters": json.dumps([["bill_run", "=", run]]),
+	                                                              "fields": json.dumps(["name", "status", "bill_count"])}).json()["data"]
+	eq([(s["status"], s["bill_count"]) for s in snaps], [("Kept", 1)], "run snapshot")
+
+	# bill delivery: a distributor must be named; the history keeps every step
+	expect_error(lambda: bo.call(f"{P}.delivery.mark", run=run, status="Handed to Distributor"), "distributor")
+	eq(bo.call(f"{P}.delivery.mark", run=run, status="Handed to Distributor", distributor="Ali Khan")["changed"], 1, "handed over")
+	bo.call(f"{P}.delivery.mark", run=run, status="Delivered", remarks="Left with the guard")
+	bill = bo.get("Utility Bill", S["bill"])
+	eq((bill["delivery_status"], bill["distributor"], [e["status"] for e in bill["delivery_log"]][-2:]), ("Delivered", "Ali Khan", ["Handed to Distributor", "Delivered"]), "delivery")  # the message sent at posting comes first
+	expect_error(lambda: USERS["cashier"].call(f"{P}.delivery.mark", run=run, status="Delivered"))
+	rep = rows_of(run_report(bo, "Bill Delivery Status", bill_run=run))
+	eq((rep[-1]["bills"], rep[-1]["delivered"]), (1, 1), "delivery report")
+
+	# month close: the checklist runs, only a manager closes, a closed month is locked
+	period = bm.save_doc({"doctype": "Billing Period", "society": S["society"], "period_start": "2026-03-15"})
+	eq((period["period_start"], period["period_end"], period["status"]), ("2026-03-01", "2026-03-31", "Open"), "period")
+	expect_error(lambda: bm.save_doc({"doctype": "Billing Period", "society": S["society"], "period_start": "2026-03-02"}), "already exists")
+	checks = bm.call(f"{P}.periods.preview", period=period["name"])
+	if not {"Bill runs approved", "Readings resolved", "Counters closed", "Bank statements matched", "Ledger reconciled"} <= {c["check"] for c in checks}:
+		raise AssertionError(f"checklist is missing checks: {[c['check'] for c in checks]}")
+	expect_error(lambda: USERS["rec"].call(f"{P}.periods.close", period=period["name"]))
+	closed = bm.call(f"{P}.periods.close", period=period["name"])
+	eq(closed["status"], "Closed", "closed")
+	expect_error(lambda: ao.save_doc({"doctype": "Payment Receipt", "payment_channel": "Bank / Channel", "reference_no": conn, "amount": "100", "mode": "Bank Transfer",
+	                                  "payment_date": "2026-03-20", "channel_txn_id": f"LOCK-{RUN}"}, action="Submit"), "closed")
+	expect_error(lambda: bm.call(f"{P}.periods.reopen", period=period["name"], reason="I would like it open again"))
+	expect_error(lambda: gm.call(f"{P}.periods.reopen", period=period["name"], reason="short"))
+	gm.call(f"{P}.periods.reopen", period=period["name"], reason="A payment was dated in the wrong month")
+	eq(bm.get("Billing Period", period["name"])["status"], "Open", "reopened")
+
+	# year end needs every month closed, then fixes the balances
+	year = bm.save_doc({"doctype": "Year End Close", "society": S["society"], "year_start": "2026-03-01", "year_end": "2026-03-31"})
+	expect_error(lambda: bm.call(f"{P}.yearend.close", name=year["name"]), "Close every month")
+	bm.call(f"{P}.periods.close", period=period["name"])
+	bm.call(f"{P}.yearend.prepare", name=year["name"])
+	eq(bm.call(f"{P}.yearend.close", name=year["name"])["status"], "Closed", "year closed")
+	expect_error(lambda: gm.call(f"{P}.periods.reopen", period=period["name"], reason="Reopen after the year end"), "year was closed")
+	rep = rows_of(run_report(gm, "Period Close Status", society=S["society"]))
+	eq([(r["status"], r["reopened"]) for r in rep], [("Closed", 1)], "period report")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

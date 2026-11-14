@@ -121,6 +121,7 @@
   "cash_only_after_dishonour",
   "prorata_section",
   "prorate_part_months",
+  "tariff_split_method",
   "arrangements_section",
   "max_installments",
   "min_down_payment_percent",
@@ -817,13 +818,21 @@
    "label": "Approval Levels by Amount",
    "options": "Approval Level",
    "description": "For each transaction, who approves up to which amount. With none set: a General Manager approves adjustments, refunds, bulk adjustments and write-offs; a Billing Manager approves installment plans."
+  },
+  {
+   "fieldname": "tariff_split_method",
+   "fieldtype": "Select",
+   "label": "Tariff Changing in the Middle of a Cycle",
+   "options": "By days\nOff",
+   "default": "By days",
+   "description": "By days: the units are split between the old and the new tariff by the days of the reading period under each, and fixed charges follow the days (FS-CFG-05, FS-BIL-02)."
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 20:00:00.000000",
+ "modified": "2026-11-14 22:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

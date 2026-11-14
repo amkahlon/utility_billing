@@ -1,0 +1,315 @@
+{
+ "actions": [],
+ "creation": "2026-11-14 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "close_title",
+  "society",
+  "year_start",
+  "year_end",
+  "cb1",
+  "status",
+  "closed_by",
+  "closed_on",
+  "summary_section",
+  "accounts",
+  "opening_balance",
+  "total_billed",
+  "total_surcharge",
+  "total_collected",
+  "total_adjusted",
+  "cb2",
+  "closing_balance",
+  "closing_arrears",
+  "closing_current",
+  "closing_surcharge",
+  "closing_fees",
+  "closing_credit",
+  "revenue_section",
+  "revenue",
+  "balances_section",
+  "balances"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "YEC-.YYYY.-.####",
+   "default": "YEC-.YYYY.-.####",
+   "hidden": 1
+  },
+  {
+   "fieldname": "close_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only_depends_on": "eval:doc.status=='Closed'"
+  },
+  {
+   "fieldname": "year_start",
+   "fieldtype": "Date",
+   "label": "Year Starts",
+   "reqd": 1,
+   "read_only_depends_on": "eval:doc.status=='Closed'"
+  },
+  {
+   "fieldname": "year_end",
+   "fieldtype": "Date",
+   "label": "Year Ends",
+   "reqd": 1,
+   "read_only_depends_on": "eval:doc.status=='Closed'"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nClosed",
+   "default": "Draft",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "closed_by",
+   "fieldtype": "Link",
+   "label": "Closed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Datetime",
+   "label": "Closed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Receivables at the end of the year"
+  },
+  {
+   "fieldname": "accounts",
+   "fieldtype": "Int",
+   "label": "Accounts With a Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "opening_balance",
+   "fieldtype": "Currency",
+   "label": "Owed at the Start of the Year",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_billed",
+   "fieldtype": "Currency",
+   "label": "Billed in the Year",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_surcharge",
+   "fieldtype": "Currency",
+   "label": "Surcharge and Fees Charged",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_collected",
+   "fieldtype": "Currency",
+   "label": "Collected in the Year",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_adjusted",
+   "fieldtype": "Currency",
+   "label": "Adjusted, Refunded and Written Off (net)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "closing_balance",
+   "fieldtype": "Currency",
+   "label": "Owed at the End of the Year",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closing_arrears",
+   "fieldtype": "Currency",
+   "label": "of which Arrears",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closing_current",
+   "fieldtype": "Currency",
+   "label": "of which Current Bill",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closing_surcharge",
+   "fieldtype": "Currency",
+   "label": "of which Surcharge",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closing_fees",
+   "fieldtype": "Currency",
+   "label": "of which Fees",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closing_credit",
+   "fieldtype": "Currency",
+   "label": "Credit Held for Consumers",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revenue_section",
+   "fieldtype": "Section Break",
+   "label": "Revenue billed by charge"
+  },
+  {
+   "fieldname": "revenue",
+   "fieldtype": "Table",
+   "label": "Revenue",
+   "options": "Year End Revenue",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balances_section",
+   "fieldtype": "Section Break",
+   "label": "Balances carried forward",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "balances",
+   "fieldtype": "Table",
+   "label": "Account Balances",
+   "options": "Year End Balance",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-14 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Year End Close",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "naming_series:",
+ "title_field": "close_title",
+ "show_title_field_in_link": 1,
+ "search_fields": "society",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

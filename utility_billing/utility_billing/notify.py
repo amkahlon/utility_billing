@@ -222,6 +222,11 @@ def _fallback(failed):
 def _sync_reference(log_name):
 	"""A recovery notice sent by SMS or WhatsApp follows its message: Sent when it goes, Failed when every channel failed."""
 	log = frappe.get_doc("Message Log", log_name)
+	if log.reference_doctype == "Utility Bill" and log.event == "bill.issued" and log.status in ("Sent", "Delivered", "Read") and log.reference_name:
+		from utility_billing.utility_billing import delivery  # noqa: PLC0415
+
+		delivery.record([log.reference_name], delivery.MESSAGE, remarks=log.channel, user=frappe.session.user, keep_stronger=True)
+		return
 	if log.reference_doctype != "Recovery Notice" or not log.reference_name:
 		return
 	status = {"Sent": "Sent", "Delivered": "Sent", "Read": "Sent", "Failed": "Failed"}.get(log.status)

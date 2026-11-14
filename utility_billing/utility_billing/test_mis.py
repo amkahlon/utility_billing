@@ -323,7 +323,7 @@ class IntegrationTestMIS(BillingCase):
 	# ----- registration, rights, empty data -----
 	def test_every_report_is_registered_with_roles_and_files(self):
 		root = Path(frappe.get_app_path("utility_billing", "utility_billing", "report"))
-		self.assertEqual(len(mis.REPORTS), 35)  # the register covers plans and write-offs in the existing report
+		self.assertEqual(len(mis.REPORTS), 37)  # increment 16 added Bill Delivery Status and Period Close Status
 		for key, spec in mis.REPORTS.items():
 			doc = frappe.get_doc("Report", spec["name"])
 			self.assertEqual((doc.report_type, doc.is_standard, doc.module), ("Script Report", "Yes", "Utility Billing"), spec["name"])

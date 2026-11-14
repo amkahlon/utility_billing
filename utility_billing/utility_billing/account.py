@@ -12,6 +12,7 @@ from frappe import _
 from frappe.utils import add_days, cint, flt, getdate, now_datetime, nowdate
 
 from utility_billing.utility_billing import account_engine as engine
+from utility_billing.utility_billing import periods
 
 FIELDS = {"current": "current_balance", "arrears": "arrears_balance", "surcharge": "surcharge_balance",
           "fees": "fees_balance", "credit": "credit_balance"}
@@ -64,6 +65,7 @@ def post(connection, entry_type, deltas, voucher_type, voucher_no, posting_date=
 	before = balances(connection)
 	after = engine.apply(before, deltas)
 	posting_date = getdate(posting_date or nowdate())
+	periods.assert_open(conn.society, posting_date, entry_type)  # a closed month is locked (FS-ACC-10)
 	entry = frappe.get_doc({
 		"doctype": "Customer Ledger Entry", "connection": connection, "consumer": conn.consumer,
 		"consumer_name": conn.consumer_name, "society": conn.society, "posting_date": posting_date,
@@ -183,7 +185,8 @@ def apply_surcharges(as_of=None, society=None):
 			continue
 		lock(bill.connection)
 		deltas = engine.charge(balances(bill.connection), "surcharge", bill.surcharge_amount, posting_order(bill.society))
-		entry = post(bill.connection, "Surcharge", deltas, "Utility Bill", bill.name, add_days(deadline, 1),
+		# dated the day after the deadline, or in the first open month when that one is already closed
+		entry = post(bill.connection, "Surcharge", deltas, "Utility Bill", bill.name, periods.next_open_date(bill.society, add_days(deadline, 1)),
 		             _("Late payment surcharge on the {0} bill").format(getdate(bill.billing_month).strftime("%B %Y")))
 		bill.db_set({"surcharge_status": "Posted", "surcharge_entry": entry.name}, update_modified=False)
 		posted += 1
