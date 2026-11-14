@@ -297,7 +297,23 @@ def _row_text(meta, table, row):
 	return ", ".join(parts)
 
 
+def clear_notifications(doc):
+	"""Once someone acts on a document (approve, reject, withdraw, resubmit, cancel), the notifications about it
+	are out of date: mark them read for everyone, and tell the affected users' open browsers to refresh their
+	counter (user request, 2026-11-14). The notification about the new state is created after this, so it stays
+	unread until it is opened."""
+	filters = {"document_type": doc.doctype, "document_name": doc.name, "read": 0}
+	users = frappe.get_all("Notification Log", filters=filters, pluck="for_user", distinct=True)
+	if not users:
+		return
+	frappe.db.set_value("Notification Log", filters, "read", 1, update_modified=False)
+	for user in users:
+		frappe.publish_realtime("ub_notifications_changed", user=user, after_commit=True)
+
+
 def log(doc, old, new, remarks=None):
+	if not doc.is_new():
+		clear_notifications(doc)
 	doc.append(
 		"approval_log",
 		{

@@ -1095,6 +1095,42 @@ def t_other_reports(d: Desk):
 		raise AssertionError(f"KPI dictionary has {len(kpis)} entries")
 
 
+# ---------------------------------------------------------------- notifications cleared when acted on
+def notes_of(desk, doc_name):
+	r = desk.s.get(f"{URL}/api/resource/Notification Log", params={
+		"filters": json.dumps([["document_name", "=", doc_name]]), "fields": json.dumps(["name", "read", "for_user", "subject"]),
+		"limit_page_length": 50})
+	return r.json()["data"]
+
+
+def wait_for_notes(desk, doc_name, count, seconds=20):
+	"""Notifications are created by the background worker; wait for them."""
+	import time
+
+	for _ in range(seconds * 2):
+		rows = notes_of(desk, doc_name)
+		if len(rows) >= count:
+			return rows
+		time.sleep(0.5)
+	raise AssertionError(f"expected {count} notifications about {doc_name}, found {len(notes_of(desk, doc_name))}")
+
+
+@case("QA-64", "Notifications: acting on a document clears the approvers' notifications; the maker's is read when opened")
+def t_notifications(d: Desk):
+	adj = USERS["bm"].save_doc({"doctype": "Tariff Adjustment", "naming_series": "ADJ-.YYYY.-.####", "adjustment_type": "FPA",
+	                            "society": S["society"], "utility": "Electricity", "billing_month": "2027-01-15",
+	                            "rate_per_unit": "1.00", "charge_type": f"FPA {RUN}"})
+	adj = USERS["bm"].workflow(adj, "Submit for Approval")
+	gm_notes = [n for n in wait_for_notes(USERS["gm"], adj["name"], 1) if n["for_user"] == EMAIL["gm"]]
+	eq([n["read"] for n in gm_notes], [0], "the approver has one unread notification")
+	adj = USERS["gm"].workflow(adj, "Approve")
+	eq([n["read"] for n in notes_of(USERS["gm"], adj["name"])], [1], "approving clears the approver's notification")
+	bm_notes = [n for n in wait_for_notes(USERS["bm"], adj["name"], 1) if n["for_user"] == EMAIL["bm"]]
+	eq([n["read"] for n in bm_notes], [0], "the maker's 'was approved' waits to be opened")
+	USERS["bm"].call("frappe.desk.doctype.notification_log.notification_log.mark_as_read", docname=bm_notes[0]["name"])
+	eq([n["read"] for n in notes_of(USERS["bm"], adj["name"])], [1], "opening it marks it read")
+
+
 # ---------------------------------------------------------------- runner
 def main():
 	d = Desk()
