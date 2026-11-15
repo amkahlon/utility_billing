@@ -41,8 +41,33 @@ window.UtilityBillingDashboard = class UtilityBillingDashboard {
 				this.society = d.society || null;
 				this.month = d.month || null;
 				this.$root.html(d.empty ? `<div class="ub-card ub-empty">${frappe.utils.escape_html(d.message)}</div>` : this.render(d));
+				if (!d.empty) this.insights(d);
 			})
 			.catch(() => this.$root.html(`<div class="ub-card ub-empty">${__("The dashboard could not be loaded.")}</div>`));
+	}
+
+	// Insights (AI analytics 1, increment 24): the month's facts by rules; a written summary when the society has switched it on.
+	// Loaded after the dashboard, so a slow AI call never holds the page up.
+	insights(d) {
+		const slot = this.$root.find(".ub-insights-slot");
+		frappe
+			.xcall("utility_billing.utility_billing.ai.insights", { society: d.society, month: d.month })
+			.then((r) => {
+				if (!r.facts.length) return slot.empty();
+				const e = (v) => frappe.utils.escape_html(v == null ? "" : String(v));
+				const linkify = (text) => e(text).replace(/\[(\d+)\]/g, (_m, n) => `<sup class="ub-fact-ref">[${n}]</sup>`);
+				const body = r.summary
+					? `<p class="ub-insight-text">${linkify(r.summary)}</p>`
+					: `<ul class="ub-insight-facts">${r.facts.slice(0, 5).map((f) => `<li>${e(f.text)}</li>`).join("")}</ul>`;
+				const facts = r.summary
+					? `<details class="ub-insight-sources"><summary>${__("The facts behind it")}</summary><ol>${r.facts.map((f) => `<li>${e(f.text)}</li>`).join("")}</ol></details>`
+					: "";
+				const note = r.error ? `<div class="ub-kpi-note red">${e(r.error)}</div>`
+					: r.ai ? `<div class="ub-kpi-note">${__("Written by AI from the facts below; every figure comes from the system's own reports.")}</div>`
+					: `<div class="ub-kpi-note">${__("Switch on the AI summary in AI Settings for a written overview.")}</div>`;
+				slot.html(`<section class="ub-card ub-insights"><div class="ub-cardhead"><h2>${__("Insights")}</h2></div>${body}${note}${facts}</section>`);
+			})
+			.catch(() => slot.empty());
 	}
 
 	skeleton() {
@@ -152,6 +177,7 @@ window.UtilityBillingDashboard = class UtilityBillingDashboard {
 		</div>
 		<div class="ub-actions">${actions}<button class="ub-chip" data-page="ub-recovery">${ub_icon("defaulters")}${__("Defaulters and recovery")}</button><button class="ub-chip" data-report="1">${ub_icon("chart")}${__("All reports")}</button></div>
 		<div class="ub-kpis">${kpis}</div>
+		<div class="ub-insights-slot"></div>
 		<div class="ub-grid3">
 			<section class="ub-card ub-span2">
 				<div class="ub-cardhead"><h2>${__("Billed vs. collected, last 12 months")}</h2>

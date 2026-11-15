@@ -483,3 +483,24 @@ def licence_revenue(f):
 	        "chart": {"data": {"labels": [d["month"] for d in data], "datasets": [{"name": _("Invoiced"), "values": [d["invoiced"] for d in data]},
 	                                                                         {"name": _("Collected"), "values": [d["paid"] for d in data]}]},
 	                  "type": "bar"}}
+
+
+# ---------------------------------------------------------------- consumption anomaly and theft suspicion (AI analytics 3, increment 24)
+@report("theft_suspicion", "Theft Suspicion", sorted(set(RECOVERY + ["Billing Officer", "Billing Manager"])),
+        [PERIOD[0], dict(fieldname="month", label="Month", fieldtype="Date", default="@month_start"),
+         dict(fieldname="min_score", label="Lowest Score", fieldtype="Int", default="30")],
+        "Accounts whose readings stand out (a fall, stuck or flat units, far below similar properties, repeated estimates, a fall after "
+        "a meter change), scored by rules. A reason to inspect, not proof.", ref_doctype="Connection")
+def theft_suspicion(f):
+	from utility_billing.utility_billing import anomaly  # noqa: PLC0415
+
+	month = month_start(f.get("month") or add_months(month_start(nowdate()), -1))
+	data = anomaly.scores(society_of(f), month, min_score=cint(f.get("min_score") or 30))
+	for r in data:
+		r["reasons"] = "; ".join(r["reasons"])
+	return {"columns": [col("Account", "connection", "Link", 120, "Connection"), col("Consumer", "consumer_name", width=160),
+	                    col("Category", "category", "Link", 140, "Consumer Category"), col("Score", "score", "Int", 70),
+	                    col("Why", "reasons", width=420), col("Units, Last 12 Months", "history", width=220)],
+	        "data": data,
+	        "summary": [{"value": len(data), "label": _("Accounts to look at"), "datatype": "Int", "indicator": "Orange"},
+	                    {"value": sum(1 for r in data if r["score"] >= 60), "label": _("Scored 60 or more"), "datatype": "Int", "indicator": "Red"}]}

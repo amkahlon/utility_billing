@@ -217,3 +217,13 @@ body[data-path="login"] .web-footer, body[data-path="login"] footer { color: #94
 .ub-bar { height: 10px; border-radius: 999px; background: var(--ub-slate-soft); overflow: hidden; margin: 10px 0 6px; }
 .ub-bar i { display: block; height: 100%; border-radius: 999px; background: var(--ub-blue); transition: width .3s ease; }
 .ub-bar i.ok { background: var(--ub-green); }
+/* AI analytics (increment 24): the dashboard's Insights card and the Ask page */
+.ub-insights { margin-bottom: 16px; }
+.ub-insight-text { font-size: 15px; line-height: 1.6; margin: 0 0 8px; }
+.ub-insight-facts { margin: 0 0 8px; padding-left: 18px; line-height: 1.7; }
+.ub-insight-sources { margin-top: 8px; font-size: 13px; color: var(--ub-muted); }
+.ub-insight-sources ol { margin: 6px 0 0; padding-left: 20px; line-height: 1.6; }
+.ub-fact-ref { color: var(--ub-blue); font-weight: 600; }
+.ub-ask-box { display: flex; gap: 8px; flex-wrap: wrap; }
+.ub-ask-box input { flex: 1 1 260px; min-width: 0; }
+.ub-answer { white-space: pre-wrap; font-size: 15px; line-height: 1.6; }

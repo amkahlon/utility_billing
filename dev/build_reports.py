@@ -130,6 +130,8 @@ GROUPS = [
 	                        ("DocType", "Transformer"), ("DocType", "Common Area Facility"), ("DocType", "Network Asset"), ("DocType", "DISCO Bill")]),
 	("Integrations", [("DocType", "API Client"), ("DocType", "Event Subscription"), ("DocType", "API Event Delivery"), ("DocType", "API Call Log")]),
 	("Reports", []),  # filled from the registry (scheduled report e-mails, FS-RPT-44, are parked by the user)
+	# AI analytics (increment 24): off until a society switches each feature on in AI Settings
+	("AI Analytics", [("Page", "ub-ask", "Ask Your Data"), ("Report", "Theft Suspicion"), ("DocType", "AI Settings"), ("DocType", "AI Log")]),
 	# SoftVerx's own licence billing (increment 24): the control site invoices; a society's site sets its key and reports usage
 	("Licensing", [("DocType", "Licence Settings"), ("DocType", "Licence Usage"), ("DocType", "Licence Client"), ("DocType", "Licence Invoice"),
 	               ("DocType", "Licence Payment"), ("Report", "Licence Receivables"), ("Report", "Licence Revenue")]),

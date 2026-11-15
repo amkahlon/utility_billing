@@ -323,7 +323,7 @@ class IntegrationTestMIS(BillingCase):
 	# ----- registration, rights, empty data -----
 	def test_every_report_is_registered_with_roles_and_files(self):
 		root = Path(frappe.get_app_path("utility_billing", "utility_billing", "report"))
-		self.assertEqual(len(mis.REPORTS), 59)  # 20 added eight (mis_more.py), 21 revenue assurance, 22 defective meters and former occupants, 23 meter stock and store movements, 24 licence receivables and revenue
+		self.assertEqual(len(mis.REPORTS), 60)  # 20 added eight (mis_more.py), 21 revenue assurance, 22 defective meters and former occupants, 23 meter stock and store movements, 24 licence receivables and revenue, theft suspicion
 		for key, spec in mis.REPORTS.items():
 			doc = frappe.get_doc("Report", spec["name"])
 			self.assertEqual((doc.report_type, doc.is_standard, doc.module), ("Script Report", "Yes", "Utility Billing"), spec["name"])
