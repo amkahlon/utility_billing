@@ -161,6 +161,11 @@ window.UtilityBillingConsumer360 = class UtilityBillingConsumer360 {
 			{ label: __("Share"), num: 1, cell: (o) => (o.share_percent ? `${o.share_percent}%` : "") },
 			{ label: __("From – to"), cell: (o) => `${this.d(o.from_date)} – ${o.to_date ? this.d(o.to_date) : __("now")}` },
 		], v.occupancy, __("Not recorded on any property."))}
-		<div class="ub-card ub-empty">${__("Service requests and complaints will appear here once those workflows are built.")}</div>`;
+		${this.table(__("Service requests"), [
+			{ label: __("Request"), cell: (s) => this.link("Service Request", s.name, s.request_title || s.name) },
+			{ label: __("What"), cell: (s) => this.esc(__(s.kind)) },
+			{ label: __("Status"), cell: (s) => this.esc(__(s.status)) },
+			{ label: __("Requested / due"), cell: (s) => `${this.d(s.requested_on)}<div class="sub">${this.d(s.due_by)}</div>` },
+		], v.service_requests || [], __("No service requests."))}`;
 	}
 };

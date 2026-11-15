@@ -15,6 +15,7 @@
   "society",
   "utility",
   "billing_month",
+  "supplementary",
   "reading_cycle",
   "cb1",
   "issue_date",
@@ -343,13 +344,20 @@
    "read_only": 1,
    "allow_on_submit": 1,
    "no_copy": 1
+  },
+  {
+   "fieldname": "supplementary",
+   "fieldtype": "Check",
+   "label": "Supplementary Run",
+   "in_standard_filter": 1,
+   "description": "Bills the accounts the month's main run left out (excluded, or with problems then fixed). The main run must be approved first (FS-RUN-03)."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-14 07:43:08.240137",
+ "modified": "2026-11-15 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Bill Run",

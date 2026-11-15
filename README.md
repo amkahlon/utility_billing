@@ -1,6 +1,6 @@
-### Utility Billing
+### Utility Management System
 
-Utility billing and management for housing societies and estates
+Utility management and billing for housing societies and estates (Frappe app `utility_billing`).
 
 ### Installation
 

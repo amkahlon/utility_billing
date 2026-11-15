@@ -352,5 +352,5 @@ class IntegrationTestRecovery(BillingCase):
 		page = frappe.get_doc("Page", "ub-recovery")
 		self.assertEqual((page.standard, page.module), ("Yes", "Utility Billing"))
 		self.assertIn("Recovery Officer", {r.role for r in page.roles})
-		links = {i.link_to for i in frappe.get_doc("Sidebar", "Utility Billing").items}
+		links = {i.link_to for i in frappe.get_doc("Sidebar", "Utility Management System").items}
 		self.assertTrue({"ub-recovery", "Recovery Case", "Recovery Run", "Recovery Notice", "Recovery Target"} <= links)

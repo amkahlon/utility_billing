@@ -33,14 +33,19 @@ class BillRun(Document):
 		approval.validate_transition(self)
 
 	def check_duplicate(self):
-		other = frappe.db.get_value(
-			"Bill Run",
-			{"society": self.society, "utility": self.utility, "billing_month": self.billing_month,
-			 "docstatus": ["<", 2], "name": ["!=", self.name]},
-			"name",
-		)
-		if other:
-			frappe.throw(_("Bill run {0} already covers this month.").format(other))
+		"""One main run per month; a supplementary run bills the accounts left out of it (FS-RUN-03), once the main run is posted."""
+		filters = {"society": self.society, "utility": self.utility, "billing_month": self.billing_month, "docstatus": ["<", 2], "name": ["!=", self.name]}
+		if not cint(self.get("supplementary")):
+			other = frappe.db.get_value("Bill Run", {**filters, "supplementary": 0}, "name")
+			if other:
+				frappe.throw(_("Bill run {0} already covers this month. Tick Supplementary to bill the accounts left out of it.").format(other))
+			return
+		main = frappe.db.get_value("Bill Run", {**filters, "supplementary": 0}, ["name", "docstatus"], as_dict=True)
+		if not main or main.docstatus != 1:
+			frappe.throw(_("A supplementary run follows the month's main run once it is approved."))
+		open_supp = frappe.db.get_value("Bill Run", {**filters, "supplementary": 1, "docstatus": 0}, "name")
+		if open_supp:
+			frappe.throw(_("Supplementary run {0} is still open for this month.").format(open_supp))
 
 	def mark_stale_calculation(self):
 		"""Changing the issue date or exclusions after calculating means the bills must be recalculated."""

@@ -337,6 +337,6 @@ class IntegrationTestSettlement(BillingCase):
 		self.assertEqual((item["route"], item["options"]["status"]), (["List", "Suspense Payment"], "Held"))
 
 	def test_new_things_are_in_the_menu_and_reports_are_registered(self):
-		links = {i.link_to for i in frappe.get_doc("Sidebar", "Utility Billing").items}
+		links = {i.link_to for i in frappe.get_doc("Sidebar", "Utility Management System").items}
 		self.assertTrue({"Refund", "Settlement File", "Suspense Payment", "Message Log", "Broadcast", "Notification Template", "Messaging Provider",
 		                 "Message Cost by Channel", "Settlement Exceptions", "Suspense Payments", "Refunds Register"} <= links)

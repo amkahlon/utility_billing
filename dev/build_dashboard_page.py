@@ -16,7 +16,7 @@ else:
 	page.save()
 	print("page updated")
 
-sb = frappe.get_doc("Sidebar", "Utility Billing")
+sb = frappe.get_doc("Sidebar", "Utility Management System")
 if not any(i.link_to == "ub-dashboard" for i in sb.items):
 	items = list(sb.items)
 	sb.items = []

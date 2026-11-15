@@ -227,6 +227,43 @@ class IntegrationTestBilling(BillingCase):
 		with self.assertRaises(frappe.ValidationError):
 			self.make_run("2026-10-01", "2026-11-02", calculate=False)  # one run per month
 
+	def test_a_supplementary_run_bills_only_what_the_main_run_left_out(self):
+		cons = frappe.db.get_value("Connection", self.conn, "consumer")
+		prop = frappe.get_doc({"doctype": "Property", "society": SOC, "property_no": "N 2310"}).insert().name
+		meter = frappe.get_doc({"doctype": "Meter", "serial_no": "TST-BIL-M3", "society": SOC, "utility": "Electricity"}).insert().name
+		other = frappe.get_doc({"doctype": "Connection", "society": SOC, "property": prop, "consumer": cons, "utility": "Electricity",
+		                        "consumer_category": self.cat, "status": "Active",
+		                        "meters": [{"meter": meter, "installed_on": "2026-07-01", "start_reading": 100}]}).insert().name
+		cycle = self.month_reading("2026-10-01", 3905, close=False)
+		r = frappe.get_doc("Meter Reading", {"reading_cycle": cycle, "connection": other})
+		r.present_reading, r.reading_date = 400, "2026-10-05"
+		r.save()
+		if r.status == "Flagged":
+			readings.approve_reading(r.name, "Checked")
+		readings.close_cycle(cycle)
+		self.fpa("2026-10-01", 1.30)
+		frappe.set_user(BILLING_OFFICER)
+		with self.assertRaises(frappe.ValidationError):  # the main run comes first
+			frappe.get_doc({"doctype": "Bill Run", "society": SOC, "utility": "Electricity", "billing_month": "2026-10-01",
+			                "issue_date": "2026-11-01", "supplementary": 1}).insert()
+		frappe.set_user("Administrator")
+		self.post(self.make_run("2026-10-01", "2026-11-01", exclusions=[(self.conn, "Meter under dispute")]))
+		frappe.set_user(BILLING_OFFICER)
+		supp = frappe.get_doc({"doctype": "Bill Run", "society": SOC, "utility": "Electricity", "billing_month": "2026-10-01",
+		                       "issue_date": "2026-11-05", "supplementary": 1}).insert()
+		billing.calculate_run(supp.name)
+		frappe.set_user("Administrator")
+		supp.reload()
+		self.assertEqual((supp.bill_count, len(supp.problems)), (1, 0))
+		self.post(supp)
+		frappe.set_user(BILLING_OFFICER)
+		again = frappe.get_doc({"doctype": "Bill Run", "society": SOC, "utility": "Electricity", "billing_month": "2026-10-01",
+		                        "issue_date": "2026-11-06", "supplementary": 1}).insert()
+		billing.calculate_run(again.name)
+		frappe.set_user("Administrator")
+		again.reload()
+		self.assertEqual((again.bill_count, len(again.problems)), (0, 0))  # nothing left to bill, nobody billed twice
+
 	def test_bills_only_through_runs_and_cancel(self):
 		with self.assertRaises(frappe.ValidationError):
 			frappe.get_doc({"doctype": "Utility Bill", "connection": self.conn, "billing_month": "2026-10-01"}).insert()

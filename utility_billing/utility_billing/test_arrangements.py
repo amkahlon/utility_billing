@@ -350,5 +350,5 @@ class IntegrationTestArrangements(BillingCase):
 		self.assertEqual({r["doctype"] for r in data}, set())  # a draft isn't waiting for approval yet
 
 	def test_the_menu_has_the_new_screens(self):
-		links = {i.link_to for i in frappe.get_doc("Sidebar", "Utility Billing").items}
+		links = {i.link_to for i in frappe.get_doc("Sidebar", "Utility Management System").items}
 		self.assertTrue({"Installment Plan", "Write Off"} <= links)

@@ -92,7 +92,8 @@ def view(consumer: str):
 		"total_deposit": round(sum(flt(a["security_deposit"]) for a in accounts), 2),
 		"bills": bills, "payments": payments, "ledger": ledger, "readings": readings, "deposits": deposits, "occupancy": occupancy,
 		"open_items": open_items,
-		"service_requests": None,  # service requests and complaints arrive with the parked service-request workflows
+		"service_requests": frappe.get_all("Service Request", filters={"connection": ["in", names]},
+		                                   fields=["name", "request_title", "kind", "status", "requested_on", "due_by"], order_by="requested_on desc", limit=20),
 	}
 
 
