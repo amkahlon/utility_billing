@@ -18,6 +18,7 @@ import json
 import os
 import random
 import sys
+import time
 import traceback
 from pathlib import Path
 
@@ -1838,6 +1839,54 @@ def t_revenue_assurance(d: Desk):
 	if not meter_row or int(meter_row["closed"]) < 1:
 		raise AssertionError(f"findings report: {rows} (second run {again})")
 	expect_error(lambda: run_report(USERS["cashier"], "Revenue Assurance Findings", society=soc))
+
+
+@case("QA-78", "FS-API-01/03/06/07/08/10: a 1Link client signs in with its API key; inquiry, payment once, idempotent v1 payment; docs served")
+def t_billing_api(d: Desk):
+	soc, conn = S["society"], S["conn"]["name"]
+	email = f"qa{RUN}.1link@example.com"
+	d.save_doc({"doctype": "User", "email": email, "first_name": f"QA{RUN} 1Link", "send_welcome_email": 0, "user_type": "System User",
+	            "roles": [{"role": "API Integration"}]})
+	api_secret = d.call("frappe.core.doctype.user.user.generate_keys", user=email)["api_secret"]
+	api_key = d.get("User", email)["api_key"]
+	d.save_doc({"doctype": "API Client", "client_name": f"QA{RUN} 1Link", "channel": "1Link", "user": email, "enabled": 1, "rate_limit": "100",
+	            "scope_account_read": 1, "scope_bill_read": 1, "scope_payment_write": 1, "scope_payment_reverse": 1,
+	            "societies": [{"society": soc}], "payment_mode": "1Link"})
+	api = Desk()
+	api.s.headers["Authorization"] = f"token {api_key}:{api_secret}"
+	CH, V1 = f"{URL}/api/method/utility_billing.api.channels", f"{URL}/api/method/utility_billing.api.v1"
+
+	inq = api.s.get(f"{CH}.bill_inquiry", params={"consumer_number": conn, "bank_mnemonic": "MCB"}).json()["message"]
+	eq(inq["response_Code"], "00", "inquiry answered")
+	eq(api.s.get(f"{CH}.bill_inquiry", params={"consumer_number": "9999999999"}).json()["message"]["response_Code"], "01", "unknown consumer")
+	due = int(inq["amount_within_dueDate"][1:]) / 100
+	today = time.strftime("%Y%m%d")
+	if due > 0:
+		pay = {"consumer_number": conn, "tran_auth_id": f"QA{RUN}A1", "transaction_amount": inq["amount_within_dueDate"], "tran_date": today, "tran_time": "101500"}
+		eq(api.s.post(f"{CH}.bill_payment", data=pay).json()["message"]["response_Code"], "00", "1Link payment posted")
+		eq(api.s.post(f"{CH}.bill_payment", data=pay).json()["message"]["response_Code"], "03", "the same authorisation ID posts once")
+		eq(api.s.post(f"{CH}.bill_reversal", data={"consumer_number": conn, "tran_auth_id": f"QA{RUN}A1"}).json()["message"]["response_Code"], "00",
+		   "reversed the same day")
+	short = {"consumer_number": conn, "tran_auth_id": f"QA{RUN}A2", "transaction_amount": "+0000000000100", "tran_date": today}
+	eq(api.s.post(f"{CH}.bill_payment", data=short).json()["message"]["response_Code"], "04", "a part payment is refused for this channel")
+
+	body = {"reference_no": conn, "amount": "1", "paid_on": time.strftime("%Y-%m-%d"), "transaction_id": f"QA{RUN}V1"}
+	r = api.s.post(f"{V1}.post_payment", data=body)
+	eq(r.status_code, 417, "a write without an Idempotency-Key is refused")
+	d.save_doc(dict(d.get("API Client", f"QA{RUN} 1Link"), partial_payments=1))
+	first = api.s.post(f"{V1}.post_payment", data=body, headers={"Idempotency-Key": f"QA{RUN}-K1"}).json()["message"]
+	again = api.s.post(f"{V1}.post_payment", data=body, headers={"Idempotency-Key": f"QA{RUN}-K1"}).json()["message"]
+	eq(first["receipt"], again["receipt"], "a retry with the same key returns the same receipt")
+	eq(api.s.post(f"{V1}.post_payment", data=dict(body, amount="2"), headers={"Idempotency-Key": f"QA{RUN}-K1"}).status_code, 409, "key reused for another request")
+	eq(api.s.get(f"{V1}.bills", params={"reference_no": conn}).status_code, 200, "bills readable with the bill scope")
+	eq(api.s.get(f"{URL}/api/resource/Connection/{conn}").status_code in (403, 404), True, "the integration user can't browse the desk")
+	logs = d.s.get(f"{URL}/api/resource/API Call Log", params={"filters": json.dumps({"client": f"QA{RUN} 1Link"}), "limit_page_length": 50}).json()["data"]
+	eq(len(logs) >= 8, True, "every call is logged")
+
+	guest = requests.get(f"{V1}.openapi", headers={"Host": SITE})
+	eq((guest.status_code, guest.json()["message"]["openapi"]), (200, "3.0.3"), "OpenAPI document is public")
+	page = requests.get(f"{URL}/ums-api", headers={"Host": SITE})
+	eq((page.status_code, "bill_inquiry" in page.text and "Idempotency-Key" in page.text), (200, True), "documentation page")
 
 
 def _notice_pdf(desk, run):

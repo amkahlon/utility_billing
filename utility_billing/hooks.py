@@ -110,11 +110,22 @@ jinja = {"methods": [
 	"utility_billing.utility_billing.account_print.payment_receipt_html",
 ]}
 
+# Events for other systems (FS-API-02): written with the change, delivered by the scheduler
+doc_events = {
+	"Utility Bill": {"on_submit": "utility_billing.utility_billing.events.bill_issued"},
+	"Payment Receipt": {"on_submit": "utility_billing.utility_billing.events.payment_posted",
+	                    "on_cancel": "utility_billing.utility_billing.events.payment_reversed"},
+	"Connection": {"on_update": "utility_billing.utility_billing.events.connection_changed"},
+	"Service Request": {"on_update": "utility_billing.utility_billing.events.service_request_changed"},
+}
+
 # Late payment surcharge the day after the due date + grace days (FS-REC-03)
 scheduler_events = {
 	"all": [
 		# Send the messages that are due: retries, and those held by quiet hours (FS-NTF-01, 02, 04)
 		"utility_billing.utility_billing.notify.process_queue",
+		# Deliver events to subscribed systems, with retries (FS-API-02)
+		"utility_billing.utility_billing.events.deliver",
 	],
 	"daily": [
 		"utility_billing.utility_billing.account.apply_surcharges",
@@ -318,7 +329,7 @@ fixtures = [
 		"dt": "Role",
 		"filters": [["role_name", "in", [
 			"Society Admin", "Billing Manager", "General Manager", "Billing Officer", "Meter Reader",
-			"Cashier", "Recovery Officer", "Accounts Officer", "Management", "Billing Auditor",
+			"Cashier", "Recovery Officer", "Accounts Officer", "Management", "Billing Auditor", "API Integration",
 		]]],
 	},
 	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},

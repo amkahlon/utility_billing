@@ -129,6 +129,12 @@ class IntegrationTestRevenueAssurance(IntegrationTestCase):
 		self.assertIn("2 times", texts["TST-RA-M1"])
 		self.assertIn("TST-RA-LOOSE", texts)
 		self.assertIn(no_meter, texts)
+		# found in the browser check: a disconnected account keeps its meter, which is not a finding
+		meter = frappe.db.get_value("Connection", self.houses[1], "current_meter")
+		frappe.db.set_value("Connection", self.houses[1], "status", "Disconnected")
+		frappe.db.delete("RA Finding", {"society": SOC})
+		ra.run_checks(SOC, OCT)
+		self.assertNotIn(meter, {f.subject for f in self.findings("RA-03")})
 
 	# ---- RA-04
 	def test_load_and_use_that_dont_fit_the_category(self):

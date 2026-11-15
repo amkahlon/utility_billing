@@ -1,0 +1,111 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 20:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "client",
+  "endpoint",
+  "status_code",
+  "response_code",
+  "cb1",
+  "duration_ms",
+  "idempotency_key",
+  "ip_address",
+  "error"
+ ],
+ "fields": [
+  {
+   "fieldname": "client",
+   "fieldtype": "Link",
+   "label": "API Client",
+   "options": "API Client",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "endpoint",
+   "fieldtype": "Data",
+   "label": "Method",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "status_code",
+   "fieldtype": "Int",
+   "label": "HTTP Status",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "response_code",
+   "fieldtype": "Data",
+   "label": "Channel Response Code"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "duration_ms",
+   "fieldtype": "Int",
+   "label": "Time (ms)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key"
+  },
+  {
+   "fieldname": "ip_address",
+   "fieldtype": "Data",
+   "label": "IP Address"
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Small Text",
+   "label": "Error"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "API Call Log",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "hash",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "in_create": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC"
+}

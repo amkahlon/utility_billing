@@ -234,7 +234,7 @@ def check_meter_records(society, month, s):
 	for m in meters:
 		if m.status == "Installed":
 			c = active.get(m.current_connection)
-			if not c or c.status not in ("Active", "Applied") or c.current_meter != m.name:
+			if not c or c.status not in ("Active", "Applied", "Disconnected") or c.current_meter != m.name:  # a disconnected account keeps its meter
 				yield dict(check="RA-03 Meter records", subject_type="Meter", subject=m.name, connection=m.current_connection, score=55, amount=0, month=None,
 				           details=_("Meter {0} is recorded as installed but isn't the current meter of an active account.").format(m.name), evidence={})
 	metered = set(frappe.get_all("Utility Type", filters={"is_metered": 1}, pluck="name"))

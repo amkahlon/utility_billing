@@ -1,0 +1,94 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 20:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "client",
+  "idempotency_key",
+  "unique_key",
+  "endpoint",
+  "request_hash",
+  "status_code",
+  "response"
+ ],
+ "fields": [
+  {
+   "fieldname": "client",
+   "fieldtype": "Link",
+   "label": "API Client",
+   "options": "API Client",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Key",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "unique_key",
+   "fieldtype": "Data",
+   "label": "Client and Key",
+   "unique": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "endpoint",
+   "fieldtype": "Data",
+   "label": "Method",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "request_hash",
+   "fieldtype": "Data",
+   "label": "Request Hash"
+  },
+  {
+   "fieldname": "status_code",
+   "fieldtype": "Int",
+   "label": "HTTP Status"
+  },
+  {
+   "fieldname": "response",
+   "fieldtype": "Long Text",
+   "label": "Response"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "API Idempotency Key",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "hash",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "in_create": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC"
+}

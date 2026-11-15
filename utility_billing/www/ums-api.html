@@ -1,0 +1,39 @@
+{% extends "templates/web.html" %}
+{% block title %}{{ info.title }}{% endblock %}
+{% block page_content %}
+<style>
+	.ums-api { max-width: 960px; margin: 0 auto; padding: 24px 16px; font-size: 14px; }
+	.ums-api .api-title { display: block; font-size: 26px; line-height: 1.3; font-weight: 700; margin: 0 0 8px; height: auto; }
+	.ums-api .api-intro { display: block; color: #5b6472; font-size: 14px; line-height: 1.6; margin: 0 0 24px; }
+	.ums-api .api-group { display: block; font-size: 20px; line-height: 1.3; font-weight: 600; margin: 28px 0 8px; }
+	.ums-api .op { border: 1px solid #e3e6ea; border-radius: 10px; padding: 16px; margin: 12px 0; background: #fff; }
+	.ums-api .verb { display: inline-block; font-weight: 600; font-size: 12px; padding: 2px 8px; border-radius: 6px; margin-right: 8px; }
+	.ums-api .GET { background: #e6f2ff; color: #0b5cad; } .ums-api .POST { background: #e9f7ef; color: #1a7f45; }
+	.ums-api code { font-size: 13px; word-break: break-all; }
+	.ums-api table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+	.ums-api th, .ums-api td { text-align: left; padding: 6px 8px; border-top: 1px solid #eef0f2; vertical-align: top; }
+	.ums-api pre { background: #f6f8fa; padding: 10px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+	.ums-api .scope { float: right; color: #5b6472; font-size: 12px; }
+</style>
+<div class="ums-api">
+	<div class="api-title" role="heading" aria-level="1">{{ info.title }}</div>
+	<p class="api-intro">Version {{ info.version }}. {{ info.description }}
+		Machine-readable: <a href="/api/method/utility_billing.api.v1.openapi">OpenAPI 3 document</a>.</p>
+	{% for tag, ops in groups %}
+	<div class="api-group" role="heading" aria-level="2">{{ tag }}</div>
+	{% for o in ops %}
+	<div class="op">
+		<span class="scope">scope: {{ o.scope }}</span>
+		<span class="verb {{ o.verb }}">{{ o.verb }}</span><code>{{ o.path }}</code>
+		<p style="margin: 8px 0 0">{{ o.summary }}</p>
+		{% if o.params %}
+		<table><tr><th>Parameter</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr>
+			{% for p in o.params %}<tr><td><code>{{ p.name }}</code></td><td>{{ p.where }}</td><td>{{ p.type }}</td><td>{{ "yes" if p.required else "" }}</td><td>{{ p.description }}</td></tr>{% endfor %}
+		</table>
+		{% endif %}
+		<pre>{{ o.example }}</pre>
+	</div>
+	{% endfor %}
+	{% endfor %}
+</div>
+{% endblock %}

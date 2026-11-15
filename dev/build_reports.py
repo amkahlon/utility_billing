@@ -125,6 +125,7 @@ GROUPS = [
 	                ("DocType", "Journal Export Layout"), ("DocType", "Revenue Target")]),
 	("Meters and Network", [("DocType", "Meter"), ("DocType", "Grid Station"), ("DocType", "Feeder"), ("DocType", "Line Section"),
 	                        ("DocType", "Transformer"), ("DocType", "Common Area Facility"), ("DocType", "Network Asset"), ("DocType", "DISCO Bill")]),
+	("Integrations", [("DocType", "API Client"), ("DocType", "Event Subscription"), ("DocType", "API Event Delivery"), ("DocType", "API Call Log")]),
 	("Reports", []),  # filled from the registry (scheduled report e-mails, FS-RPT-44, are parked by the user)
 	("Setup", [("DocType", "Society"), ("DocType", "Tariff"), ("DocType", "Charge Type"), ("DocType", "Tax"), ("DocType", "Consumer Category"),
 	           ("DocType", "Fee Type"), ("DocType", "Cash Counter"), ("DocType", "Reason Code"),
