@@ -38,9 +38,9 @@
 	.ub .wm { position: absolute; top: 85mm; left: 0; width: 100%; text-align: center; font-size: 64pt; font-weight: 700;
 		color: rgba(180, 35, 24, .13); -webkit-transform: rotate(-24deg); transform: rotate(-24deg); z-index: 0; }
 	.ub .sp { height: 2.5mm; }
-	.ub .l2 { font-family: "Noto Naskh Arabic", "Noto Nastaliq Urdu", "DejaVu Sans", sans-serif; color: #5b6670; font-weight: 400; }
+	.ub .l2 { font-family: "Noto Naskh Arabic", "DejaVu Sans", sans-serif; color: #5b6670; font-weight: 400; }
 	.ub .band .l2, .ub .pay .l2 { color: inherit; }
-	.ub .rtl { text-align: right; word-wrap: break-word; font-family: "Noto Naskh Arabic", "Noto Nastaliq Urdu", "DejaVu Sans", sans-serif; }
+	.ub .rtl { text-align: right; word-wrap: break-word; font-family: "Noto Naskh Arabic", "DejaVu Sans", sans-serif; }
 	.ub .stamp .l2 { display: block; }
 	.ub .barcode { display: block; height: 11mm; width: 52mm; margin-top: 1mm; }
 	.ub .gap { width: 3mm; }
@@ -175,7 +175,7 @@
 			</ul>
 			{%- if notices_second %}
 			<ul class="notices small rtl" lang="{{ lang2 }}" style="margin: 1.5mm 0; padding-right: 5mm; padding-left: 0; list-style: none;">
-				{%- for n in notices_second %}<li>{{ n | e }}</li>{% endfor %}
+				{%- for n in notices_second %}<li>{{ rtl(n) }}</li>{% endfor %}
 			</ul>
 			{%- endif %}
 		</div>
@@ -187,7 +187,8 @@
 			<div class="box-h">{{ t("How to pay") }}</div>
 			<div class="small" style="padding: 1.5mm 2mm;">
 				{%- if soc.payment_instructions %}<div>{% for l in soc.payment_instructions.split("\n") %}{{ l | e }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div>{% endif %}
-				{%- if payment_instructions_second %}<div class="rtl" lang="{{ lang2 }}" style="margin-top: 1mm;">{% for l in payment_instructions_second.split("\n") %}{{ l | e }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div>{% endif %}
+				{#- a table cell: wkhtmltopdf overruns a right-aligned block that mixes digits and Urdu (found in the PDF check) #}
+				{%- if payment_instructions_second %}<table style="margin-top: 1mm; table-layout: fixed;"><tr><td class="rtl" dir="rtl" lang="{{ lang2 }}">{% for l in payment_instructions_second.split("\n") %}{{ rtl(l) }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr></table>{% endif %}
 				{%- for b in soc.banks %}
 				<div style="margin-top: 1mm;"><span class="strong">{{ b.bank | e }}</span> {{ (b.title or "") | e }} · {{ _("A/c") }} {{ (b.account or "") | e }}
 					{%- if b.iban %}<br><span class="muted">IBAN</span> {{ b.iban | e }}{% endif %}

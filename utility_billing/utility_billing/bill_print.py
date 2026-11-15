@@ -11,6 +11,7 @@ notices or bank accounts, or the consumer's details change (FS-RUN-09).
 import base64
 import json
 import mimetypes
+import re
 import urllib.parse
 
 import frappe
@@ -210,6 +211,23 @@ def labeller(language):
 	return t
 
 
+LATIN_RUN = re.compile(r"[0-9A-Za-z][0-9A-Za-z.,:/+\-]*")
+
+
+def rtl_text(text):
+	"""Second-language text for the PDF: escaped, with each run of digits or Latin letters in a left-to-right span. wkhtmltopdf
+	otherwise lays out a right-to-left line that mixes them too wide for its box (found in the PDF check, 2026-11-15)."""
+	from markupsafe import Markup, escape  # noqa: PLC0415
+
+	text, out, pos = str(text or ""), [], 0
+	for m in LATIN_RUN.finditer(text):  # escape each piece on its own, so an entity such as &lt; is never split
+		out.append(str(escape(text[pos:m.start()])))
+		out.append(f'<span dir="ltr">{escape(m.group(0))}</span>')
+		pos = m.end()
+	out.append(str(escape(text[pos:])))
+	return Markup("".join(out))
+
+
 def bill_context(bill, duplicate=0) -> dict:
 	snap = snapshot_of(bill)
 	soc = snap["society"]
@@ -230,7 +248,7 @@ def bill_context(bill, duplicate=0) -> dict:
 		"logo": logo_data_uri(soc.get("logo")),
 		"qr": qr_data_uri(qr_text(soc, bill, ref)) if soc.get("show_qr") and ref else None,
 		"barcode": barcode.png_data_uri(ref) if soc.get("show_barcode") and ref else None,
-		"t": labeller(language), "lang2": bill_labels.LANG_CODE.get(language or ""),
+		"t": labeller(language), "lang2": bill_labels.LANG_CODE.get(language or ""), "rtl": rtl_text,
 		"notices_second": soc.get("notices_second") or [], "payment_instructions_second": soc.get("payment_instructions_second"),
 		"watermark": watermark_of(bill, duplicate),
 		"duplicate": duplicate,

@@ -45,3 +45,9 @@ class UnitTestBillPrintHelpers(UnitTestCase):
 		self.assertIn('dir="rtl" lang="ur"', urdu)
 		self.assertIn("آخری تاریخ", urdu)
 		self.assertEqual(str(labeller("Urdu")("Something new")), "Something new")  # no translation: English only
+
+	def test_digits_in_right_to_left_text_are_kept_left_to_right(self):
+		from utility_billing.utility_billing.bill_print import rtl_text
+
+		self.assertEqual(str(rtl_text("یا 1لنک سے 042-111 پر")), 'یا <span dir="ltr">1</span>لنک سے <span dir="ltr">042-111</span> پر')
+		self.assertEqual(str(rtl_text("<b>x</b>")), '&lt;<span dir="ltr">b</span>&gt;<span dir="ltr">x</span>&lt;/<span dir="ltr">b</span>&gt;')  # escaped, entities whole
