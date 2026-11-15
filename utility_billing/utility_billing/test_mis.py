@@ -5,6 +5,8 @@ September bill 59,470 paid 58,366 on 10-10-2026, October bill 22,260 + arrears 1
 import json
 from pathlib import Path
 
+from unittest.mock import patch
+
 import frappe
 
 from utility_billing.install import create_default_kpis, create_default_reason_codes
@@ -151,6 +153,9 @@ class IntegrationTestMIS(BillingCase):
 		self.assertEqual((octo["bills"], octo["units"], octo["amount"], octo["exempt"]), (1, 0, 0, 1))
 
 	# ----- 7 and 8. adjustments and surcharge -----
+	# The October test bill is due 15-11-2026; this test needs "today" before that, so the date is pinned.
+	@patch("utility_billing.utility_billing.doctype.account_adjustment.account_adjustment.nowdate", new=lambda: "2026-11-10")
+	@patch("utility_billing.utility_billing.account.nowdate", new=lambda: "2026-11-10")
 	def test_adjustments_and_surcharge_registers(self):
 		run, bill = self.october_posted()
 		account.apply_surcharges(as_of="2026-11-16", society=SOC)
