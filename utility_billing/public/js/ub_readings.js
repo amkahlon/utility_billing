@@ -134,7 +134,8 @@ window.UtilityBillingReadings = class UtilityBillingReadings {
 			<div class="ub-card"><h2>${__("Check meters")}</h2>${this.checks(d)}</div>
 		</div>
 		<div class="ub-grid3">
-			<div class="ub-card ub-span2"><h2>${__("Waiting for review")} (${d.review_total})</h2>${this.review(d)}</div>
+			<div class="ub-card ub-span2"><div class="ub-cardhead"><h2>${__("Waiting for review")} (${d.review_total})</h2>
+				${d.review_total ? `<a class="ub-btn" href="/app/ub-review?cycle=${encodeURIComponent(d.cycle)}">${__("Review them")}</a>` : ""}</div>${this.review(d)}</div>
 			<div class="ub-card"><h2>${__("By reader")}</h2>${this.table(d.by_reader, __("Reader"))}</div>
 		</div>`;
 	}

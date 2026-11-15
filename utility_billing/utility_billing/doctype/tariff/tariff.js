@@ -14,6 +14,7 @@ frappe.ui.form.on("Tariff", {
 	},
 
 	refresh(frm) {
+		if (!frm.is_new()) frm.add_custom_button(__("Open in Tariff Editor"), () => frappe.set_route("ub-tariff", { name: frm.doc.name }));
 		show_energy_pricing(frm).then((metered) => {
 			if (frm.doc.docstatus === 1 && metered) {
 				frm.add_custom_button(__("Preview Charge"), () => preview_charge(frm));

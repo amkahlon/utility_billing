@@ -1,0 +1,139 @@
+# Copyright (c) 2026, SoftVerx. All rights reserved. See license.txt.
+"""Bill run wizard (page ub-billrun), designed after the mock-up "Bill run wizard" (2026-11-16): one month's run as six steps (cycle,
+readings, calculate, review exceptions, approve and post, print and notify), the figures that matter at each, and the bills that need a
+look before approval: very high, zero use, estimated, defective meter, and accounts that couldn't be billed. Each is accepted, held (left
+out of the run, billed later in a supplementary run) or corrected at its reading. The run is the ordinary Bill Run, so calculation,
+maker-checker approval and posting are unchanged (FS-RUN-01 to 06)."""
+
+import json
+
+import frappe
+from frappe import _
+from frappe.utils import cint, flt, getdate
+
+from utility_billing.utility_billing import billing
+
+HIGH_FACTOR, HIGH_MIN_UNITS = 2.0, 100
+
+
+def _run(name):
+	run = frappe.get_doc("Bill Run", name)
+	run.check_permission("read")
+	return run
+
+
+def review_of(run) -> dict:
+	try:
+		return json.loads(run.get("exception_review") or "{}")
+	except ValueError:
+		return {}
+
+
+def exceptions(run) -> list[dict]:
+	"""The run's bills that need a look, each with why, and the accounts the run couldn't bill."""
+	bills = frappe.get_all("Utility Bill", filters={"bill_run": run.name, "docstatus": ["<", 2]},
+	                       fields=["name", "connection", "consumer_name", "property", "units", "current_amount", "consumption_type", "meter_reading"])
+	conns = [b.connection for b in bills] or [""]
+	history = {}
+	for h in frappe.db.sql("""select connection, units from `tabUtility Bill` where connection in %s and docstatus = 1 and billing_month < %s
+	                          order by billing_month desc""", (conns, getdate(run.billing_month)), as_dict=True):
+		history.setdefault(h.connection, [])
+		if len(history[h.connection]) < 3:
+			history[h.connection].append(flt(h.units))
+	readings = {r.name: r for r in frappe.get_all("Meter Reading", filters={"name": ["in", [b.meter_reading for b in bills if b.meter_reading] or [""]]},
+	                                            fields=["name", "status", "defective"])}
+	houses = {p.name: p.property_no for p in frappe.get_all("Property", filters={"name": ["in", [b.property for b in bills] or [""]]},
+	                                                     fields=["name", "property_no"])}
+	metered = billing.is_metered(run.utility)
+	out = []
+	for b in bills:
+		avg = round(sum(history.get(b.connection, [])) / len(history[b.connection]), 1) if history.get(b.connection) else None
+		r = readings.get(b.meter_reading)
+		kind = None
+		if r and cint(r.defective):
+			kind = "Defective meter"
+		elif (r and r.status == "Estimated") or b.consumption_type == "Estimated":
+			kind = "Estimated"
+		elif metered and flt(b.units) == 0 and (avg or 0) > 0:
+			kind = "Zero use"
+		elif avg and flt(b.units) >= HIGH_MIN_UNITS and flt(b.units) > HIGH_FACTOR * avg:
+			kind = "Very high bill"
+		if kind:
+			out.append({"key": b.name, "kind": kind, "bill": b.name, "connection": b.connection, "consumer_name": b.consumer_name,
+			            "house": houses.get(b.property) or b.property, "units": flt(b.units), "average": avg, "amount": flt(b.current_amount),
+			            "reading": b.meter_reading})
+	for p in run.problems:
+		out.append({"key": f"problem:{p.connection}", "kind": "Couldn't bill", "connection": p.connection, "problem": p.problem,
+		            "consumer_name": frappe.db.get_value("Connection", p.connection, "consumer_name"), "house": None, "units": None,
+		            "average": None, "amount": None})
+	return out
+
+
+@frappe.whitelist()
+def load(name: str):
+	run = _run(name)
+	cycle = frappe.db.get_value("Reading Cycle", run.reading_cycle, ["name", "status", "total_readings", "pending_readings", "flagged_readings",
+	                                                                "estimated_readings", "valid_readings", "reading_from", "reading_to"], as_dict=True) \
+		if run.reading_cycle else None
+	defective = frappe.db.count("Meter Reading", {"reading_cycle": run.reading_cycle, "defective": 1}) if run.reading_cycle else 0
+	groups = frappe.db.sql("""select ifnull(l.charge_group, 'Other') grp, sum(l.amount) amount from `tabBill Line` l join `tabUtility Bill` b
+	                          on b.name = l.parent where b.bill_run = %s and b.docstatus < 2 group by l.charge_group order by amount desc""", run.name, as_dict=True)
+	metered = billing.is_metered(run.utility)
+	review = review_of(run)
+	ex = exceptions(run) if run.calculation_status == "Calculated" else []
+	for e in ex:
+		e["decision"] = review.get(e["key"])
+	left = sum(1 for e in ex if not e["decision"])
+	posted = run.docstatus == 1 and (run.get("posting_status") or "Posted") == "Posted"
+	notified = posted and frappe.db.exists("Message Log", {"reference_doctype": "Utility Bill", "event": "bill.issued",
+	                                                       "reference_name": ["in", frappe.get_all("Utility Bill", filters={"bill_run": run.name}, pluck="name", limit=50) or [""]]})
+	steps = [
+		# a flat-rate utility (maintenance, for example) has no readings, so its first two steps don't apply
+		{"label": _("Select cycle"), "done": bool(cycle) or not metered},
+		{"label": _("Check readings"), "done": bool(cycle and cycle.status == "Closed") or not metered},
+		{"label": _("Calculate"), "done": run.calculation_status == "Calculated"},
+		{"label": _("Review exceptions"), "done": run.calculation_status == "Calculated" and left == 0},
+		{"label": _("Approve and post"), "done": posted},
+		{"label": _("Print and notify"), "done": bool(notified)},
+	]
+	from frappe.model.workflow import get_transitions  # noqa: PLC0415
+
+	try:
+		actions = sorted({x.get("action") for x in get_transitions(run)})
+	except Exception:  # noqa: BLE001
+		actions = []
+	return {
+		"name": run.name, "title": run.get("run_title") or run.name, "society": run.society, "utility": run.utility,
+		"month": getdate(run.billing_month).strftime("%B %Y"), "issue_date": str(run.issue_date), "due_date": str(run.due_date),
+		"owner": frappe.db.get_value("User", run.owner, "full_name") or run.owner, "state": run.workflow_state or ("Approved" if run.docstatus == 1 else "Draft"),
+		"docstatus": run.docstatus, "calculation_status": run.calculation_status, "posting_status": run.get("posting_status"),
+		"calculated_on": str(run.calculated_on) if run.get("calculated_on") else None,
+		"cycle": cycle, "defective": defective, "bill_count": cint(run.bill_count), "total_current": flt(run.total_current),
+		"total_payable": flt(run.total_payable), "groups": [{"group": g.grp, "amount": flt(g.amount)} for g in groups],
+		"exceptions": ex, "left": left, "steps": steps, "actions": actions,
+		"can_review": run.docstatus == 0 and bool(set(frappe.get_roles()) & {"Billing Officer", "Billing Manager", "System Manager"}),
+		"can_calculate": run.docstatus == 0 and run.workflow_state in (None, "", "Draft", "Rejected") and frappe.has_permission("Bill Run", "write", run),
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def decide(name: str, key: str, decision: str):
+	"""Accept an exception, or hold its account out of the run (it is billed later in a supplementary run; the run is calculated again)."""
+	run = frappe.get_doc("Bill Run", name)
+	run.check_permission("write")
+	if run.docstatus != 0:
+		frappe.throw(_("The run is posted; its bills can't be held any more."))
+	if decision not in ("Accepted", "Held", ""):
+		frappe.throw(_("Unknown decision."))
+	review = review_of(run)
+	if decision:
+		review[key] = decision
+	else:
+		review.pop(key, None)
+	run.db_set("exception_review", json.dumps(review), update_modified=False)
+	if decision == "Held":
+		conn = key.split(":", 1)[1] if key.startswith("problem:") else frappe.db.get_value("Utility Bill", key, "connection")
+		if conn and not any(e.connection == conn for e in run.exclusions):
+			run.append("exclusions", {"connection": conn, "reason": _("Held at review")})
+			run.save()  # the run needs calculating again without it
+	return load(name)

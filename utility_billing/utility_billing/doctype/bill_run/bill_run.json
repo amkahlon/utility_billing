@@ -23,6 +23,7 @@
   "calculation_status",
   "posting_status",
   "posting_error",
+  "exception_review",
   "calculated_on",
   "amended_from",
   "exclusions_section",
@@ -153,6 +154,14 @@
    "label": "Posting Error",
    "read_only": 1,
    "depends_on": "eval:doc.posting_status=='Posting failed'"
+  },
+  {
+   "fieldname": "exception_review",
+   "fieldtype": "Long Text",
+   "label": "Exception Review",
+   "hidden": 1,
+   "no_copy": 1,
+   "read_only": 1
   },
   {
    "fieldname": "calculated_on",
@@ -376,7 +385,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-16 18:00:00.000000",
+ "modified": "2026-11-16 22:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Bill Run",

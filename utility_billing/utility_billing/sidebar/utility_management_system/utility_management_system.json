@@ -206,6 +206,21 @@
    "indent": 0,
    "is_default_module": 0,
    "keep_closed": 0,
+   "label": "Reading Review",
+   "link_to": "ub-review",
+   "link_type": "Page",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "added": 0,
+   "child": 1,
+   "collapsible": 1,
+   "hidden": 0,
+   "indent": 0,
+   "is_default_module": 0,
+   "keep_closed": 0,
    "label": "Reading Cycle",
    "link_to": "Reading Cycle",
    "link_type": "DocType",
@@ -375,6 +390,21 @@
    "open_in_new_tab": 1,
    "show_arrow": 0,
    "type": "Section Break"
+  },
+  {
+   "added": 0,
+   "child": 1,
+   "collapsible": 1,
+   "hidden": 0,
+   "indent": 0,
+   "is_default_module": 0,
+   "keep_closed": 0,
+   "label": "Cash Counter",
+   "link_to": "ub-cash",
+   "link_type": "Page",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
   },
   {
    "added": 0,
@@ -2584,7 +2614,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-11-15 22:34:38.414253",
+ "modified": "2026-11-16 00:33:09.711670",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Management System",
