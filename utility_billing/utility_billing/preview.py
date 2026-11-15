@@ -26,7 +26,9 @@ def require():
 
 def last_cycle(society, category=None):
 	"""(month, posted bills of that month) for a society, optionally one category."""
-	month = frappe.db.get_value("Utility Bill", {"society": society, "docstatus": 1, "status": "Posted"}, "billing_month", order_by="billing_month desc")
+	# the latest month with posted bills of that category (another utility's later run, maintenance say, isn't this tariff's last cycle)
+	month = frappe.db.get_value("Utility Bill", {"society": society, "docstatus": 1, "status": "Posted", **({"consumer_category": category} if category else {})},
+	                            "billing_month", order_by="billing_month desc")
 	if not month:
 		return None, []
 	filters = {"society": society, "docstatus": 1, "status": "Posted", "billing_month": month}
@@ -62,8 +64,8 @@ def summarise(month, rows, unavailable=0, what="") -> dict:
 
 
 @frappe.whitelist()
-def tariff_impact(name: str) -> dict:
-	"""What last cycle's bills of the tariff's category would have been under this tariff."""
+def tariff_impact(name: str, with_rows: int = 0) -> dict:
+	"""What last cycle's bills of the tariff's category would have been under this tariff (with_rows: each bill too, for the editor)."""
 	require()
 	t = frappe.get_doc("Tariff", name)
 	month, bills = last_cycle(t.society, t.consumer_category)
@@ -77,7 +79,10 @@ def tariff_impact(name: str) -> dict:
 			continue
 		rows.append({"connection": b.connection, "consumer_name": b.consumer_name, "category": b.consumer_category,
 		             "old": flt(b.current_amount), "new": flt(new["current_amount"])})
-	return summarise(month, rows, unavailable, _("Tariff {0}").format(t.name))
+	out = summarise(month, rows, unavailable, _("Tariff {0}").format(t.name))
+	if frappe.utils.cint(with_rows):
+		out["_rows"] = rows
+	return out
 
 
 @frappe.whitelist()

@@ -302,6 +302,17 @@ def get_recovery(society: str | None = None, as_of: str | None = None, block: st
 	                                and issue_date between %s and %s group by stage""",
 	                             (society, ACTIVE_NOTICE, month, frappe.utils.get_last_day(month)), as_dict=True)
 	progress = target_progress(society, month)
+	# the mock-up's figures and columns (2026-11-16): last payment, a stage label per account, plans and missed installments
+	names = [r["connection"] for r in shown[:500]] or [""]
+	last_paid = {x.connection: x for x in frappe.db.sql(
+		"""select connection, max(payment_date) payment_date from `tabPayment Receipt` where docstatus = 1 and connection in %s group by connection""",
+		(names,), as_dict=True)}
+	for r in shown[:500]:
+		r["last_payment"] = str(last_paid[r["connection"]].payment_date) if r["connection"] in last_paid else None
+		r["stage_label"], r["stage_tone"] = stage_label(r)
+	plans = frappe.db.sql("""select count(distinct p.name) plans, count(distinct case when s.status = 'Missed' then p.name end) missed
+	                         from `tabInstallment Plan` p left join `tabInstallment Row` s on s.parent = p.name
+	                         where p.society = %s and p.docstatus = 1 and p.plan_status = 'Active'""", society, as_dict=True)[0]
 	return {
 		"society": society, "societies": societies, "as_of": str(as_of), "show": show, "block": block or "", "category": category or "",
 		"data_label": dashboard.data_label(society),
@@ -310,7 +321,8 @@ def get_recovery(society: str | None = None, as_of: str | None = None, block: st
 			"defaulters": len(defaulters), "defaulter_amount": round(sum(r["owed"] for r in defaulters), 2),
 			"overdue_accounts": len(rows), "notices_due": sum(due.values()), "due_by_stage": dict(due),
 			"on_hold": sum(1 for r in rows if r["hold"]), "broken_promises": sum(1 for r in rows if r["promise"] == "Broken"),
-			"open_cases": open_n, "issued_this_month": {x.stage: cint(x.n) for x in issued_month}},
+			"open_cases": open_n, "issued_this_month": {x.stage: cint(x.n) for x in issued_month},
+			"outstanding": round(sum(r["owed"] for r in rows), 2), "plans": cint(plans.plans), "missed_installments": cint(plans.missed)},
 		"progress": progress, "month_label": month.strftime("%B %Y"),
 		"blocks": sorted({r["block"] for r in mis.account_rows(society, as_of) if r.block}),
 		"categories": frappe.get_all("Consumer Category", pluck="name", order_by="name"),
@@ -320,15 +332,60 @@ def get_recovery(society: str | None = None, as_of: str | None = None, block: st
 	}
 
 
+def stage_label(r) -> tuple[str, str]:
+	"""(label, tone) of where an account stands, as the mock-up's Stage column shows it."""
+	if r.get("promise") == "Broken":
+		return _("Broken promise"), "red"
+	if r.get("hold") == "Installment plan active":
+		return _("Installment plan"), "blue"
+	if r.get("hold"):
+		return _("On hold"), "blue"
+	if r.get("next_stage") == "Disconnection Order":
+		return _("For disconnection"), "red"
+	if r.get("last_stage"):
+		return _("{0} sent").format(_(r["last_stage"])), "amber"
+	if r.get("next_stage"):
+		return _("{0} due").format(_(r["next_stage"])), "amber"
+	return _("No action yet"), ""
+
+
 @frappe.whitelist(methods=["POST"])
-def new_run(society: str, as_of: str | None = None, block: str | None = None, consumer_category: str | None = None):
-	"""Create a draft recovery run and fill it, for the page's "Run recovery stages" button."""
+def new_run(society: str, as_of: str | None = None, block: str | None = None, consumer_category: str | None = None, connections=None):
+	"""Create a draft recovery run and fill it, for the page's "Run recovery stages" button; with `connections`, for those accounts only
+	(the selection bar's "Send notice"). The run is reviewed before anything is issued."""
 	require(RUNNERS, _("run recovery stages"))
 	run = frappe.get_doc({"doctype": "Recovery Run", "society": society, "as_of": as_of or nowdate(), "block": block,
 	                      "consumer_category": consumer_category})
 	prepare_run(run)
+	wanted = set(frappe.parse_json(connections) if isinstance(connections, str) else (connections or []))
+	if wanted:
+		run.set("items", [i for i in run.items if i.connection in wanted])
+		run.accounts_due = len(run.items)
+		if not run.items:
+			frappe.throw(_("None of the selected accounts is due a notice yet (each stage waits its number of days)."))
 	run.insert()
 	return run.name
+
+
+@frappe.whitelist(methods=["POST"])
+def disconnection_requests(society: str, connections):
+	"""The selection bar's "Create disconnection orders": a Disconnection service request per account (reason Defaulter), so the notice
+	period and the approval step still apply. Accounts with one already open are skipped."""
+	require(RUNNERS, _("create disconnection requests"))
+	from utility_billing.utility_billing import servicereq  # noqa: PLC0415
+
+	servicereq.ensure_types(society)
+	made, skipped = [], []
+	for c in frappe.parse_json(connections) if isinstance(connections, str) else connections:
+		if frappe.db.get_value("Connection", c, "society") != society or frappe.db.exists(
+				"Service Request", {"connection": c, "kind": servicereq.DISC, "status": ["in", ["Open", "In Progress"]]}):
+			skipped.append(c)
+			continue
+		sr = frappe.get_doc({"doctype": "Service Request", "request_type": f"{society}-DISC", "connection": c, "disconnection_reason": "Defaulter",
+		                     "description": _("Raised from Defaulters and Recovery")})
+		sr.insert()
+		made.append(sr.name)
+	return {"made": made, "skipped": skipped}
 
 
 @frappe.whitelist(methods=["POST"])

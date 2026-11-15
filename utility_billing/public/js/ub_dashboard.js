@@ -17,6 +17,13 @@ window.UtilityBillingDashboard = class UtilityBillingDashboard {
 		this.$root.on("change", ".ub-society", (e) => this.reload({ society: e.target.value, month: null }));
 		this.$root.on("change", ".ub-month", (e) => this.reload({ month: e.target.value }));
 		this.$root.on("click", ".ub-export", () => this.export_csv());
+		this.$root.on("click", "[data-drill]", (e) => {
+			const to = $(e.currentTarget).attr("data-drill");
+			if (!to) return;
+			if (to.startsWith("ub-")) return frappe.set_route(to);
+			frappe.route_options = { society: this.society || undefined };
+			frappe.set_route("query-report", to);
+		});
 		this.$root.on("click", "[data-new]", (e) => frappe.new_doc($(e.currentTarget).attr("data-new")));
 		this.$root.on("click", "[data-report]", () => frappe.set_route("query-report", "Management Dashboard"));
 		this.$root.on("click", "[data-page]", (e) => frappe.set_route($(e.currentTarget).attr("data-page")));
@@ -122,9 +129,12 @@ window.UtilityBillingDashboard = class UtilityBillingDashboard {
 	render(d) {
 		const e = frappe.utils.escape_html;
 		const options = (list, current, key, label) => list.map((o) => `<option value="${e(o[key])}" ${o[key] === current ? "selected" : ""}>${e(o[label])}</option>`).join("");
+		// Each card opens the report or screen behind its figure, in the order dashboard.kpis_of returns them.
+		const drill = ["Bill Register", "Collections", "Arrears Ageing", "AT&C Losses", "Consumption Analytics", "ub-recovery", "Defective Meters",
+			"Service Requests and Service Standards"];
 		const kpis = d.kpis
 			.map(
-				(k) => `<div class="ub-kpi ${k.raw === null || k.raw === undefined ? "is-empty" : ""}">
+				(k, i) => `<div class="ub-kpi ub-kpi-go ${k.raw === null || k.raw === undefined ? "is-empty" : ""}" data-drill="${e(drill[i] || "")}" role="button" tabindex="0">
 					<div class="ub-kpi-top"><div class="ub-kpi-label">${e(k.label)}</div><div class="ub-kpi-icon">${ub_icon(k.icon)}</div></div>
 					<div class="ub-kpi-value">${e(k.value)}</div>
 					<div class="ub-kpi-foot"><div class="ub-kpi-note ${e(k.tone)}">${e(k.note)}</div>${this.spark(k.spark)}</div></div>`

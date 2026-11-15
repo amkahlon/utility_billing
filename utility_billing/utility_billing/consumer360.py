@@ -4,9 +4,10 @@ reading, and a combined statement across the consumer's accounts. Data for the p
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 
-from utility_billing.utility_billing import access, account, flags
+from utility_billing.utility_billing import access, flags
+from utility_billing.utility_billing import account as acct  # (view() has a parameter "account" and a variable "ledger")
 
 STAFF = {"System Manager", "Society Admin", "Billing Manager", "General Manager", "Billing Officer", "Cashier", "Recovery Officer",
          "Accounts Officer", "Management", "Billing Auditor"}
@@ -19,18 +20,26 @@ def _require():
 
 @frappe.whitelist()
 def search(text: str, limit: int = 20):
-	"""Consumers matching a name, CNIC, phone, house number, reference number or meter number (FS-MST-12)."""
+	"""Consumers matching a name, CNIC, phone, house number, reference number or meter number (FS-MST-12), one row per account, with
+	its house, utility, status and balance, and what matched, so the right account opens straight away (Consumer 360 redesign)."""
 	_require()
 	text = (text or "").strip()
 	if len(text) < 2:
 		return []
 	like = f"%{text}%"
 	rows = frappe.db.sql(
-		"""select distinct c.name, c.consumer_name, c.mobile_no, c.id_number from `tabConsumer` c
-		left join `tabConnection` k on k.consumer = c.name left join `tabProperty` p on p.name = k.property
+		"""select c.name, c.consumer_name, c.mobile_no, c.id_number, k.name account, k.reference_no, k.current_meter, k.utility,
+		          k.status account_status, p.property_no house,
+		          case when k.reference_no like %(l)s then 'reference' when k.current_meter like %(l)s then 'meter'
+		               when p.property_no like %(l)s then 'house' when c.id_number like %(l)s then 'cnic'
+		               when c.mobile_no like %(l)s or c.phone like %(l)s then 'phone' else 'name' end matched
+		from `tabConsumer` c left join `tabConnection` k on k.consumer = c.name left join `tabProperty` p on p.name = k.property
 		where c.consumer_name like %(l)s or c.id_number like %(l)s or c.mobile_no like %(l)s or c.phone like %(l)s
 		   or k.reference_no like %(l)s or k.current_meter like %(l)s or p.property_no like %(l)s
-		order by c.consumer_name limit %(n)s""", {"l": like, "n": int(limit)}, as_dict=True)
+		order by (k.reference_no = %(t)s or k.current_meter = %(t)s or p.property_no = %(t)s) desc, c.consumer_name, k.name
+		limit %(n)s""", {"l": like, "t": text, "n": int(limit)}, as_dict=True)
+	for r in rows:
+		r["balance"] = acct.balance(r.account) if r.account else None
 	return access.mask_rows(rows)
 
 
@@ -42,7 +51,122 @@ def _connections(consumer):
 
 
 @frappe.whitelist()
-def view(consumer: str):
+def consumer_of(account: str):
+	"""The consumer an account belongs to, for opening the page from a link (/app/ub-consumer-360?account=...)."""
+	_require()
+	ref = (account or "").strip()
+	conn = account_mod_connection(ref)
+	if not conn:
+		frappe.throw(_("No account with number {0}.").format(ref))
+	return {"consumer": frappe.db.get_value("Connection", conn, "consumer"), "account": conn}
+
+
+def account_mod_connection(ref):
+	return acct.connection_of(ref) or (ref if frappe.db.exists("Connection", ref) else None)
+
+
+def roles_can(*roles) -> bool:
+	have = set(frappe.get_roles())
+	return bool(have & set(roles)) or "System Manager" in have
+
+
+def twelve_months(rows) -> list[dict]:
+	"""The last twelve months up to the latest one read, each with its units (None when there was no reading), as the chart shows them."""
+	by = {getdate(r.billing_month).replace(day=1): r for r in rows}
+	last = max(by) if by else getdate(nowdate()).replace(day=1)
+	out = []
+	for i in range(11, -1, -1):
+		m = frappe.utils.add_months(last, -i)
+		r = by.get(m)
+		out.append({"month": m.strftime("%b"), "full": m.strftime("%B %Y"), "units": flt(r.units) if r else None, "estimated": cint(r.estimated) if r else 0})
+	return out
+
+
+def overview(conn_name) -> dict:
+	"""One account as the mock-up's Overview shows it (Consumer 360 redesign, 2026-11-16): what is payable and by when, the latest
+	bill line by line, the connection and meter, twelve months of units, what happened lately, and what needs attention."""
+	k = frappe.get_doc("Connection", conn_name)
+	today = getdate(nowdate())
+	enq = acct.enquiry_of(conn_name)
+	bill = frappe.get_doc("Utility Bill", enq["bill"]) if enq.get("bill") else None
+	reading = frappe.db.get_value("Meter Reading", bill.meter_reading, ["previous_reading", "present_reading", "reading_date", "photo"],
+	                              as_dict=True) if bill and bill.meter_reading else None
+	last_pay = frappe.db.get_value("Payment Receipt", {"connection": conn_name, "docstatus": 1},
+	                               ["name", "payment_date", "amount", "mode", "payment_channel"], order_by="payment_date desc, creation desc", as_dict=True)
+	meter = frappe.db.get_value("Meter", k.current_meter, ["serial_no", "status", "multiplier", "meter_type"], as_dict=True) if k.current_meter else None
+	consumer = frappe.db.get_value("Consumer", k.consumer, ["notify_app", "notify_sms", "notify_email", "notify_whatsapp", "preferred_channel"],
+	                               as_dict=True) or {}
+	prop = frappe.db.get_value("Property", k.property, ["property_no", "block", "sector", "plot_size_class"], as_dict=True) or {}
+	months = frappe.db.sql("""select billing_month, sum(units) units, max(status = 'Estimated') estimated from `tabMeter Reading`
+	                          where connection = %s and status in ('Valid', 'Approved', 'Estimated') and billing_month > %s
+	                          group by billing_month order by billing_month""", (conn_name, frappe.utils.add_months(today, -12)), as_dict=True)
+	held = flt(frappe.db.get_value("Connection", conn_name, "security_deposit"))
+	alerts = [{"tone": "amber", "text": _("Flag: {0}").format(f.name)} for f in flags.active(conn_name, today)]
+	for dt, label, cond in (("Bill Dispute", _("Bill dispute"), {"status": ["not in", ["Closed", "Resolved", "Decided", "Cancelled"]]}),
+	                        ("Installment Plan", _("Installment plan"), {"plan_status": "Active", "docstatus": 1})):
+		for n in frappe.get_all(dt, filters={"connection": conn_name, **cond}, pluck="name", limit=3):
+			alerts.append({"tone": "blue", "text": f"{label} {n}", "go": [dt, n]})
+	case = frappe.db.get_value("Recovery Case", {"connection": conn_name, "status": ["!=", "Closed"]}, ["name", "last_stage", "assigned_to"], as_dict=True)
+	if case:
+		alerts.append({"tone": "red", "text": _("Recovery: {0}").format(case.last_stage or _("case open")) + (f" · {case.assigned_to}" if case.assigned_to else ""),
+		               "go": ["Recovery Case", case.name]})
+	if flt(k.last_mdi_kw) > flt(k.sanctioned_load_kw) > 0:
+		alerts.append({"tone": "amber", "text": _("Maximum demand {0} kW is above the sanctioned {1} kW").format(flt(k.last_mdi_kw), flt(k.sanctioned_load_kw))})
+	if meter and meter.status == "Defective":
+		alerts.append({"tone": "red", "text": _("Meter {0} is marked defective").format(meter.serial_no)})
+	activity = []
+	for b in frappe.get_all("Utility Bill", filters={"connection": conn_name, "docstatus": 1}, fields=["name", "billing_month", "issue_date", "payable_within_due",
+	                                                                                                  "delivery_status"], order_by="issue_date desc", limit=4):
+		activity.append({"date": b.issue_date, "kind": "bill", "go": ["Utility Bill", b.name],
+		                 "text": _("{0} bill issued: Rs {1}").format(getdate(b.billing_month).strftime("%B"), f"{flt(b.payable_within_due):,.0f}"),
+		                 "note": b.delivery_status or ""})
+	for r in frappe.get_all("Meter Reading", filters={"connection": conn_name, "reading_date": ["is", "set"]},
+	                        fields=["name", "reading_date", "present_reading", "status", "photo", "route"], order_by="reading_date desc", limit=3):
+		activity.append({"date": r.reading_date, "kind": "reading", "go": ["Meter Reading", r.name],
+		                 "text": _("Reading {0} taken").format(f"{flt(r.present_reading):g}") + (_(", photo") if r.photo else ""),
+		                 "note": " · ".join(x for x in (_(r.status), _("route {0}").format(r.route) if r.route else "") if x)})
+	for p in frappe.get_all("Payment Receipt", filters={"connection": conn_name, "docstatus": 1}, fields=["name", "payment_date", "amount", "mode"],
+	                        order_by="payment_date desc", limit=3):
+		activity.append({"date": p.payment_date, "kind": "payment", "go": ["Payment Receipt", p.name],
+		                 "text": _("Payment Rs {0} by {1}").format(f"{flt(p.amount):,.0f}", p.mode), "note": p.name})
+	for s in frappe.get_all("Service Request", filters={"connection": conn_name}, fields=["name", "request_title", "status", "requested_on"],
+	                        order_by="requested_on desc", limit=3):
+		activity.append({"date": s.requested_on, "kind": "request", "go": ["Service Request", s.name], "text": s.request_title or s.name,
+		                 "note": _(s.status)})
+	messages = frappe.get_all("Message Log", filters={"connection": conn_name}, fields=["name", "creation", "event", "channel", "status", "subject", "body"],
+	                          order_by="creation desc", limit=20)
+	activity.sort(key=lambda a: getdate(a["date"]), reverse=True)
+	return {
+		"name": k.name, "reference_no": k.reference_no, "utility": k.utility, "status": k.status, "category": k.consumer_category,
+		"category_name": frappe.db.get_value("Consumer Category", k.consumer_category, "category_name"), "society": k.society,
+		"property_no": prop.get("property_no"), "block": prop.get("block"), "sector": prop.get("sector"), "plot": prop.get("plot_size_class"),
+		"load": flt(k.sanctioned_load_kw), "phase": k.phase,
+		"payable": {"amount_due": flt(enq["amount_due"]), "within_due": flt(enq["payable_within_due"]), "after_due": flt(enq["payable_after_due"]),
+		            "due_date": enq.get("due_date"), "current": flt(bill.current_amount) if bill else 0, "arrears": flt(bill.arrears) if bill else 0,
+		            "balance": flt(enq["balance"]), "former": flt(enq.get("former_balance")), "deposit": held,
+		            "last_payment": last_pay, "bill_month": getdate(bill.billing_month).strftime("%B %Y") if bill else None},
+		"bill": {"name": bill.name, "month": getdate(bill.billing_month).strftime("%B %Y"), "units": flt(bill.units), "consumption_type": bill.consumption_type,
+		         "previous": flt(reading.previous_reading) if reading else None, "present": flt(reading.present_reading) if reading else None,
+		         "lines": [{"label": ln.label, "amount": flt(ln.amount), "note": ln.note, "rate": flt(ln.rate), "quantity": flt(ln.quantity)}
+		                   for ln in sorted(bill.lines, key=lambda x: (x.line_order or 0, x.idx))],
+		         "current": flt(bill.current_amount), "arrears": flt(bill.arrears), "within_due": flt(bill.payable_within_due),
+		         "surcharge": flt(bill.surcharge_amount), "after_due": flt(bill.payable_after_due), "tax": flt(bill.tax_amount),
+		         "installment": flt(bill.installment_due), "due_date": str(bill.extended_due_date or bill.due_date), "final": cint(bill.final_bill),
+		         "note": bill.period_note} if bill else None,
+		"meter": {"serial_no": meter.serial_no, "status": meter.status, "multiplier": flt(meter.multiplier) or 1, "type": meter.meter_type,
+		          "installed": k.current_meter} if meter else None,
+		"network": {"feeder": frappe.db.get_value("Feeder", k.feeder, "feeder_name") if k.feeder else None,
+		            "transformer": k.transformer, "kva": frappe.db.get_value("Transformer", k.transformer, "kva_rating") if k.transformer else None,
+		            "route": k.route, "mdi": flt(k.last_mdi_kw)},
+		"notifications": [ch for ch, on in (("App", consumer.get("notify_app")), ("SMS", consumer.get("notify_sms")), ("Email", consumer.get("notify_email")),
+		                                    ("WhatsApp", consumer.get("notify_whatsapp"))) if cint(on)],
+		"consumption": twelve_months(months),
+		"alerts": alerts, "activity": activity[:8], "messages": messages,
+	}
+
+
+@frappe.whitelist()
+def view(consumer: str, account: str | None = None):
 	_require()
 	c = frappe.get_doc("Consumer", consumer)
 	conns = _connections(consumer)
@@ -50,10 +174,10 @@ def view(consumer: str):
 	today = getdate(nowdate())
 	accounts = []
 	for k in conns:
-		bal = {b: flt(v) for b, v in account.balances(k.name).items()}
+		bal = {b: flt(v) for b, v in acct.balances(k.name).items()}
 		prop = frappe.db.get_value("Property", k.property, ["property_no", "block", "sector"], as_dict=True) or {}
 		accounts.append({**k, "property_no": prop.get("property_no"), "block": prop.get("block"), "balances": bal,
-		                 "owes": flt(account.balance(k.name)), "flags": [f.name for f in flags.active(k.name, today)]})
+		                 "owes": flt(acct.balance(k.name)), "flags": [f.name for f in flags.active(k.name, today)]})
 	bills = frappe.get_all("Utility Bill", filters={"connection": ["in", names], "docstatus": 1},
 	                       fields=["name", "connection", "billing_month", "issue_date", "due_date", "units", "current_amount", "payable_within_due",
 	                               "status", "surcharge_status", "delivery_status"], order_by="issue_date desc", limit=24)
@@ -81,6 +205,11 @@ def view(consumer: str):
 			open_items.append({"doctype": dt, "name": n, "label": _(label)})
 	if not access.sees_personal():
 		c.id_number, c.mobile_no = access.mask(c.id_number), access.mask(c.mobile_no)
+	mine = [a["name"] for a in accounts]
+	# the account asked for; else the one owing most among the active ones; else the first
+	selected = account if account in mine else (max((a for a in accounts if a["status"] == "Active"), key=lambda a: a["owes"], default=None) or
+	                                            (accounts[0] if accounts else None))
+	selected = selected["name"] if isinstance(selected, dict) else selected
 	return {
 		"consumer": {"name": c.name, "consumer_name": c.consumer_name, "consumer_type": c.consumer_type, "id_type": c.id_type, "id_number": c.id_number,
 		             "mobile_no": c.mobile_no, "email": c.email, "address": c.address, "preferred_language": c.preferred_language,
@@ -94,6 +223,11 @@ def view(consumer: str):
 		"open_items": open_items,
 		"service_requests": frappe.get_all("Service Request", filters={"connection": ["in", names]},
 		                                   fields=["name", "request_title", "kind", "status", "requested_on", "due_by"], order_by="requested_on desc", limit=20),
+		"complaints": frappe.get_all("Bill Dispute", filters={"connection": ["in", names]}, fields=["*"], order_by="creation desc", limit=20),
+		# the account the page shows (the mock-up's view of one account; a consumer with several switches between them)
+		"selected": selected, "overview": overview(selected) if selected else None,
+		"can": {"pay": roles_can("Cashier", "Accounts Officer"), "request": roles_can("Billing Officer", "Billing Manager", "Society Admin", "Recovery Officer"),
+		        "print": roles_can("Billing Officer", "Billing Manager", "Cashier", "Accounts Officer", "Society Admin", "General Manager")},
 	}
 
 

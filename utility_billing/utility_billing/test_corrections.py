@@ -143,6 +143,8 @@ class IntegrationTestCorrections(BillingCase):
 			frappe.get_doc({"doctype": "Bill Revision", "original_bill": self.bill_doc.name, "kind": "Corrected reading", "reason_code": "NON-PAY",
 			                "remarks": "not a revision reason", "new_present_reading": 3881}).insert()
 
+	# The October test bill is due 15-11-2026; this test needs "today" before that, so the date is pinned.
+	@patch("utility_billing.utility_billing.corrections.nowdate", new=lambda: "2026-11-10")
 	def test_the_maker_can_not_approve_and_an_approved_revision_can_not_be_undone(self):
 		rev = self.revision()
 		act(rev, "Submit for Approval", BILLING_MANAGER)

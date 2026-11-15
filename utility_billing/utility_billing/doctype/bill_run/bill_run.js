@@ -14,6 +14,7 @@ frappe.ui.form.on("Bill Run", {
 					frappe.xcall("utility_billing.utility_billing.doctype.bill_run.bill_run.retry_posting", { run: frm.doc.name }).then(() => frm.reload_doc()));
 			}
 		}
+		frm.add_custom_button(__("Open Wizard"), () => frappe.set_route("ub-billrun", { run: frm.doc.name }));
 		frm.add_custom_button(__("Open Bills"), () => frappe.set_route("List", "Utility Bill", { bill_run: frm.doc.name }));
 		if (frm.doc.bill_count && frm.doc.calculation_status === "Calculated" && frm.doc.docstatus < 2) {
 			frm.add_custom_button(__("Print Bills"), () => print_run_bills(frm));
