@@ -1087,7 +1087,7 @@ def t_other_reports(d: Desk):
 	run_report(USERS["reader"], "Reading Exceptions", reading_cycle=S["cycle"])
 	run_report(bm, "Estimated Bills", month="2026-11-01")
 	meters = run_report(bm, "Meter Register")
-	if not rows_of(meters) or len(meters["report_summary"]) != 6:  # four statuses, changed and under test (increment 20)
+	if not rows_of(meters) or len(meters["report_summary"]) != 8:  # six statuses (Issued, Scrapped: 23), changed and under test
 		raise AssertionError("meter register is empty or has no status counts")
 	census = rows_of(run_report(bm, "Consumer Census"))
 	if census[-1]["total"] < 1:
@@ -2034,9 +2034,12 @@ def t_lifecycle_store(d: Desk):
 	soc = S["society"]
 	saved = d.save_doc(dict(d.get("Society", soc), changes_through_requests=1))
 	eq(saved["changes_through_requests"], 1, "society setting saved")
-	conn = USERS["bm"].get("Connection", S["conn"]["name"])
+	active = d.s.get(f"{URL}/api/resource/Connection", params={"filters": json.dumps([["society", "=", soc], ["status", "=", "Active"]]),
+	                                                           "limit_page_length": 1}).json()["data"]
+	name = active[0]["name"]  # the lock is on active accounts (an earlier case disconnects the first one)
+	conn = USERS["bm"].get("Connection", name)
 	expect_error(lambda: USERS["bm"].save_doc(dict(conn, sanctioned_load_kw="9")), "service request")
-	USERS["bm"].save_doc(dict(USERS["bm"].get("Connection", S["conn"]["name"]), phase="Three"))  # other details still change on the form
+	USERS["bm"].save_doc(dict(USERS["bm"].get("Connection", name), phase="Three"))  # other details still change on the form
 	dash = USERS["bo"].call("utility_billing.utility_billing.reading_dashboard.get_reading_dashboard", society=soc)
 	eq((dash["society"], "cards" in dash or dash.get("no_cycle")), (soc, True), "reading dashboard")
 	expect_error(lambda: USERS["cashier"].call("utility_billing.utility_billing.reading_dashboard.get_reading_dashboard", society=soc))
