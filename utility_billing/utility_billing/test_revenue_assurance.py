@@ -119,7 +119,9 @@ class IntegrationTestRevenueAssurance(IntegrationTestCase):
 	# ---- RA-03
 	def test_meter_records(self):
 		self.october()
-		frappe.get_doc({"doctype": "Meter", "serial_no": "tst ra m1", "society": SOC, "utility": "Electricity"}).insert()  # TST-RA-M1 again
+		dup = frappe.get_doc({"doctype": "Meter", "serial_no": "tst ra m1", "society": SOC, "utility": "Electricity", "status": "In Store"})
+		dup.name = "tst ra m1"
+		dup.db_insert()  # TST-RA-M1 again, entered before duplicates were refused at entry (now the check catches old data)
 		store = frappe.get_doc({"doctype": "Meter", "serial_no": "TST-RA-LOOSE", "society": SOC, "utility": "Electricity"}).insert()
 		frappe.db.set_value("Meter", store.name, "status", "Installed")  # installed, on no account
 		no_meter = self.house(meter=False, status="Applied")

@@ -155,7 +155,7 @@ class IntegrationTestMasters(IntegrationTestCase):
 			self.connection([], status="Applied", consumer_category=water)
 
 	def test_transformer_must_be_same_society(self):
-		ensure("Society", "TST-OTHER", {"society_name": "Other", "short_name": "TST-OTHER"})
+		ensure("Society", "TST-OTHER", {"society_name": "Masters Test Other Society", "short_name": "TST-OTHER"})  # society names are unique
 		ensure("Feeder", "TST-OTHER-F1", {"society": "TST-OTHER", "feeder_code": "F1", "feeder_name": "Feeder 1"})
 		ensure("Transformer", "TST-OTHER-T1", {"society": "TST-OTHER", "transformer_code": "T1", "feeder": "TST-OTHER-F1"})
 		with self.assertRaises(frappe.ValidationError):

@@ -332,7 +332,7 @@ def t_network(d: Desk):
 	t = d.save_doc({"doctype": "Transformer", "society": S["society"], "transformer_code": "T1", "feeder": f["name"],
 	                "kva_rating": "200"})
 	S["transformer"] = t["name"]
-	other = d.save_doc({"doctype": "Society", "society_name": "Other", "short_name": f"qo{RUN}", "enable_electricity": 1,
+	other = d.save_doc({"doctype": "Society", "society_name": f"Other {RUN}", "short_name": f"qo{RUN}", "enable_electricity": 1,
 	                    "days_to_due_date": "14", "surcharge_basis": "Percentage of current bill", "surcharge_rate": "10"})
 	expect_error(lambda: d.save_doc({"doctype": "Transformer", "society": other["name"], "transformer_code": "T9",
 	                                 "feeder": f["name"]}), "belongs to society")
@@ -1816,26 +1816,33 @@ def t_reports_more(d: Desk):
 
 
 # ---------------------------------------------------------------- increment 21
-@case("QA-77", "FS-RA-03/09: revenue assurance checks run by a manager; a finding is investigated and closed from the form; findings report")
+@case("QA-77", "FS-RA-08/09, FS-MST: duplicate numbers refused at entry; revenue assurance checks run by a manager; a finding closed from the form")
 def t_revenue_assurance(d: Desk):
 	RA = "utility_billing.utility_billing.revenue_assurance.run_now"
 	bm, rec, soc = USERS["bm"], USERS["rec"], S["society"]
 	expect_error(lambda: USERS["cashier"].call(RA, society=soc, month="2026-11-01"), "Only a Billing Manager")
-	loose = d.save_doc({"doctype": "Meter", "serial_no": f"QA{RUN}-DUP", "society": soc, "utility": "Electricity"})
-	d.save_doc({"doctype": "Meter", "serial_no": f"qa{RUN} dup", "society": soc, "utility": "Electricity"})  # the same meter typed again
+	# user, 2026-11-15: a duplicate meter number is refused when it is typed, however it is spelt; the same for other numbers and codes
+	d.save_doc({"doctype": "Meter", "serial_no": f"QA{RUN}-DUP", "society": soc, "utility": "Electricity"})
+	expect_error(lambda: d.save_doc({"doctype": "Meter", "serial_no": f"qa{RUN} dup", "society": soc, "utility": "Electricity"}), "already used")
+	expect_error(lambda: d.save_doc({"doctype": "Meter", "serial_no": f"00QA{RUN}DUP", "society": soc, "utility": "Electricity"}), "already used")
+	expect_error(lambda: d.save_doc({"doctype": "Feeder", "society": soc, "feeder_code": "f-1", "feeder_name": "Feeder one again"}), "already used")
+	s = d.get("Society", soc)
+	d.save_doc(dict(s, ra_adjustment_limit="1"))  # any reversal or adjustment in the month stands out
 	out = bm.call(RA, society=soc, month="2026-11-01")
 	eq(out["month"], "2026-11-01", "checks ran for November")
-	found = d.s.get(f"{URL}/api/resource/RA Finding", params={"filters": json.dumps({"society": soc, "subject": loose["name"]}),
-	                                                          "fields": json.dumps(["name", "check_type", "status"])}).json()["data"]
-	eq([(f["check_type"], f["status"]) for f in found], [("RA-03 Meter records", "Open")], "the same meter entered twice is a finding")
+	found = d.s.get(f"{URL}/api/resource/RA Finding", params={"filters": json.dumps({"society": soc, "check_type": "RA-08 Unusual reversals or adjustments"}),
+	                                                          "fields": json.dumps(["name", "check_type", "status", "subject"])}).json()["data"]
+	if not found:
+		raise AssertionError(f"no RA-08 finding: {out}")
+	eq(found[0]["status"], "Open", "unusual reversals and adjustments are a finding")
 	f = rec.get("RA Finding", found[0]["name"])
 	expect_error(lambda: rec.save_doc(dict(f, status="Closed")), "result")
-	closed = rec.save_doc(dict(f, status="Closed", result="Master data fixed", notes="Meter was returned to the store; record corrected"))
+	closed = rec.save_doc(dict(f, status="Closed", result="No issue", notes="Reversals were for dishonoured cheques, each with a reason"))
 	eq((closed["status"], closed["closed_by"]), ("Closed", EMAIL["rec"]), "closed by the recovery officer")
 	again = bm.call(RA, society=soc, month="2026-11-01")
 	eq(rec.get("RA Finding", f["name"])["status"], "Closed", "running again doesn't reopen it")
 	rows = rows_of(run_report(bm, "Revenue Assurance Findings", society=soc))
-	meter_row = next((r for r in rows if r.get("item") == "RA-03 Meter records"), None)
+	meter_row = next((r for r in rows if r.get("item") == "RA-08 Unusual reversals or adjustments"), None)
 	if not meter_row or int(meter_row["closed"]) < 1:
 		raise AssertionError(f"findings report: {rows} (second run {again})")
 	expect_error(lambda: run_report(USERS["cashier"], "Revenue Assurance Findings", society=soc))

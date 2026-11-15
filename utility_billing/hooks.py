@@ -119,6 +119,15 @@ doc_events = {
 	"Service Request": {"on_update": "utility_billing.utility_billing.events.service_request_changed"},
 }
 
+# Numbers and codes that identify something are refused when already used, ignoring case, spaces and dashes (user, 2026-11-15).
+# Keep this list the same as uniqueness.DOCTYPES (a test checks it).
+UNIQUE_CHECKED = ("API Client", "Cash Counter", "Charge Type", "Common Area Facility", "Connection Flag Type", "Consumer", "Consumer Category",
+                  "DISCO Bill", "Fee Type", "Feeder", "Grid Station", "Journal Export Layout", "KPI Definition", "Ledger Account", "Line Section",
+                  "Meter", "Network Asset", "Property", "Reading Exception Code", "Reading Route", "Reason Code", "Service Request Type",
+                  "Society", "Tax", "Transformer")
+for _dt in UNIQUE_CHECKED:
+	doc_events.setdefault(_dt, {})["validate"] = "utility_billing.utility_billing.uniqueness.validate"
+
 # Late payment surcharge the day after the due date + grace days (FS-REC-03)
 scheduler_events = {
 	"all": [
