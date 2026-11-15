@@ -368,8 +368,8 @@ class IntegrationTestMIS(BillingCase):
 					continue
 				columns, data, *_rest = mis.run(key, {"society": "TST-EMPTY", **WIDE, "month": "2026-10-01", "as_of": "2026-12-20"})
 				self.assertTrue(columns)
-				# these always list their months; the audit log and the users' rights aren't per society
-				if key not in ("dashboard", "audit_log", "atc_losses", "recovery_vs_target", "users_rights"):
+				# these always list their months; the audit log, the users' rights and SoftVerx's licence billing aren't per society
+				if key not in ("dashboard", "audit_log", "atc_losses", "recovery_vs_target", "users_rights", "licence_receivables", "licence_revenue"):
 					self.assertEqual(data, [], spec["name"])
 
 	def test_report_rights(self):

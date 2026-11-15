@@ -2061,6 +2061,49 @@ def t_lifecycle_store(d: Desk):
 	expect_error(lambda: run_report(USERS["cashier"], "Meter Stock"))
 
 
+# ---------------------------------------------------------------- increment 24
+@case("QA-85", "FS-SAS-02/03, gap 14: a site's usage reaches the control site with its key; invoice, PDF and payment; AI off by default")
+def t_licence_and_ai(d: Desk):
+	import datetime
+
+	ai, lic = "utility_billing.utility_billing.ai", "utility_billing.utility_billing.licensing"
+	last = (datetime.date.today().replace(day=1) - datetime.timedelta(days=1)).replace(day=1).isoformat()
+	settings = d.get("Licence Settings", "Licence Settings")
+	d.save_doc(dict(settings, mode="The SoftVerx control site", seller_name="SoftVerx", invoice_day="1"))
+	try:
+		client = d.save_doc({"doctype": "Licence Client", "client_name": f"QA Client {RUN}", "rate_per_account": "25", "monthly_minimum": "1000",
+		                     "currency": "PKR", "tax_percent": "16", "payment_days": "15", "start_date": "2026-01-01"})["name"]
+		key = d.call(f"{lic}.new_key", client=client)["key"]
+		site = requests.Session()  # a society's site: no login, only its licence key
+		site.headers.update({"Host": SITE, "Accept": "application/json"})
+		bad = site.post(f"{URL}/api/method/{lic}.receive_usage", json={"month": last, "lines": []}, headers={"X-UMS-Licence-Key": "ums_wrong"})
+		eq(bad.status_code in (401, 403), True, f"a wrong key is refused (HTTP {bad.status_code})")
+		ok = site.post(f"{URL}/api/method/{lic}.receive_usage", headers={"X-UMS-Licence-Key": key},
+		               json={"month": last, "site": "qa-society", "lines": [{"society": S["society"], "utility": "Electricity", "accounts": 120}]})
+		eq((ok.status_code, ok.json()["message"]["accepted"], ok.json()["message"]["accounts"]), (200, True, 120), "usage received")
+		usage = ok.json()["message"]["usage"]
+		inv = d.save_doc({"doctype": "Licence Invoice", "client": client, "month": last, "usage": usage, "accounts": "120",
+		                  "invoice_date": datetime.date.today().isoformat()})
+		inv = d.save_doc(inv, action="Submit")
+		eq((float(inv["amount"]), int(inv["minimum_applied"]), float(inv["total"]), inv["status"]), (3000.0, 0, 3480.0, "Unpaid"), "invoice")
+		_reader, text = get_pdf_at(d, f"{lic}.download_invoice", name=inv["name"])
+		for part in ("SoftVerx", f"QA Client {RUN}", inv["name"], "3,480.00"):
+			if part not in text:
+				raise AssertionError(f"{part!r} missing from the licence invoice PDF")
+		pay = d.save_doc(d.save_doc({"doctype": "Licence Payment", "client": client, "amount": "3480", "reference": f"QA85-{RUN}"}), action="Submit")
+		eq((d.get("Licence Invoice", inv["name"])["status"], float(pay["unallocated"])), ("Paid", 0.0), "invoice paid")
+		rows = rows_of(d.call("frappe.desk.query_report.run", report_name="Licence Receivables", filters={}))
+		eq(any(r.get("client") == client for r in rows), True, "receivables list the client")
+	finally:
+		d.save_doc(dict(d.get("Licence Settings", "Licence Settings"), mode="A society's site"))
+	# AI: off until a society switches it on; nothing is sent
+	got = USERS["bm"].call(f"{ai}.insights", society=S["society"])
+	eq((got["ai"], got["summary"], bool(got["facts"])), (False, None, True), "insights are the rule facts only")
+	expect_error(lambda: USERS["bm"].call(f"{ai}.ask", society=S["society"], question="Who owes us the most?"), "switched on")
+	run_report(USERS["rec"], "Theft Suspicion", min_score="0")
+	expect_error(lambda: run_report(USERS["cashier"], "Theft Suspicion"))
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 
