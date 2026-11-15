@@ -435,3 +435,51 @@ def meter_movements(f):
 	                    col("Issued To", "issued_to", width=140), col("Reference", "reference", width=130)],
 	        "data": data,
 	        "summary": [{"value": by[k], "label": _(k), "datatype": "Int", "indicator": "Blue"} for k in ("Received", "Issued", "Returned", "Scrapped")]}
+
+
+# ---------------------------------------------------------------- SoftVerx licence billing, on the control site (increment 24)
+@report("licence_receivables", "Licence Receivables", ["Licence Manager"],
+        [dict(fieldname="as_of", label="As Of", fieldtype="Date", default="@today")],
+        "What each client has been invoiced, has paid and still owes, by how long past the due date.", ref_doctype="Licence Invoice")
+def licence_receivables(f):
+	from utility_billing.utility_billing import licensing  # noqa: PLC0415
+
+	data = licensing.receivables(f.get("as_of"))
+	total = sum(r["outstanding"] for r in data)
+	late = sum(r["d30"] + r["d60"] + r["d90"] for r in data)
+	return {"columns": [col("Client", "client", "Link", 180, "Licence Client"), col("Invoiced", "invoiced", "Currency", 120),
+	                    col("Paid", "paid", "Currency", 120), col("Outstanding", "outstanding", "Currency", 120),
+	                    col("Not Yet Due", "current", "Currency", 110), col("1-30 Days Late", "d30", "Currency", 120),
+	                    col("31-60 Days Late", "d60", "Currency", 120), col("Over 60 Days Late", "d90", "Currency", 130)],
+	        "data": data,
+	        "summary": [{"value": round(total, 2), "label": _("Outstanding"), "datatype": "Currency", "indicator": "Blue"},
+	                    {"value": round(late, 2), "label": _("Past due"), "datatype": "Currency", "indicator": "Red"}]}
+
+
+@report("licence_revenue", "Licence Revenue", ["Licence Manager"],
+        [dict(fieldname="from_date", label="From Month", fieldtype="Date", default="@month_start"),
+         dict(fieldname="to_date", label="To Month", fieldtype="Date", default="@today")],
+        "Active accounts, invoiced and collected per month, with the clients whose usage report hasn't arrived.", ref_doctype="Licence Invoice")
+def licence_revenue(f):
+	from utility_billing.utility_billing import licensing  # noqa: PLC0415
+
+	start = month_start(f.get("from_date") or add_months(month_start(nowdate()), -11))
+	end = month_start(f.get("to_date") or nowdate())
+	rows = {r.month: r for r in sql("""select month, count(*) clients, sum(accounts) accounts, sum(total) invoiced, sum(paid_amount) paid
+	                                  from `tabLicence Invoice` where docstatus = 1 and month between %(a)s and %(b)s group by month""",
+	                               {"a": start, "b": end})}
+	data, m = [], start
+	while m <= end:
+		r = rows.get(m) or {}
+		missing = licensing.missing_usage(m) if m < month_start(nowdate()) else []
+		if r or missing:  # a month with nothing invoiced and nobody missing isn't listed
+			data.append({"month": m.strftime("%B %Y"), "clients": cint(r.get("clients")), "accounts": cint(r.get("accounts")),
+			             "invoiced": flt(r.get("invoiced")), "paid": flt(r.get("paid")), "missing": ", ".join(missing)})
+		m = add_months(m, 1)
+	return {"columns": [col("Month", "month", width=120), col("Clients Invoiced", "clients", "Int", 120), col("Active Accounts", "accounts", "Int", 120),
+	                    col("Invoiced", "invoiced", "Currency", 130), col("Collected", "paid", "Currency", 130),
+	                    col("Usage Not Received From", "missing", width=260)],
+	        "data": data,
+	        "chart": {"data": {"labels": [d["month"] for d in data], "datasets": [{"name": _("Invoiced"), "values": [d["invoiced"] for d in data]},
+	                                                                         {"name": _("Collected"), "values": [d["paid"] for d in data]}]},
+	                  "type": "bar"}}

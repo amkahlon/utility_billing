@@ -130,6 +130,9 @@ GROUPS = [
 	                        ("DocType", "Transformer"), ("DocType", "Common Area Facility"), ("DocType", "Network Asset"), ("DocType", "DISCO Bill")]),
 	("Integrations", [("DocType", "API Client"), ("DocType", "Event Subscription"), ("DocType", "API Event Delivery"), ("DocType", "API Call Log")]),
 	("Reports", []),  # filled from the registry (scheduled report e-mails, FS-RPT-44, are parked by the user)
+	# SoftVerx's own licence billing (increment 24): the control site invoices; a society's site sets its key and reports usage
+	("Licensing", [("DocType", "Licence Settings"), ("DocType", "Licence Usage"), ("DocType", "Licence Client"), ("DocType", "Licence Invoice"),
+	               ("DocType", "Licence Payment"), ("Report", "Licence Receivables"), ("Report", "Licence Revenue")]),
 	("Setup", [("DocType", "Society"), ("DocType", "Society Onboarding", "Onboarding Checklist"), ("DocType", "Tariff"), ("DocType", "Charge Type"), ("DocType", "Tax"), ("DocType", "Consumer Category"),
 	           ("DocType", "Fee Type"), ("DocType", "Cash Counter"), ("DocType", "Reason Code"),
 	           ("DocType", "Reading Exception Code"), ("DocType", "Connection Flag Type"), ("DocType", "Utility Type"), ("DocType", "KPI Definition")]),

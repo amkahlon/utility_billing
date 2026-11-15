@@ -1,0 +1,47 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "society",
+  "utility",
+  "accounts"
+ ],
+ "fields": [
+  {
+   "fieldname": "society",
+   "fieldtype": "Data",
+   "label": "Society",
+   "in_list_view": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "utility",
+   "fieldtype": "Data",
+   "label": "Utility",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "accounts",
+   "fieldtype": "Int",
+   "label": "Active Accounts",
+   "in_list_view": 1,
+   "columns": 3
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Licence Usage Line",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50,
+ "permissions": []
+}
