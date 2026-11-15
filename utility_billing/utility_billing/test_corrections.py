@@ -424,5 +424,5 @@ class IntegrationTestCorrections(BillingCase):
 		self.assertEqual([r["kind"] for r in only], ["Bill dispute"])
 
 	def test_the_menu_has_the_new_screens(self):
-		links = {i.link_to for i in frappe.get_doc("Sidebar", "Utility Billing").items}
+		links = {i.link_to for i in frappe.get_doc("Sidebar", "Utility Management System").items}
 		self.assertTrue({"Bill Revision", "Due Date Extension", "Bill Dispute", "Bulk Adjustment", "Corrections Register"} <= links)

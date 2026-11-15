@@ -1548,7 +1548,7 @@ def line_losses(f):
 	          "loss_kwh": r["loss_kwh"], "loss_pct": r["loss_pct"], "status": _(r["status"]), "technical_pct": est.get(r["item"])} for r in rows]
 	message = _(LEVEL_NOTE)
 	if not whole:
-		message = _("No DISCO bill or feeder input units are recorded for this month yet (Utility Billing → DISCO Bill). ") + message
+		message = _("No DISCO bill or feeder input units are recorded for this month yet (Meters and Network → DISCO Bill). ") + message
 	return {"columns": [col(by, "name", width=240), col("Connections", "connections", "Int", 100), col("Input kWh", "input_kwh", "Float", 120),
 	                    col("Billed kWh", "billed_kwh", "Float", 120), col("Loss kWh", "loss_kwh", "Float", 110),
 	                    col("Loss %", "loss_pct", "Percent", 90), col("Status", "status", width=120)] +

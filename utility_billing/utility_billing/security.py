@@ -9,7 +9,7 @@ from frappe.utils import cint
 
 TWO_FACTOR_ROLES = ("System Manager", "Society Admin", "General Manager", "Billing Manager", "Management", "Accounts Officer")
 POLICY = {"enable_password_policy": 1, "minimum_password_score": "3", "allow_consecutive_login_attempts": 5, "allow_login_after_fail": 900,
-          "enable_two_factor_auth": 1, "two_factor_method": "OTP App", "otp_issuer_name": "Utility Billing"}
+          "enable_two_factor_auth": 1, "two_factor_method": "OTP App", "otp_issuer_name": "Utility Management System"}
 
 
 def status() -> list[dict]:

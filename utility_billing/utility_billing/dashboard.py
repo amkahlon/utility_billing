@@ -116,8 +116,16 @@ def kpis_of(society, month, series, as_of):
 		kpi(_("Defaulters (60+ days)"), f"{defaulters:,}", _("{0} outstanding").format(rs(overdue_60)),
 		    BAD if defaulters else GOOD, defaulters),
 		kpi(_("Defective meters"), f"{len(defective):,}", _("{0} not updated for 2+ months").format(stale), WARN if stale else MUTED, len(defective)),
-		kpi(_("Open service requests"), "—", _("Service requests aren't built yet"), MUTED),
+		service_card(society, as_of),
 	]
+
+
+def service_card(society, as_of):
+	"""Open service requests and how many are past their service standard (FS-WF-00)."""
+	rows = frappe.get_all("Service Request", filters={"society": society, "status": ["in", ["Open", "In Progress"]]}, pluck="due_by")
+	late = sum(1 for d in rows if d and getdate(d) < getdate(as_of))
+	note = _("{0} past the service standard").format(late) if late else (_("All within the service standard") if rows else _("Nothing open"))
+	return kpi(_("Open service requests"), f"{len(rows):,}", note, WARN if late else (GOOD if rows else MUTED), len(rows))
 
 
 SEVERITY = {"red": 0, "amber": 1, "blue": 2}

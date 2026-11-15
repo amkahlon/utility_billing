@@ -1,7 +1,7 @@
 app_name = "utility_billing"
-app_title = "Utility Billing"
+app_title = "Utility Management System"
 app_publisher = "SoftVerx"
-app_description = "Utility billing and management for housing societies and estates"
+app_description = "Utility management and billing for housing societies and estates"
 app_email = "dev@softverx.example"
 app_license = "Proprietary"
 
@@ -15,7 +15,7 @@ add_to_apps_screen = [
 	{
 		"name": "utility_billing",
 		"logo": "/assets/utility_billing/images/utility-billing-logo.svg",
-		"title": "Utility Billing",
+		"title": "Utility Management System",
 		"route": "/desk/ub-dashboard",
 	}
 ]

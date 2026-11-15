@@ -219,7 +219,7 @@
    "fieldname": "phase",
    "fieldtype": "Select",
    "label": "Phase",
-   "options": "\nSingle Phase\nThree Phase",
+   "options": "\nSingle\nThree",
    "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection'"
   },
   {

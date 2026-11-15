@@ -277,7 +277,8 @@ def _calculate(run):
 				"Utility Bill", {"connection": conn, "billing_month": month, "docstatus": 1}, "name"
 			)
 			if already:
-				problems.append({"connection": conn, "problem": _("Already billed for this month in {0}.").format(already)})
+				if not frappe.utils.cint(doc.get("supplementary")):  # a supplementary run bills only the accounts still without a bill
+					problems.append({"connection": conn, "problem": _("Already billed for this month in {0}.").format(already)})
 				continue
 			try:
 				bill = frappe.get_doc(build_bill(doc, conn))

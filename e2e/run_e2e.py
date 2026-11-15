@@ -1141,7 +1141,7 @@ def t_modern_dashboard(d: Desk):
 	cards = {k["label"]: k for k in res["kpis"]}
 	eq((cards["Billed this cycle"]["value"], cards["Units billed"]["value"], cards["Units billed"]["note"]),
 	   ("Rs 22,700", "300 kWh", "1 connection billed"), "November figures")
-	eq((cards["Line losses (AT&C)"]["value"], cards["Open service requests"]["value"]), ("—", "—"), "unavailable cards say so")
+	eq((cards["Line losses (AT&C)"]["value"], cards["Open service requests"]["value"]), ("—", "0"), "line losses unavailable without a DISCO bill; no open service requests")
 	eq([s["state"] for s in res["steps"]][:3], ["done", "done", "done"], "readings, review and bill run are done")
 	eq(len(res["series"]), 12, "12 months")
 	if not res["channels"] or res["channels"][0]["name"] != "Cash":

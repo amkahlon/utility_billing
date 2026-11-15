@@ -52,9 +52,10 @@ class IntegrationTestDashboard(BillingCase):
 	def test_cards_that_cant_be_produced_yet_say_so_instead_of_showing_zero(self):
 		self.october_posted()
 		k = self.cards(self.get(month="2026-10-01"))
-		for label in ("Line losses (AT&C)", "Open service requests"):
-			self.assertEqual((k[label]["value"], k[label]["raw"], k[label]["tone"]), ("—", None, "slate"), label)
+		label = "Line losses (AT&C)"
+		self.assertEqual((k[label]["value"], k[label]["raw"], k[label]["tone"]), ("—", None, "slate"), label)
 		self.assertIn("DISCO bill", k["Line losses (AT&C)"]["note"])
+		self.assertEqual((k["Open service requests"]["value"], k["Open service requests"]["note"]), ("0", "Nothing open"))  # increment 18
 
 	def test_arrears_card_and_trend(self):
 		self.october_posted()
@@ -149,7 +150,7 @@ class IntegrationTestDashboard(BillingCase):
 		page = frappe.get_doc("Page", "ub-dashboard")
 		self.assertEqual((page.standard, page.module), ("Yes", "Utility Billing"))
 		self.assertEqual({r.role for r in page.roles}, set(dashboard.ALLOWED))
-		items = frappe.get_doc("Sidebar", "Utility Billing").items
+		items = frappe.get_doc("Sidebar", "Utility Management System").items
 		self.assertEqual((items[0].label, items[0].link_type, items[0].link_to), ("Dashboard", "Page", "ub-dashboard"))
 		self.assertEqual([i.idx for i in items], list(range(1, len(items) + 1)))
 

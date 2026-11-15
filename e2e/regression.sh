@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Full regression: migrate all sites, unit + integration tests on the test site (with ERPNext) and the ERPNext-free
-# QA site, then the HTTP end-to-end suite (once, on one society) against a freshly restarted QA server on port 8001.
+# Regression gate for each increment (user's decision 2026-11-15): migrate all sites, check our DocTypes don't clash with
+# ERPNext's on the test site, run the unit + integration tests once on the ERPNext-free QA site, then the HTTP end-to-end
+# suite (once, on one society) against a freshly restarted QA server on port 8001.
+# Before a release or a client deployment, run the tests on both sites:  TEST_SITES="test.localhost qa.localhost" bash regression.sh
 # Needs `bench start` running (Redis and the background worker).
 # Usage (inside WSL):  bash ~/frappe-bench/apps/utility_billing/e2e/regression.sh
 set -uo pipefail
@@ -14,8 +16,11 @@ for site in ub.localhost test.localhost qa.localhost; do
   bench --site "$site" migrate > "$HOME/migrate-$site.log" 2>&1 || { echo "migrate failed, see ~/migrate-$site.log"; status=1; }
 done
 
+echo "== DocType clash check on test.localhost (with ERPNext)"
+(cd sites && ../env/bin/python ../apps/utility_billing/e2e/check_clash.py test.localhost 2>/dev/null) || status=1
+
 # Never on ub.localhost (the dev site with the user's demo data): allow_tests is off there.
-for site in test.localhost qa.localhost; do
+for site in ${TEST_SITES:-qa.localhost}; do
   echo "== unit + integration on $site"
   out=$(bench --site "$site" run-tests --app utility_billing 2>&1 | sed "s/\x1b\[[0-9;]*m//g")
   echo "$out" | grep -E "✖|FAIL|ERROR|^Ran |^OK"

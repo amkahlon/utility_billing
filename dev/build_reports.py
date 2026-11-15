@@ -134,7 +134,7 @@ GROUPS = [
 def build_sidebar():
 	from utility_billing.utility_billing import mis
 
-	doc = frappe.get_doc("Sidebar", "Utility Billing")
+	doc = frappe.get_doc("Sidebar", "Utility Management System")  # named by its title: renaming it would change every desk address
 	doc.items = []
 	doc.append("items", {"type": "Link", "label": "Dashboard", "link_type": "Page", "link_to": "ub-dashboard", "child": 0})
 	for section, links in GROUPS:

@@ -261,5 +261,5 @@ class IntegrationTestTaxes(BillingCase):
 
 	# ---- menu and reports
 	def test_the_menu_has_the_tax_screen_and_report(self):
-		links = {i.link_to for i in frappe.get_doc("Sidebar", "Utility Billing").items}
+		links = {i.link_to for i in frappe.get_doc("Sidebar", "Utility Management System").items}
 		self.assertTrue({"Tax", "Tax Register and Taxes Payable"} <= links)
