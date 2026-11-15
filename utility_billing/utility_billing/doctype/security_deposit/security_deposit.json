@@ -17,6 +17,7 @@
   "reference_no",
   "posting_date",
   "remarks",
+  "transferred_from",
   "posting_section",
   "balance_before",
   "balance_after",
@@ -132,6 +133,14 @@
    "fieldname": "remarks",
    "fieldtype": "Small Text",
    "label": "Remarks"
+  },
+  {
+   "fieldname": "transferred_from",
+   "fieldtype": "Link",
+   "label": "Transferred From",
+   "options": "Connection",
+   "read_only": 1,
+   "description": "The account this deposit was paid on, before that account was merged into this one."
   },
   {
    "fieldname": "posting_section",
@@ -270,7 +279,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 22:00:00.000000",
+ "modified": "2026-11-16 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Security Deposit",

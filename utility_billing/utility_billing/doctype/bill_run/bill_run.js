@@ -4,6 +4,16 @@ frappe.ui.form.on("Bill Run", {
 	refresh(frm) {
 		utility_billing.setup_approval_form(frm);
 		if (frm.is_new()) return;
+		// FS-RUN-07: a large run posts in the background after approval
+		if (frm.doc.posting_status === "Posting") {
+			frm.dashboard.set_headline_alert(__("Posting the bills in the background. Reload in a few minutes."), "blue");
+		} else if (frm.doc.posting_status === "Posting failed") {
+			frm.dashboard.set_headline_alert(__("Posting stopped before every bill was posted. Fix the cause shown below, then Post Again: it carries on with the rest."), "red");
+			if (frappe.user.has_role("Billing Manager")) {
+				frm.add_custom_button(__("Post Again"), () =>
+					frappe.xcall("utility_billing.utility_billing.doctype.bill_run.bill_run.retry_posting", { run: frm.doc.name }).then(() => frm.reload_doc()));
+			}
+		}
 		frm.add_custom_button(__("Open Bills"), () => frappe.set_route("List", "Utility Bill", { bill_run: frm.doc.name }));
 		if (frm.doc.bill_count && frm.doc.calculation_status === "Calculated" && frm.doc.docstatus < 2) {
 			frm.add_custom_button(__("Print Bills"), () => print_run_bills(frm));

@@ -1,0 +1,275 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 18:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "reading_cycle",
+  "society",
+  "utility",
+  "billing_month",
+  "meter",
+  "measures",
+  "feeder",
+  "transformer",
+  "cb1",
+  "route",
+  "route_sequence",
+  "assigned_reader",
+  "status",
+  "reading_section",
+  "previous_reading",
+  "present_reading",
+  "reading_date",
+  "cb2",
+  "multiplier",
+  "units",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "reading_cycle",
+   "fieldtype": "Link",
+   "label": "Reading Cycle",
+   "options": "Reading Cycle",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "utility",
+   "fieldtype": "Link",
+   "label": "Utility",
+   "options": "Utility Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "billing_month",
+   "fieldtype": "Date",
+   "label": "Month",
+   "read_only": 1
+  },
+  {
+   "fieldname": "meter",
+   "fieldtype": "Link",
+   "label": "Check Meter",
+   "options": "Meter",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "measures",
+   "fieldtype": "Data",
+   "label": "Measures",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "The feeder or transformer whose input this meter records."
+  },
+  {
+   "fieldname": "feeder",
+   "fieldtype": "Link",
+   "label": "Feeder",
+   "options": "Feeder",
+   "read_only": 1
+  },
+  {
+   "fieldname": "transformer",
+   "fieldtype": "Link",
+   "label": "Transformer",
+   "options": "Transformer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "route",
+   "fieldtype": "Data",
+   "label": "Route",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "route_sequence",
+   "fieldtype": "Int",
+   "label": "Order on Route",
+   "read_only": 1
+  },
+  {
+   "fieldname": "assigned_reader",
+   "fieldtype": "Link",
+   "label": "Reader",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nRead",
+   "default": "Pending",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "reading_section",
+   "fieldtype": "Section Break",
+   "label": "Reading"
+  },
+  {
+   "fieldname": "previous_reading",
+   "fieldtype": "Float",
+   "label": "Previous Reading",
+   "read_only": 1
+  },
+  {
+   "fieldname": "present_reading",
+   "fieldtype": "Float",
+   "label": "Present Reading"
+  },
+  {
+   "fieldname": "reading_date",
+   "fieldtype": "Date",
+   "label": "Reading Date"
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "multiplier",
+   "fieldtype": "Float",
+   "label": "Multiplier",
+   "read_only": 1
+  },
+  {
+   "fieldname": "units",
+   "fieldtype": "Float",
+   "label": "Units (kWh)",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "description": "Say why when the meter rolled over or was replaced."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Check Meter Reading",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "hash",
+ "title_field": "meter",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Meter Reader",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  }
+ ],
+ "search_fields": "meter,route",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

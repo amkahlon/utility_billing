@@ -1,0 +1,98 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 18:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "meter",
+  "serial_no",
+  "make",
+  "meter_type",
+  "digits",
+  "multiplier",
+  "condition",
+  "status_before",
+  "status_after"
+ ],
+ "fields": [
+  {
+   "fieldname": "meter",
+   "fieldtype": "Link",
+   "label": "Meter",
+   "options": "Meter",
+   "in_list_view": 1,
+   "columns": 2,
+   "description": "Received: left empty, the meter is made from the details on the right."
+  },
+  {
+   "fieldname": "serial_no",
+   "fieldtype": "Data",
+   "label": "Serial No",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "make",
+   "fieldtype": "Data",
+   "label": "Make",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "meter_type",
+   "fieldtype": "Select",
+   "label": "Type",
+   "options": "Single Phase\nThree Phase\nTOU\nNet Metering\nPrepaid\nBulk / Check Meter",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "digits",
+   "fieldtype": "Int",
+   "label": "Digits",
+   "default": "5"
+  },
+  {
+   "fieldname": "multiplier",
+   "fieldtype": "Float",
+   "label": "Multiplier",
+   "default": "1"
+  },
+  {
+   "fieldname": "condition",
+   "fieldtype": "Select",
+   "label": "Condition",
+   "options": "\nGood\nDefective",
+   "in_list_view": 1,
+   "columns": 1,
+   "description": "Returned meters: Defective ones stay marked defective in the store."
+  },
+  {
+   "fieldname": "status_before",
+   "fieldtype": "Data",
+   "label": "Status Before",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status_after",
+   "fieldtype": "Data",
+   "label": "Status After",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Meter Store Item",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50,
+ "permissions": []
+}

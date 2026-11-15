@@ -21,6 +21,8 @@
   "issue_date",
   "due_date",
   "calculation_status",
+  "posting_status",
+  "posting_error",
   "calculated_on",
   "amended_from",
   "exclusions_section",
@@ -134,6 +136,23 @@
    "no_copy": 1,
    "options": "Not calculated\nCalculating\nCalculated\nFailed",
    "read_only": 1
+  },
+  {
+   "fieldname": "posting_status",
+   "fieldtype": "Select",
+   "label": "Posting",
+   "options": "\nPosting\nPosted\nPosting failed",
+   "read_only": 1,
+   "in_list_view": 1,
+   "depends_on": "eval:doc.posting_status",
+   "description": "A large run posts its bills in the background after approval."
+  },
+  {
+   "fieldname": "posting_error",
+   "fieldtype": "Small Text",
+   "label": "Posting Error",
+   "read_only": 1,
+   "depends_on": "eval:doc.posting_status=='Posting failed'"
   },
   {
    "fieldname": "calculated_on",
@@ -357,7 +376,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-15 20:00:00.000000",
+ "modified": "2026-11-16 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Bill Run",

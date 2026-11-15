@@ -12,8 +12,14 @@ from frappe.utils import add_months, flt, getdate, now_datetime
 from utility_billing.utility_billing import bill_engine as engine
 from utility_billing.utility_billing import flags, holders, periods, plans, prorata, snapshots, split_engine, tax_engine
 from utility_billing.utility_billing import account, bill_print
-from utility_billing.utility_billing import readings
-from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff
+from utility_billing.utility_billing import readings, runcache
+from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff as _applicable_tariff
+
+
+def get_applicable_tariff(society, utility, category, on_date):
+	"""The tariff in force (tariff.get_applicable_tariff), looked up once per category and date during a run."""
+	return runcache.tariff(("applicable", society, utility, category, str(on_date)),
+	                       lambda: _applicable_tariff(society, utility, category, on_date))
 
 BACKGROUND_THRESHOLD = 200  # runs with more connections calculate in a background job (FS-RUN-01)
 
@@ -59,6 +65,8 @@ def tariff_charges(tariff, plot_class=None) -> list:
 
 def contract_tariff(connection, month):
 	"""The service agreement in force on the account in `month` that carries a contract tariff, or None (FS-MST-19, FS-CFG-32)."""
+	if runcache.none_for("agreements", connection):
+		return None
 	start, end = readings.month_start(month), frappe.utils.get_last_day(month)
 	rows = frappe.get_all("Service Agreement", filters={"connection": connection, "docstatus": 1, "status": "Active",
 	                                                    "start_date": ["<=", end], "tariff": ["is", "set"]},
@@ -134,11 +142,11 @@ def tariff_segments(run, category, reading, units, fraction, fraction_note, plot
 	if not (start and end):
 		return None
 	start, end = getdate(start), getdate(end)
-	rows = frappe.get_all(
+	rows = runcache.tariff(("periods", run.society, run.utility, category, start, end), lambda: frappe.get_all(
 		"Tariff", filters={"docstatus": 1, "society": run.society, "utility": run.utility, "consumer_category": category,
 		                   "effective_from": ["<=", end]},
 		or_filters=[["effective_to", "is", "not set"], ["effective_to", ">=", start]],
-		fields=["name", "effective_from", "effective_to"])
+		fields=["name", "effective_from", "effective_to"]))
 	parts = split_engine.tariff_days(start, end, [(r.name, getdate(r.effective_from), getdate(r.effective_to) if r.effective_to else None) for r in rows])
 	total = (end - start).days
 	if len(parts) < 2 or sum(p[3] for p in parts) != total:
@@ -219,11 +227,12 @@ def build_bill(run, connection, override=None) -> dict:
 	held = flags.effect(connection, flags.HOLD_BILLING, month, frappe.utils.get_last_day(month))
 	if held:
 		raise BillProblem(_("Bill on hold: flag {0}. Remove it to bill this account.").format(held))
-	reading = frappe.db.get_value(
-		"Meter Reading", {"reading_cycle": run.reading_cycle, "connection": connection},
-		["name", "status", "units", "consumption_type", "previous_reading_date", "reading_date", "defective", "previous_reading", "multiplier"],
-		as_dict=True,
-	)
+	reading_fields = ["name", "status", "units", "consumption_type", "previous_reading_date", "reading_date", "defective", "previous_reading",
+	                  "multiplier"]
+	cycle_rows = runcache.bulk(("readings", run.reading_cycle), lambda: {
+		r.connection: r for r in frappe.get_all("Meter Reading", filters={"reading_cycle": run.reading_cycle}, fields=[*reading_fields, "connection"])})
+	reading = cycle_rows.get(connection) if cycle_rows is not None else frappe.db.get_value(
+		"Meter Reading", {"reading_cycle": run.reading_cycle, "connection": connection}, reading_fields, as_dict=True)
 	# Fixed charges while disconnected (increment 22, gap 2): with the society's "Continue" policy a disconnected account is billed its
 	# fixed and per-area charges every month, without a reading, energy or minimum charge.
 	keep_fixed = conn.status == "Disconnected" and society.get("disconnected_fixed_charges") == "Continue"
@@ -251,7 +260,10 @@ def build_bill(run, connection, override=None) -> dict:
 		if not society.energy_charge_type:
 			raise BillProblem(_("Set the Energy Charge Type on society {0}.").format(society.name))
 		energy = charge_of(society.energy_charge_type, basis=engine.PER_UNIT)
-	plot_class = frappe.db.get_value("Property", conn.property, "plot_size_class")
+	props = runcache.bulk(("properties", run.society), lambda: {
+		p.name: p for p in frappe.get_all("Property", filters={"society": run.society}, fields=["name", "plot_size_class", "area"])})
+	prop = (props or {}).get(conn.property) or frappe.db.get_value("Property", conn.property, ["plot_size_class", "area"], as_dict=True) or {}
+	plot_class = prop.get("plot_size_class")
 	charges = tariff_charges(tariff, plot_class)
 
 	adjustments = []
@@ -272,7 +284,7 @@ def build_bill(run, connection, override=None) -> dict:
 			rate=engine.D(adj.rate_per_unit), reference=month_label(adj.reference_month), exempt_reason=exempt,
 		))
 
-	area = flt(frappe.db.get_value("Property", conn.property, "area"))
+	area = flt(prop.get("area"))
 	consumer_id = part.get("consumer") or conn.consumer
 	consumer = frappe.db.get_value("Consumer", consumer_id, ["tax_status", "tax_exempt"], as_dict=True) or {}
 	plan_name = installment = installment_no = None
@@ -380,6 +392,12 @@ def calculate_run(run: str):
 
 
 def _calculate(run):
+	society, utility = frappe.db.get_value("Bill Run", run, ["society", "utility"])
+	with runcache.for_run(society, utility):  # FS-RUN-07: lookups shared by every account, once per run
+		_calculate_bills(run)
+
+
+def _calculate_bills(run):
 	doc = frappe.get_doc("Bill Run", run)
 	try:
 		for name in frappe.get_all("Utility Bill", filters={"bill_run": run, "docstatus": 0}, pluck="name"):
@@ -389,28 +407,30 @@ def _calculate(run):
 		month = readings.month_start(doc.billing_month)
 		society = frappe.get_cached_doc("Society", doc.society)
 		statuses = ["Active", "Disconnected"] if society.get("disconnected_fixed_charges") == "Continue" else ["Active"]  # increment 22
+		billed = dict(frappe.db.sql("""select connection, name from `tabUtility Bill` where society = %s and utility = %s and billing_month = %s
+		                               and docstatus = 1""", (doc.society, doc.utility, month)))  # one query for the run (FS-RUN-07)
 		for conn in frappe.get_all(
 			"Connection", filters={"society": doc.society, "utility": doc.utility, "status": ["in", statuses]},
 			pluck="name", order_by="name",
 		):
 			if conn in excluded:
 				continue
-			already = frappe.db.get_value(
-				"Utility Bill", {"connection": conn, "billing_month": month, "docstatus": 1}, "name"
-			)
+			already = billed.get(conn)
 			if already:
 				if not frappe.utils.cint(doc.get("supplementary")):  # a supplementary run bills only the accounts still without a bill
 					problems.append({"connection": conn, "problem": _("Already billed for this month in {0}.").format(already)})
 				continue
 			try:
-				reading = frappe.db.get_value("Meter Reading", {"reading_cycle": doc.reading_cycle, "connection": conn},
-				                              ["status", "units", "previous_reading_date", "reading_date", "previous_reading", "multiplier"],
-				                              as_dict=True)
-				parts = holder_parts(doc, conn, reading, society) if reading and reading.status in readings.DONE else []
+				parts = []
+				if not runcache.none_for("changed", conn):  # only an account with a recorded change can need two bills
+					reading = frappe.db.get_value("Meter Reading", {"reading_cycle": doc.reading_cycle, "connection": conn},
+					                              ["status", "units", "previous_reading_date", "reading_date", "previous_reading", "multiplier"],
+					                              as_dict=True)
+					parts = holder_parts(doc, conn, reading, society) if reading and reading.status in readings.DONE else []
 				for override in parts or [None]:  # a holder change in the period: a final bill and the incoming holder's bill
 					bill = frappe.get_doc(build_bill(doc, conn, override))
 					bill.flags.from_bill_run = True
-					bill.insert(ignore_permissions=True)
+					bill.insert(ignore_permissions=True, ignore_links=True)  # its links come from the account, tariff and charge types
 			except BillProblem as e:
 				problems.append({"connection": conn, "problem": str(e)})
 		doc.set("problems", problems)
@@ -480,14 +500,27 @@ def set_summary(doc):
 
 def post_run(doc):
 	"""On approval: post every draft bill of the run (FS-BIL-10: posted bills never change)."""
+	with runcache.for_run(doc.society, doc.utility):  # FS-RUN-07
+		_post_bills(doc)
+
+
+def _post_bills(doc):
 	periods.assert_open(doc.society, doc.issue_date, "Bill run")
-	snapshots.take(doc)  # kept before anything is posted, so the run can be restored (FS-RUN-13)
+	if not frappe.db.exists("Run Snapshot", {"bill_run": doc.name}):  # a posting carried on after a failure keeps the first snapshot
+		snapshots.take(doc)  # kept before anything is posted, so the run can be restored (FS-RUN-13)
 	# final bills first: what the account owes after them becomes the former holder's before the incoming holder's bill is posted
-	for name in frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 0}, pluck="name", order_by="final_bill desc, name"):
+	batch = frappe.flags.post_batch  # background posting: commit every `batch` bills (FS-RUN-07: under the transaction write limit,
+	# and payments to these accounts aren't held up for minutes); a failure leaves the rest as drafts for "Post Again"
+	names = frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 0}, pluck="name", order_by="final_bill desc, name")
+	for n, name in enumerate(names, start=1):
+		if batch and n % batch == 0:
+			frappe.db.commit()
 		bill = frappe.get_doc("Utility Bill", name)
 		# Payments may have arrived between calculation and approval: arrears are taken from the account
 		# as it stands at posting, so the bill never asks for money already paid.
-		arrears = flt(account.arrears_for_new_bill(bill.connection))
+		account.lock(bill.connection)  # held to the commit, so no payment slips in between this read and the bill's entry
+		last = account.last_entry(bill.connection)  # read once for the arrears and the posting (FS-RUN-07)
+		arrears = flt(account.arrears_for_new_bill(bill.connection, account.balances_of(last)))
 		if arrears != flt(bill.arrears):
 			bill.arrears = arrears
 			bill.payable_within_due = flt(bill.current_amount) + (flt(bill.installment_due) if flt(bill.installment_due) else arrears)
@@ -498,13 +531,16 @@ def post_run(doc):
 		bill.print_snapshot = json.dumps(bill_print.build_snapshot(bill))
 		bill.flags.from_bill_run = True
 		bill.flags.ignore_permissions = True
-		bill.submit()
-		account.post_bill(bill)
+		bill.flags.ignore_links = True  # checked when the run calculated it; nothing it links to can have gone since
+		bill.docstatus = 1  # submit: the run's approval and the ledger entry record the posting, so no version row per bill
+		bill.save(ignore_version=True)
+		account.post_bill(bill, last)
 		plans.mark_billed(bill)
 		if frappe.utils.cint(bill.final_bill):
 			change = frappe.get_all("Connection Change", filters={"parent": bill.connection, "change_type": holders.HOLDER, "old_consumer": bill.consumer},
 			                        fields=["change_date", "owner_liable"], order_by="change_date desc", limit=1)
 			holders.after_final_bill(bill, change[0] if change else frappe._dict(change_date=bill.issue_date, owner_liable=0))
+			runcache.active()["former"].add(bill.connection)  # the incoming holder's bill must see the balance just moved off
 	from utility_billing.utility_billing import billaccounts  # noqa: PLC0415
 
 	billaccounts.after_run_posted(doc)  # combined bills gather the services' new bills (increment 22)

@@ -1,0 +1,74 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 18:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "key_group",
+  "key_value",
+  "scope_key",
+  "ref_doctype",
+  "ref_name"
+ ],
+ "fields": [
+  {
+   "fieldname": "key_group",
+   "fieldtype": "Data",
+   "label": "Group",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "key_value",
+   "fieldtype": "Data",
+   "label": "Key",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "scope_key",
+   "fieldtype": "Data",
+   "label": "Scope",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ref_doctype",
+   "fieldtype": "Link",
+   "label": "Record Type",
+   "options": "DocType",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "ref_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Record",
+   "options": "ref_doctype",
+   "in_list_view": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Unique Key",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "hash",
+ "permissions": [
+  {
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "role": "System Manager"
+  }
+ ],
+ "in_create": 1,
+ "description": "Kept by the duplicate-number check: the comparison form of each identifying number or code (uniqueness.py).",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

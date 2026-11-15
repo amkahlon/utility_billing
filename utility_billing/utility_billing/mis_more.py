@@ -389,3 +389,49 @@ def former_occupant_balances(f):
 	                    col("Surcharge", "surcharge", "Currency", 100), col("Paid", "paid", "Currency", 100),
 	                    col("Outstanding", "outstanding", "Currency", 110), col("Status", "status", width=90)],
 	        "data": data}
+
+
+# ---------------------------------------------------------------- meter store (gap 13, increment 23)
+@report("meter_stock", "Meter Stock", BILLING, [PERIOD[0], dict(fieldname="utility", label="Utility", fieldtype="Link", options="Utility Type")],
+        "Meters on hand by utility and type: in the store, issued to installers, installed, defective, removed and scrapped.", ref_doctype="Meter")
+def meter_stock(f):
+	statuses = ("In Store", "Issued", "Installed", "Defective", "Removed", "Scrapped")
+	cond = " and utility = %(u)s" if f.get("utility") else ""
+	rows = sql(f"""select utility, ifnull(meter_type, '') meter_type, status, count(*) n from `tabMeter` where society = %(s)s {cond}
+	               group by utility, meter_type, status""", {"s": society_of(f), "u": f.get("utility")})
+	table = OrderedDict()
+	for r in sorted(rows, key=lambda r: (r.utility, r.meter_type)):
+		row = table.setdefault((r.utility, r.meter_type), {"utility": r.utility, "meter_type": r.meter_type or _("Not set"), **{s: 0 for s in statuses}})
+		row[r.status] = row.get(r.status, 0) + cint(r.n)
+	data = list(table.values())
+	for row in data:
+		row["on_hand"] = row["In Store"] + row["Issued"]
+		row["total"] = sum(row[s] for s in statuses)
+	totals = {s: sum(r[s] for r in data) for s in statuses}
+	return {"columns": [col("Utility", "utility", width=110), col("Type", "meter_type", width=140)]
+	                   + [col(s, s, "Int", 95) for s in statuses] + [col("On Hand", "on_hand", "Int", 90), col("Total", "total", "Int", 80)],
+	        "data": data,
+	        "summary": [{"value": totals["In Store"], "label": _("In the store"), "datatype": "Int", "indicator": "Blue"},
+	                    {"value": totals["Issued"], "label": _("With installers"), "datatype": "Int", "indicator": "Orange"},
+	                    {"value": totals["Defective"], "label": _("Defective"), "datatype": "Int", "indicator": "Red"},
+	                    {"value": totals["Scrapped"], "label": _("Scrapped"), "datatype": "Int", "indicator": "Grey"}]}
+
+
+@report("meter_movements", "Meter Store Movements", BILLING, PERIOD,
+        "Meters received, issued to installers, returned and scrapped in the period, meter by meter.", ref_doctype="Meter Store Movement")
+def meter_movements(f):
+	from_date, to_date = _period(f)
+	data = sql("""select m.name movement, m.posting_date, m.movement_type, m.issued_to, m.reference, i.meter, i.serial_no, i.meter_type,
+	              i.status_before, i.status_after
+	              from `tabMeter Store Movement` m join `tabMeter Store Item` i on i.parent = m.name
+	              where m.society = %(s)s and m.docstatus = 1 and m.posting_date between %(f)s and %(t)s
+	              order by m.posting_date, m.name, i.idx""", {"s": society_of(f), "f": from_date, "t": to_date})
+	by = defaultdict(int)
+	for r in data:
+		by[r.movement_type] += 1
+	return {"columns": [col("Movement", "movement", "Link", 140, "Meter Store Movement"), col("Date", "posting_date", "Date", 100),
+	                    col("Type", "movement_type", width=90), col("Meter", "meter", "Link", 130, "Meter"), col("Serial No", "serial_no", width=120),
+	                    col("Meter Type", "meter_type", width=110), col("From", "status_before", width=90), col("To", "status_after", width=90),
+	                    col("Issued To", "issued_to", width=140), col("Reference", "reference", width=130)],
+	        "data": data,
+	        "summary": [{"value": by[k], "label": _(k), "datatype": "Int", "indicator": "Blue"} for k in ("Received", "Issued", "Returned", "Scrapped")]}

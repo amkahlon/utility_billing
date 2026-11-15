@@ -81,6 +81,8 @@ def lines_for(entry_name):
 	soc = settings(e.society)
 	rec = need(soc.receivables, _("receivables (Society {0} → Accounting)").format(e.society))
 	amount = flt(e.amount)
+	if e.entry_type == "Transfer":  # between two accounts of one society: receivables to receivables, no journal (increment 23)
+		return []
 	if e.entry_type == "Reversal":
 		return [(a, cr, dr) for a, dr, cr in lines_for(e.reverses)]
 	if e.entry_type == "Bill":
@@ -221,7 +223,7 @@ def make_daily_journal(society, date):
 	which go to their bill run's journal."""
 	start, end = day_bounds(date)
 	entries = frappe.get_all("Customer Ledger Entry", filters={
-		"society": society, "entry_type": ["!=", "Bill"], "gl_journal": ["is", "not set"],
+		"society": society, "entry_type": ["not in", ["Bill", "Transfer"]], "gl_journal": ["is", "not set"],
 		"posted_on": ["between", [start, end]]}, pluck="name", order_by="posted_on, seq")
 	return build_journal(society, entries, "Daily Transactions", getdate(date),
 	                     _("Collections and account transactions of {0}").format(formatdate(date)))
@@ -250,7 +252,7 @@ def make_journals_for(society, up_to=None):
 	up_to = getdate(up_to or nowdate())
 	rows = frappe.db.sql(
 		"""select distinct date(posted_on) from `tabCustomer Ledger Entry`
-		where society = %s and entry_type != 'Bill' and ifnull(gl_journal, '') = '' and date(posted_on) <= %s
+		where society = %s and entry_type not in ('Bill', 'Transfer') and ifnull(gl_journal, '') = '' and date(posted_on) <= %s
 		order by 1""", (society, up_to))
 	for (day,) in rows:
 		j = make_daily_journal(society, day)

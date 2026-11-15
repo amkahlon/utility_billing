@@ -28,6 +28,7 @@ class Connection(Document):
 
 	def validate(self):
 		self.validate_reference_unchanged()
+		self.validate_request_only()
 		self.validate_links()
 		self.validate_meter_history()
 		self.set_title()
@@ -42,6 +43,32 @@ class Connection(Document):
 		stored = frappe.db.get_value("Connection", self.name, "reference_no")
 		if stored and self.reference_no != stored:
 			frappe.throw(_("The reference number is permanent and can't be changed."))
+
+	def validate_request_only(self):
+		"""FS-MST-16: on an active account, category, load, holder and meters change only through a service request (society setting,
+		on by default). The Administrator may still correct data; Frappe's version log keeps what changed."""
+		if self.is_new() or frappe.flags.via_service_request or frappe.session.user == "Administrator":
+			return
+		before = self.get_doc_before_save()
+		if not before or before.status != "Active":
+			return
+		if not frappe.utils.cint(frappe.db.get_value("Society", self.society, "changes_through_requests")):
+			return
+		changed = [label for field, label in (("consumer_category", _("category")), ("sanctioned_load_kw", _("load")), ("consumer", _("holder")))
+		           if str(self.get(field) or "") != str(before.get(field) or "") and not (field == "sanctioned_load_kw"
+		                                                                              and flt(self.get(field)) == flt(before.get(field)))]
+
+		def meters(doc):
+			return sorted((r.meter, str(r.installed_on or ""), str(r.removed_on or ""), flt(r.start_reading), flt(r.end_reading)) for r in doc.meters)
+
+		if meters(self) != meters(before):
+			changed.append(_("meters"))
+		if self.status != before.status:
+			changed.append(_("status"))
+		if changed:
+			frappe.throw(_("The {0} of an active account change only through a service request (category change, load change, ownership or "
+			               "tenant, meter change, disconnection …). Raise one from the account.").format(", ".join(changed)),
+			             title=_("Use a service request"))
 
 	def validate_links(self):
 		cat_utility = frappe.db.get_value("Consumer Category", self.consumer_category, "utility")
@@ -90,6 +117,9 @@ class Connection(Document):
 		open_rows = [r for r in rows if not r.removed_on]
 		self.current_meter = open_rows[0].meter if open_rows else None
 		if self.current_meter:
+			from utility_billing.utility_billing.doctype.meter_store_movement.meter_store_movement import check_installable  # noqa: PLC0415
+
+			check_installable(self.current_meter)
 			elsewhere = frappe.db.get_value(
 				"Connection Meter",
 				{"meter": self.current_meter, "removed_on": ["is", "not set"], "parent": ["!=", self.name]},
@@ -117,7 +147,7 @@ class Connection(Document):
 			if not r.removed_on:
 				if current.current_connection != self.name or current.status == "In Store":
 					status = "Defective" if current.status == "Defective" else "Installed"
-					frappe.db.set_value("Meter", r.meter, {"current_connection": self.name, "status": status})
+					frappe.db.set_value("Meter", r.meter, {"current_connection": self.name, "status": status, "issued_to": None})
 			elif current.current_connection == self.name:
 				status = "Defective" if current.status == "Defective" else "Removed"
 				frappe.db.set_value("Meter", r.meter, {"current_connection": None, "status": status})

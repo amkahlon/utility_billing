@@ -125,8 +125,17 @@ UNIQUE_CHECKED = ("API Client", "Cash Counter", "Charge Type", "Common Area Faci
                   "DISCO Bill", "Fee Type", "Feeder", "Grid Station", "Journal Export Layout", "KPI Definition", "Ledger Account", "Line Section",
                   "Meter", "Network Asset", "Property", "Reading Exception Code", "Reading Route", "Reason Code", "Service Request Type",
                   "Society", "Tax", "Transformer")
+def _add_event(doctype, event, method):
+	events = doc_events.setdefault(doctype, {})
+	have = events.get(event)
+	events[event] = method if not have else ([*have, method] if isinstance(have, list) else [have, method])
+
+
 for _dt in UNIQUE_CHECKED:
-	doc_events.setdefault(_dt, {})["validate"] = "utility_billing.utility_billing.uniqueness.validate"
+	_add_event(_dt, "validate", "utility_billing.utility_billing.uniqueness.validate")
+	# the indexed Unique Key rows that make the check one lookup (increment 23: 20,000 meters)
+	for _event in ("on_update", "on_trash", "on_cancel", "after_rename"):
+		_add_event(_dt, _event, f"utility_billing.utility_billing.uniqueness.{_event}")
 
 # Late payment surcharge the day after the due date + grace days (FS-REC-03)
 scheduler_events = {

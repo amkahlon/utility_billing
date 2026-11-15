@@ -503,3 +503,14 @@ def cost_rows(society, from_date, to_date):
 	return frappe.db.sql(
 		"""select channel, status, count(*) messages, sum(cost) cost, sum(parts) parts from `tabMessage Log`
 		where society = %s and date(creation) between %s and %s group by channel, status""", (society, from_date, to_date), as_dict=True)
+
+
+@safe
+def request_updated(sr, message):
+	"""The consumer is told at each step of their service request (increment 23): received, each step done, completed, rejected or
+	cancelled."""
+	if not sr.connection:
+		return []
+	names = notify("request.updated", sr.connection, {"message": message, "request": sr.name}, reference=("Service Request", sr.name))
+	queue_send(names)
+	return names

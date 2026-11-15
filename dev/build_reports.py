@@ -108,7 +108,7 @@ GROUPS = [
 	("Approvals", [("Page", "ub-approvals", "Approval Inbox"), ("DocType", "Approval Delegation"), ("DocType", "User Access")]),
 	("Consumers", [("Page", "ub-consumer-360", "Consumer 360"), ("DocType", "Consumer"), ("DocType", "Property"), ("DocType", "Connection"),
 	               ("DocType", "Security Deposit")]),
-	("Meter Readings", [("DocType", "Reading Cycle"), ("DocType", "Meter Reading"), ("DocType", "Reading Route")]),
+	("Meter Readings", [("Page", "ub-readings", "Reading Dashboard"), ("DocType", "Reading Cycle"), ("DocType", "Check Meter Reading"), ("DocType", "Meter Reading"), ("DocType", "Reading Route")]),
 	("Billing", [("DocType", "Bill Run"), ("DocType", "Utility Bill"), ("DocType", "Combined Bill"), ("DocType", "Tariff Adjustment"),
 	             ("DocType", "Billing Account"), ("DocType", "Service Agreement")]),
 	("Payments", [("DocType", "Cashier Day"), ("DocType", "Payment Receipt"), ("DocType", "Fee Charge"),
@@ -126,7 +126,7 @@ GROUPS = [
 	                    ("DocType", "Opening Balance Import", "Opening Balances")]),
 	("Accounting", [("DocType", "GL Journal"), ("DocType", "Receivables Reconciliation"), ("DocType", "Ledger Account"),
 	                ("DocType", "Journal Export Layout"), ("DocType", "Revenue Target")]),
-	("Meters and Network", [("DocType", "Meter"), ("DocType", "Grid Station"), ("DocType", "Feeder"), ("DocType", "Line Section"),
+	("Meters and Network", [("DocType", "Meter"), ("DocType", "Meter Store Movement"), ("Report", "Meter Stock"), ("Report", "Meter Store Movements"), ("DocType", "Grid Station"), ("DocType", "Feeder"), ("DocType", "Line Section"),
 	                        ("DocType", "Transformer"), ("DocType", "Common Area Facility"), ("DocType", "Network Asset"), ("DocType", "DISCO Bill")]),
 	("Integrations", [("DocType", "API Client"), ("DocType", "Event Subscription"), ("DocType", "API Event Delivery"), ("DocType", "API Call Log")]),
 	("Reports", []),  # filled from the registry (scheduled report e-mails, FS-RPT-44, are parked by the user)

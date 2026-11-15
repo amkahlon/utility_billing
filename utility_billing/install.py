@@ -179,6 +179,29 @@ def after_migrate():
 
 	for society in frappe.get_all("Society", pluck="name"):
 		servicereq.ensure_types(society)  # the standard service request types (FS-WF-00)
+	ensure_indexes()
+
+
+# Database indexes for the lookups made per account (increment 23, FS-RUN-07 and FS-NFR-02): without them every bill, ledger and reading
+# lookup reads the whole table, which grows by tens of thousands of rows a month.
+INDEXES = (
+	("Utility Bill", ("connection", "billing_month")), ("Utility Bill", ("bill_run",)), ("Utility Bill", ("society", "billing_month")),
+	("Customer Ledger Entry", ("connection", "seq")), ("Customer Ledger Entry", ("society", "posted_on")),
+	("Customer Ledger Entry", ("voucher_no",)),
+	("Meter Reading", ("reading_cycle", "connection")), ("Meter Reading", ("connection", "billing_month")),
+	("Payment Receipt", ("connection", "payment_date")), ("Payment Receipt", ("billing_account",)),
+	("Fee Charge", ("connection",)), ("Security Deposit", ("connection",)), ("Service Request", ("connection",)),
+	("Installment Plan", ("connection",)), ("Former Occupant Balance", ("connection",)), ("Message Log", ("connection",)),
+	("Account Adjustment", ("connection",)), ("Check Meter Reading", ("meter", "billing_month")),
+	("Unique Key", ("key_group", "key_value")), ("Unique Key", ("ref_doctype", "ref_name")),
+)
+
+
+def ensure_indexes():
+	for doctype, fields in INDEXES:
+		meta = frappe.get_meta(doctype)
+		if all(meta.has_field(f) for f in fields):
+			frappe.db.add_index(doctype, list(fields), index_name="ub_" + "_".join(fields))
 
 
 def create_default_export_layouts():

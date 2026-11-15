@@ -19,6 +19,7 @@ NEEDS = {  # what each kind needs before it can be saved
 	sr_mod.DEPOSIT: ("deposit_change", "deposit_amount"),
 	sr_mod.DETECT: ("assessed_load_kw", "hours_per_day", "assessed_days", "rate_per_unit"),
 	sr_mod.DISC: ("disconnection_reason",),
+	sr_mod.MERGE: ("merge_into",),
 }
 
 
@@ -62,6 +63,13 @@ class ServiceRequest(Document):
 			elif frappe.utils.getdate(self.effective_date) < frappe.utils.getdate(earliest):
 				frappe.throw(_("The society gives {0} days' notice: the disconnection can take effect on {1} at the earliest.").format(
 					notice, frappe.utils.formatdate(earliest)))
+		if self.kind == sr_mod.MERGE and self.connection:
+			keep = frappe.db.get_value("Connection", self.merge_into, ["society", "utility", "status"], as_dict=True)
+			mine = frappe.db.get_value("Connection", self.connection, "utility")
+			if self.merge_into == self.connection or not keep or keep.society != self.society or keep.utility != mine:
+				frappe.throw(_("Merge into another {0} account of the same society.").format(mine))
+			if keep.status != "Active":
+				frappe.throw(_("Account {0} is {1}; merge into an active account.").format(self.merge_into, _(keep.status)))
 		if self.kind == sr_mod.DETECT:
 			self.assessed_units = round(flt(self.assessed_load_kw) * flt(self.hours_per_day) * flt(self.assessed_days), 2)
 			self.assessed_amount = round(self.assessed_units * flt(self.rate_per_unit), 2)
@@ -74,7 +82,7 @@ class ServiceRequest(Document):
 		k = self.kind
 		if k == sr_mod.RECON and status != "Disconnected":
 			frappe.throw(_("Only a disconnected account can be reconnected (this one is {0}).").format(_(status)))
-		if k in (sr_mod.DISC, sr_mod.METER, sr_mod.CAT, sr_mod.LOAD) and status != "Active":
+		if k in (sr_mod.DISC, sr_mod.METER, sr_mod.CAT, sr_mod.LOAD, sr_mod.MERGE, sr_mod.SPLIT) and status != "Active":
 			frappe.throw(_("Account {0} is {1}, not active.").format(self.connection, _(status)))
 		if k == sr_mod.CLOSE and status == "Closed":
 			frappe.throw(_("Account {0} is already closed.").format(self.connection))
@@ -85,6 +93,16 @@ class ServiceRequest(Document):
 
 	def after_insert(self):
 		sr_mod.demand(self)
+		sr_mod.tell_consumer(self, _("received"))
+
+	def on_update(self):
+		before = self.get_doc_before_save()
+		if not before or self.flags.in_insert:
+			return
+		if self.status in ("Open", "In Progress") and not self.current_step:
+			return  # the last step is done: the completion message follows
+		if self.status != before.status or self.current_step != before.current_step:
+			sr_mod.tell_consumer(self)
 
 	def on_trash(self):
 		if self.status != "Open" or any(s.status != "Pending" for s in self.steps):

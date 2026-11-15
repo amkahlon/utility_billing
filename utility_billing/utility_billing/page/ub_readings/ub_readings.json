@@ -1,0 +1,26 @@
+{
+ "content": null,
+ "creation": "2026-11-16 18:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-11-16 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "ub-readings",
+ "owner": "Administrator",
+ "page_name": "ub-readings",
+ "roles": [
+  {"role": "Billing Auditor"},
+  {"role": "Billing Manager"},
+  {"role": "Billing Officer"},
+  {"role": "General Manager"},
+  {"role": "Management"},
+  {"role": "Meter Reader"}
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Reading Dashboard"
+}
