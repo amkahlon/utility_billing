@@ -44,5 +44,9 @@
 <div class="sp"></div>
 <p class="small muted">{{ _("If you have already paid, please show this notice with your receipt at the society office.") }}</p>
 <div class="sp"></div><div class="sp"></div>
-<table><tr><td class="sig">{{ _("Authorised signatory") }}</td><td></td></tr></table>
+{#- the society's signatory for notices on the notice's date (FS-CLT-07); a blank line for a hand signature otherwise #}
+<table><tr><td class="sig">
+	{%- if soc.signature %}<img src="{{ soc.signature }}" style="height: 14mm; display: block;">{% endif %}
+	{%- if soc.signatory %}<b>{{ soc.signatory.name | e }}</b><br>{{ soc.signatory.designation | e }}{% else %}{{ _("Authorised signatory") }}{% endif %}
+</td><td></td></tr></table>
 </div>

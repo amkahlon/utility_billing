@@ -65,7 +65,12 @@
 <div class="small" style="margin-top: 2mm; color: #8f1d12;">{{ _("Reversed on") }} {{ date(r.reversed_on) }}: {{ (r.reversal_remarks or "") | e }} ({{ (r.reversal_reason or "") | e }})</div>
 {%- endif %}
 <div class="small muted" style="margin-top: 4mm; text-align: center;">
+	{%- if soc.signatory %}
+	{%- if soc.signature %}<img src="{{ soc.signature }}" style="height: 10mm; display: block; margin: 0 auto;">{% endif %}
+	<b>{{ soc.signatory.name | e }}</b>, {{ soc.signatory.designation | e }}
+	{%- else %}
 	{{ _("Computer-generated receipt; no signature needed.") }}
+	{%- endif %}
 	{%- set contact = [soc.phone, soc.email] | select | list %}{% if contact %}<br>{% for x in contact %}{{ x | e }}{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}
 </div>
 </div>

@@ -1945,6 +1945,29 @@ def t_approvals_in_turn(d: Desk):
 		d.save_doc(dict(d.get("Society", soc), **keep))
 
 
+@case("QA-81", "FS-CLT-07/09/10: signatories and branding history saved from the Society form; onboarding checklist and tasks")
+def t_client_setup(d: Desk):
+	OB = "utility_billing.utility_billing.onboarding"
+	soc = S["society"]
+	s = d.get("Society", soc)
+	overlap = [{"signatory_name": "A", "designation": "GM", "for_bill": 1, "valid_from": "2026-01-01"},
+	           {"signatory_name": "B", "designation": "BM", "for_bill": 1, "valid_from": "2026-06-01"}]
+	expect_error(lambda: d.save_doc(dict(s, signatories=overlap)), "overlapping")
+	saved = d.save_doc(dict(s, signatories=[{"signatory_name": f"QA Signatory {RUN}", "designation": "General Manager", "for_bill": 1, "for_receipt": 1,
+	                                         "for_notice": 1, "valid_from": "2026-01-01"}],
+	                        branding_versions=[{"effective_from": "2026-01-01", "brand_colour": "#7A1F5F", "footer_text": f"QA footer {RUN}"}]))
+	eq((len(saved["signatories"]), len(saved["branding_versions"])), (1, 1), "signatory and branding version saved")
+	name = USERS["gm"].call(f"{OB}.open_for", society=soc)
+	check = USERS["gm"].call(f"{OB}.checklist", society=soc)
+	names = {c["check"]: c["done"] for c in check["checks"]}
+	eq((names.get("Signatory for bills"), names.get("Tariffs approved"), check["total"] >= 14), (True, True, True), "checklist from the setup")
+	ob = USERS["bm"].get("Society Onboarding", name)
+	ob["tasks"][0]["done"] = 1
+	ob = USERS["bm"].save_doc(ob)
+	eq((ob["tasks"][0]["done_by"], float(ob["percent_complete"]) > 0), (EMAIL["bm"], True), "task ticked with who and when")
+	expect_error(lambda: USERS["cashier"].call(f"{OB}.open_for", society=soc))
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

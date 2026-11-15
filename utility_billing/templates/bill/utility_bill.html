@@ -200,6 +200,13 @@
 	</td>
 </tr></table>
 
+{#- the society's signatory for bills on the issue date (FS-CLT-07) #}
+{%- if signatory %}
+<table style="margin-top: 1.5mm;"><tr><td></td><td class="right small" style="width: 60mm;">
+	{%- if signature %}<img src="{{ signature }}" style="height: 10mm; display: inline-block;"><br>{% endif %}
+	<span class="strong">{{ signatory.name | e }}</span><br><span class="muted">{{ signatory.designation | e }}</span>
+</td></tr></table>
+{%- endif %}
 <div class="small muted center" style="margin-top: 2mm;">
 	{%- if soc.footer %}<div>{{ soc.footer | e }}</div>{% endif %}
 	{%- set contact = [soc.phone, soc.email, soc.website, soc.office_hours] | select | list %}

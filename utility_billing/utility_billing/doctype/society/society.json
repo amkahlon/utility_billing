@@ -26,6 +26,10 @@
   "cb_brand",
   "letterhead_text",
   "footer_text",
+  "signatories_section",
+  "signatories",
+  "branding_history_section",
+  "branding_versions",
   "supply_section",
   "disco_name",
   "disco_account_no",
@@ -256,6 +260,32 @@
    "fieldname": "footer_text",
    "fieldtype": "Small Text",
    "label": "Footer Text"
+  },
+  {
+   "fieldname": "signatories_section",
+   "fieldtype": "Section Break",
+   "label": "Signatories",
+   "collapsible": 1,
+   "description": "Who signs bills, receipts, recovery notices and no-dues certificates, and from when (FS-CLT-07). A document prints the signatory in force on its date."
+  },
+  {
+   "fieldname": "signatories",
+   "fieldtype": "Table",
+   "label": "Signatories",
+   "options": "Society Signatory"
+  },
+  {
+   "fieldname": "branding_history_section",
+   "fieldtype": "Section Break",
+   "label": "Branding history",
+   "collapsible": 1,
+   "description": "Logo, colour, letterhead and footer that take over from a date (FS-CLT-09). A document prints the branding in force on its date; without a version the fields under Logo and Branding apply."
+  },
+  {
+   "fieldname": "branding_versions",
+   "fieldtype": "Table",
+   "label": "Branding Versions",
+   "options": "Branding Version"
   },
   {
    "fieldname": "supply_section",
@@ -1057,7 +1087,7 @@
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 00:30:00.000000",
+ "modified": "2026-11-16 01:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

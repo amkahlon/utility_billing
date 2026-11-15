@@ -17,11 +17,18 @@ ENTRY_LABELS = {"Bill": "Bill", "Surcharge": "Late payment surcharge", "Payment"
                 "Deposit offset": "Security deposit applied", "Reversal": "Reversal"}
 
 
-def society_header(society):
+def society_header(society, on=None, kind=None):
+	"""The society's header for a document dated `on`: the branding in force that day (FS-CLT-09) and, for a `kind` of document
+	(Receipt, Notice, Certificate), its signatory then (FS-CLT-07)."""
+	from utility_billing.utility_billing import branding  # noqa: PLC0415
+
 	s = frappe.get_cached_doc("Society", society)
+	brand = branding.effective(s, on)
+	sig = branding.signatory(s, kind, on) if kind else None
 	return {"name": s.society_name, "address": s.address, "phone": s.phone, "email": s.email, "ntn": s.ntn,
-	        "colour": s.brand_colour or "#1F5F8B", "logo": logo_data_uri(s.logo),
-	        "letterhead": [l for l in (s.letterhead_text or "").splitlines() if l.strip() and l.strip() != s.society_name]}
+	        "colour": brand["colour"], "logo": logo_data_uri(brand["logo"]),
+	        "letterhead": [l for l in (brand["letterhead"] or "").splitlines() if l.strip() and l.strip() != s.society_name],
+	        "signatory": sig, "signature": logo_data_uri(sig["signature"]) if sig and sig.get("signature") else None}
 
 
 def wrap(body, title):
@@ -32,7 +39,7 @@ def wrap(body, title):
 # ---------------------------------------------------------------- receipt
 def receipt_context(r):
 	return {
-		"r": r, "soc": society_header(r.society), "money": money, "date": date,
+		"r": r, "soc": society_header(r.society, r.payment_date, "Receipt"), "money": money, "date": date,
 		"words": money_in_words(r.amount, "PKR"),
 		"cashier": frappe.db.get_value("User", r.owner, "full_name") or r.owner,
 		"counter": frappe.db.get_value("Cash Counter", r.cash_counter, "counter_name") if r.cash_counter else None,

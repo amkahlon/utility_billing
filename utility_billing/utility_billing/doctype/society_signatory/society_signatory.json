@@ -1,0 +1,97 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 01:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "signatory_name",
+  "designation",
+  "signature",
+  "for_bill",
+  "for_receipt",
+  "for_notice",
+  "for_certificate",
+  "valid_from",
+  "valid_to"
+ ],
+ "fields": [
+  {
+   "fieldname": "signatory_name",
+   "fieldtype": "Data",
+   "label": "Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "designation",
+   "fieldtype": "Data",
+   "label": "Designation",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "signature",
+   "fieldtype": "Attach Image",
+   "label": "Signature"
+  },
+  {
+   "fieldname": "for_bill",
+   "fieldtype": "Check",
+   "label": "Bills",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "for_receipt",
+   "fieldtype": "Check",
+   "label": "Receipts",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "for_notice",
+   "fieldtype": "Check",
+   "label": "Recovery Notices",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "for_certificate",
+   "fieldtype": "Check",
+   "label": "No-Dues Certificates",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Date",
+   "label": "From",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "valid_to",
+   "fieldtype": "Date",
+   "label": "To",
+   "in_list_view": 1,
+   "columns": 1,
+   "description": "Empty = still signing."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 01:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Society Signatory",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50,
+ "permissions": []
+}

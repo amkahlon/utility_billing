@@ -74,6 +74,9 @@ def build_snapshot(bill) -> dict:
 		 "consumption_type", "status"], as_dict=True,
 	) if g("meter_reading") else None
 	category = frappe.db.get_value("Consumer Category", g("consumer_category"), "category_name") if g("consumer_category") else ""
+	from utility_billing.utility_billing import branding  # noqa: PLC0415
+
+	brand = branding.effective(society, g("issue_date"))  # the branding in force on the issue date (FS-CLT-09)
 	return {
 		"version": SNAPSHOT_VERSION,
 		"captured_on": str(now_datetime()),
@@ -81,8 +84,9 @@ def build_snapshot(bill) -> dict:
 			"name": society.society_name, "short_name": society.short_name, "address": society.address,
 			"phone": society.phone, "email": society.email, "website": society.website,
 			"office_hours": society.office_hours, "ntn": society.ntn, "strn": society.strn_vat,
-			"logo": society.logo, "colour": society.brand_colour or "#1F5F8B",
-			"letterhead": society.letterhead_text, "footer": society.footer_text,
+			"logo": brand["logo"], "colour": brand["colour"],
+			"letterhead": brand["letterhead"], "footer": brand["footer"],
+			"signatory": branding.signatory(society, "Bill", g("issue_date")),  # FS-CLT-07
 			"notices": [n.strip() for n in (society.bill_notices or "").splitlines() if n.strip()],
 			"payment_instructions": society.payment_instructions,
 			"banks": [{"bank": b.bank_name, "title": b.account_title, "account": b.account_number, "iban": b.iban,
@@ -246,6 +250,7 @@ def bill_context(bill, duplicate=0) -> dict:
 		"title": _(TITLES.get(bill.utility, "Utility Bill")),
 		"month": month_name(bill.billing_month), "issue_date": date(bill.issue_date), "due_date": date(bill.due_date),
 		"logo": logo_data_uri(soc.get("logo")),
+		"signatory": soc.get("signatory"), "signature": logo_data_uri((soc.get("signatory") or {}).get("signature")),
 		"qr": qr_data_uri(qr_text(soc, bill, ref)) if soc.get("show_qr") and ref else None,
 		"barcode": barcode.png_data_uri(ref) if soc.get("show_barcode") and ref else None,
 		"t": labeller(language), "lang2": bill_labels.LANG_CODE.get(language or ""), "rtl": rtl_text,

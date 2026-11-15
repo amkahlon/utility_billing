@@ -48,6 +48,9 @@ class Society(Document):
 		self.validate_recovery_rules()
 		self.validate_notifications()
 		self.validate_logo()
+		from utility_billing.utility_billing import branding  # signatories and branding history (FS-CLT-07, 09)
+
+		branding.validate_society(self)
 
 	def validate_notifications(self):
 		seen = set()
