@@ -22,3 +22,26 @@ class UnitTestBillPrintHelpers(UnitTestCase):
 		uri = qr_data_uri("1000000016")
 		self.assertTrue(uri.startswith("data:image/png;base64,"))
 		self.assertEqual(base64.b64decode(uri.split(",", 1)[1])[:8], b"\x89PNG\r\n\x1a\n")
+
+	def test_code_128(self):
+		from utility_billing.utility_billing import barcode
+
+		self.assertEqual(len(barcode.PATTERNS), 107)
+		self.assertTrue(all(sum(map(int, p)) == 11 for p in barcode.PATTERNS[:106]))  # every symbol is 11 modules, the stop 13
+		self.assertEqual(sum(map(int, barcode.PATTERNS[106])), 13)
+		self.assertEqual(barcode.symbols("1234"), [105, 12, 34, 82])  # code set C; check (105 + 12x1 + 34x2) mod 103 = 82
+		self.assertEqual(barcode.symbols("AB1"), [104, 33, 34, 17, (104 + 33 + 68 + 51) % 103])  # code set B for letters
+		self.assertEqual(barcode.symbols("123")[0], 104)  # an odd number of digits: code set B
+		w = barcode.widths("1000000016")
+		self.assertEqual((len(w) % 6, sum(w)), (1, 11 * 7 + 13))  # start + 5 pairs + check, then stop
+		self.assertRaises(ValueError, barcode.symbols, "")
+		self.assertEqual(base64.b64decode(barcode.png_data_uri("1000000016").split(",", 1)[1])[:8], b"\x89PNG\r\n\x1a\n")
+
+	def test_labels_in_a_second_language(self):
+		from utility_billing.utility_billing.bill_print import labeller
+
+		self.assertEqual(str(labeller(None)("Due date")), "Due date")
+		urdu = str(labeller("Urdu")("Due date"))
+		self.assertIn('dir="rtl" lang="ur"', urdu)
+		self.assertIn("آخری تاریخ", urdu)
+		self.assertEqual(str(labeller("Urdu")("Something new")), "Something new")  # no translation: English only

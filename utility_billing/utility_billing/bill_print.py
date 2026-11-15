@@ -11,12 +11,13 @@ notices or bank accounts, or the consumer's details change (FS-RUN-09).
 import base64
 import json
 import mimetypes
+import urllib.parse
 
 import frappe
 from frappe import _
 from frappe.utils import cint, flt, formatdate, getdate, now_datetime
 
-SNAPSHOT_VERSION = 1
+SNAPSHOT_VERSION = 2  # 2: barcode, QR content and second language (bills with version 1 print as before)
 DEFAULT_HISTORY_MONTHS = 12
 MAX_HISTORY_MONTHS = 24
 MAX_BILLS_PER_PDF = 500  # bulk print: larger runs are printed block by block or route by route
@@ -88,6 +89,13 @@ def build_snapshot(bill) -> dict:
 			          for b in society.bank_accounts if b.print_on_bill],
 			"office_copy": bool(cint(society.print_office_copy)),
 			"show_qr": bool(cint(society.show_qr_code)),
+			# increment 21 (gap 12, FS-LOC): barcode and QR each on or off, what the QR holds, a second language
+			"show_barcode": bool(cint(society.get("show_barcode"))),
+			"qr_content": society.get("qr_content") or "Reference number",
+			"qr_link_template": society.get("qr_link_template"),
+			"second_language": society.get("second_language") or None,
+			"notices_second": [n.strip() for n in (society.get("bill_notices_second") or "").splitlines() if n.strip()],
+			"payment_instructions_second": society.get("payment_instructions_second"),
 		},
 		"consumer": {"name": consumer.get("consumer_name") or g("consumer_name"), "mobile": consumer.get("mobile_no"),
 		             "address": consumer.get("address")},
@@ -172,12 +180,45 @@ def watermark_of(bill, duplicate):
 	return _("DUPLICATE") if duplicate else None
 
 
+def qr_text(soc, bill, ref) -> str:
+	"""What the QR code holds: the reference number, or the society's payment link with the bill's values filled in."""
+	template = (soc.get("qr_link_template") or "").strip()
+	if soc.get("qr_content") != "Payment link" or not template:
+		return ref
+	values = {"{reference_no}": ref, "{amount}": f"{flt(bill.payable_within_due):.0f}", "{due_date}": str(bill.due_date or ""), "{bill}": bill.name}
+	for k, v in values.items():
+		template = template.replace(k, urllib.parse.quote(str(v), safe=""))
+	return template
+
+
+def labeller(language):
+	"""t("Due date") -> the English label, and the second language's beside it when the society prints one."""
+	from markupsafe import Markup, escape  # noqa: PLC0415
+
+	from utility_billing.utility_billing import bill_labels  # noqa: PLC0415
+
+	code = bill_labels.LANG_CODE.get(language or "")
+
+	def t(label):
+		english = escape(_(label))
+		other = bill_labels.second(label, language)
+		if not other:
+			return Markup(english)
+		# left-to-right marks around the right-to-left words keep what follows (a date in brackets) in its place (found in the PDF check)
+		return Markup(f'{english} ‎<span class="l2" dir="rtl" lang="{code}">{escape(other)}</span>‎')
+
+	return t
+
+
 def bill_context(bill, duplicate=0) -> dict:
 	snap = snapshot_of(bill)
 	soc = snap["society"]
 	lines = sorted(bill.lines, key=lambda l: (cint(l.line_order), l.idx))
 	ref = snap["connection"].get("reference_no") or ""
 	duplicate = cint(duplicate) if bill.docstatus == 1 else 0
+	from utility_billing.utility_billing import barcode, bill_labels  # noqa: PLC0415
+
+	language = soc.get("second_language")
 	return {
 		"bill": bill, "snap": snap, "soc": soc, "con": snap["connection"], "consumer": snap["consumer"],
 		"reading": snap.get("reading"), "history": snap.get("history") or [],
@@ -187,7 +228,10 @@ def bill_context(bill, duplicate=0) -> dict:
 		"title": _(TITLES.get(bill.utility, "Utility Bill")),
 		"month": month_name(bill.billing_month), "issue_date": date(bill.issue_date), "due_date": date(bill.due_date),
 		"logo": logo_data_uri(soc.get("logo")),
-		"qr": qr_data_uri(ref) if soc.get("show_qr") and ref else None,
+		"qr": qr_data_uri(qr_text(soc, bill, ref)) if soc.get("show_qr") and ref else None,
+		"barcode": barcode.png_data_uri(ref) if soc.get("show_barcode") and ref else None,
+		"t": labeller(language), "lang2": bill_labels.LANG_CODE.get(language or ""),
+		"notices_second": soc.get("notices_second") or [], "payment_instructions_second": soc.get("payment_instructions_second"),
 		"watermark": watermark_of(bill, duplicate),
 		"duplicate": duplicate,
 		"money": money, "qty": qty, "date": date, "month_name": month_name,

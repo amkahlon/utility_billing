@@ -80,6 +80,12 @@
   "bill_history_months",
   "print_office_copy",
   "show_qr_code",
+  "show_barcode",
+  "qr_content",
+  "qr_link_template",
+  "second_language",
+  "bill_notices_second",
+  "payment_instructions_second",
   "cb_bill_layout",
   "bill_notices",
   "payment_instructions",
@@ -532,6 +538,48 @@
    "fieldname": "show_qr_code",
    "fieldtype": "Check",
    "label": "Show QR Code"
+  },
+  {
+   "fieldname": "show_barcode",
+   "fieldtype": "Check",
+   "label": "Show Barcode",
+   "description": "Code 128 barcode of the reference number, for bank counters' scanners. Independent of the QR code: print either, both or neither."
+  },
+  {
+   "fieldname": "qr_content",
+   "fieldtype": "Select",
+   "label": "QR Code Holds",
+   "options": "Reference number\nPayment link",
+   "default": "Reference number",
+   "depends_on": "eval:doc.show_qr_code"
+  },
+  {
+   "fieldname": "qr_link_template",
+   "fieldtype": "Data",
+   "label": "Payment Link",
+   "depends_on": "eval:doc.show_qr_code && doc.qr_content=='Payment link'",
+   "mandatory_depends_on": "eval:doc.show_qr_code && doc.qr_content=='Payment link'",
+   "description": "The address a phone opens, with {reference_no}, {amount}, {due_date} or {bill} filled in from the bill. For example https://pay.example.pk/?ref={reference_no}&amount={amount}"
+  },
+  {
+   "fieldname": "second_language",
+   "fieldtype": "Select",
+   "label": "Second Language on the Bill",
+   "options": "\nUrdu\nArabic",
+   "description": "Labels printed in this language beside the English, right to left."
+  },
+  {
+   "fieldname": "bill_notices_second",
+   "fieldtype": "Small Text",
+   "label": "Notices in the Second Language",
+   "depends_on": "eval:doc.second_language",
+   "description": "One notice per line."
+  },
+  {
+   "fieldname": "payment_instructions_second",
+   "fieldtype": "Small Text",
+   "label": "Payment Instructions in the Second Language",
+   "depends_on": "eval:doc.second_language"
   },
   {
    "fieldname": "cb_bill_layout",
@@ -1009,7 +1057,7 @@
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 23:30:00.000000",
+ "modified": "2026-11-16 00:30:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",
