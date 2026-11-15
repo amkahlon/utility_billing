@@ -47,6 +47,11 @@ body { background: var(--ub-page); color: var(--ub-ink); font-feature-settings: 
 
 /* Sidebar */
 .body-sidebar, .body-sidebar-container .body-sidebar { background: var(--ub-navy) !important; border-right: 0; }
+/* Phones: a closed sidebar drawer must leave no panel behind (Frappe clears its background; the navy above would leave a dark block
+   over the page). Increment 23, phones and tablets. */
+@media (max-width: 767.98px) {
+	.body-sidebar-container:not(.expanded) .body-sidebar { background: transparent !important; }
+}
 .body-sidebar, .body-sidebar .sidebar-item-label, .body-sidebar .header-title, .body-sidebar .avatar-name-email, .body-sidebar .sidebar-item-suffix { color: #CBD5E1; }
 .body-sidebar .header-title { color: #FFFFFF; font-weight: 600; letter-spacing: -.01em; }
 .body-sidebar .sidebar-item-icon, .body-sidebar .sidebar-item-icon svg, .body-sidebar .drop-icon svg, .body-sidebar .sidebar-item-control svg { color: #94A3B8; stroke: currentColor; }

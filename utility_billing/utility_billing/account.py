@@ -49,7 +49,7 @@ def balance_as_of(connection, date, exclude=None) -> float:
 
 
 def posting_order(society):
-	return engine.order_of(frappe.db.get_value("Society", society, "payment_posting_order"))
+	return engine.order_of(frappe.get_cached_value("Society", society, "payment_posting_order"))
 
 
 # ---------------------------------------------------------------- writing entries
@@ -58,11 +58,12 @@ def lock(connection):
 	frappe.db.sql("select name from `tabConnection` where name = %s for update", connection)
 
 
-def post(connection, entry_type, deltas, voucher_type, voucher_no, posting_date=None, remarks=None, reverses=None):
-	"""Write one ledger entry. Callers lock the account first."""
+def post(connection, entry_type, deltas, voucher_type, voucher_no, posting_date=None, remarks=None, reverses=None, last=False):
+	"""Write one ledger entry. Callers lock the account first. `last`: the account's last entry when the caller has just read it
+	(None for an account with no entries yet)."""
 	conn = frappe.db.get_value("Connection", connection, ["consumer", "consumer_name", "society"], as_dict=True)
-	last = last_entry(connection)
-	before = balances(connection)
+	last = last_entry(connection) if last is False else last
+	before = balances_of(last)  # balances(), from the entry just read
 	after = engine.apply(before, deltas)
 	posting_date = getdate(posting_date or nowdate())
 	periods.assert_open(conn.society, posting_date, entry_type)  # a closed month is locked (FS-ACC-10)
@@ -98,13 +99,19 @@ def reverse_entry(entry_name, voucher_type, voucher_no, posting_date=None, remar
 
 
 # ---------------------------------------------------------------- bills
-def post_bill(bill):
+def balances_of(last) -> dict:
+	"""The balances an entry leaves (an empty account when there's none)."""
+	return {b: engine.D(last[f]) for b, f in FIELDS.items()} if last else engine.empty()
+
+
+def post_bill(bill, last=False):
 	"""A posted bill: the unpaid current bill moves to arrears, the new bill becomes current, and any
-	credit pays it (FS-REC-10)."""
+	credit pays it (FS-REC-10). `last`: the account's last entry when the caller has just read it (a bill run does)."""
 	lock(bill.connection)
-	deltas = engine.bill(balances(bill.connection), bill.current_amount, posting_order(bill.society))
+	last = last_entry(bill.connection) if last is False else last
+	deltas = engine.bill(balances_of(last), bill.current_amount, posting_order(bill.society))
 	entry = post(bill.connection, "Bill", deltas, "Utility Bill", bill.name, bill.issue_date,
-	             _("Bill for {0}").format(getdate(bill.billing_month).strftime("%B %Y")))
+	             _("Bill for {0}").format(getdate(bill.billing_month).strftime("%B %Y")), last=last)
 	frappe.db.set_value("Utility Bill", bill.name, {"ledger_entry": entry.name, "surcharge_status": "Not due yet"},
 	                    update_modified=False)
 	return entry
@@ -137,12 +144,13 @@ def reverse_bill(bill):
 	reverse_entry(bill.ledger_entry, "Utility Bill", bill.name, remarks=_("Bill cancelled"))
 
 
-def arrears_for_new_bill(connection) -> float:
+def arrears_for_new_bill(connection, bal=None) -> float:
 	"""Everything owed before a new bill: arrears, unpaid current bill, surcharge and fees, less credit, less what former holders still
 	owe (their final bills and balances are theirs: user decision 2026-11-16, the incoming holder starts clean)."""
 	from utility_billing.utility_billing import holders  # noqa: PLC0415
 
-	return round(balance(connection) - holders.former_outstanding(connection), 2)
+	owed = flt(engine.total(bal)) if bal is not None else balance(connection)
+	return round(owed - holders.former_outstanding(connection), 2)
 
 
 # ---------------------------------------------------------------- surcharge (FS-REC-03, FS-PAY-08)

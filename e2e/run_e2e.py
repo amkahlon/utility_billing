@@ -2028,6 +2028,36 @@ def t_flexibility(d: Desk):
 	eq(d.call(f"{ACC}.enquiry", reference_no=maint)["amount_due"], 0.0, "maintenance paid")
 
 
+# ---------------------------------------------------------------- increment 23
+@case("QA-84", "FS-MST-16, FS-RDG-13, gap 13: account changes only by request; reading dashboard; meter store and its reports")
+def t_lifecycle_store(d: Desk):
+	soc = S["society"]
+	saved = d.save_doc(dict(d.get("Society", soc), changes_through_requests=1))
+	eq(saved["changes_through_requests"], 1, "society setting saved")
+	conn = USERS["bm"].get("Connection", S["conn"]["name"])
+	expect_error(lambda: USERS["bm"].save_doc(dict(conn, sanctioned_load_kw="9")), "service request")
+	USERS["bm"].save_doc(dict(USERS["bm"].get("Connection", S["conn"]["name"]), phase="Three"))  # other details still change on the form
+	dash = USERS["bo"].call("utility_billing.utility_billing.reading_dashboard.get_reading_dashboard", society=soc)
+	eq((dash["society"], "cards" in dash or dash.get("no_cycle")), (soc, True), "reading dashboard")
+	expect_error(lambda: USERS["cashier"].call("utility_billing.utility_billing.reading_dashboard.get_reading_dashboard", society=soc))
+	got = USERS["bo"].save_doc({"doctype": "Meter Store Movement", "society": soc, "utility": "Electricity", "movement_type": "Received",
+	                            "posting_date": "2026-11-16", "supplier": "Acme", "reference": f"PO-{RUN}",
+	                            "items": [{"serial_no": f"QA-{RUN}-S{n}", "make": "Acme", "meter_type": "Single Phase"} for n in (1, 2)]})
+	got = USERS["bo"].save_doc(got, action="Submit")
+	meters = [r["meter"] for r in got["items"]]
+	eq([d.get("Meter", m)["status"] for m in meters], ["In Store", "In Store"], "meters received into the store")
+	out = USERS["bo"].save_doc({"doctype": "Meter Store Movement", "society": soc, "utility": "Electricity", "movement_type": "Issued",
+	                            "posting_date": "2026-11-16", "issued_to": "Installer A", "items": [{"meter": meters[0]}]})
+	USERS["bo"].save_doc(out, action="Submit")
+	eq((d.get("Meter", meters[0])["status"], d.get("Meter", meters[0])["issued_to"]), ("Issued", "Installer A"), "meter issued")
+	expect_error(lambda: USERS["bo"].save_doc({"doctype": "Meter Store Movement", "society": soc, "utility": "Electricity", "movement_type": "Scrapped",
+	                                          "posting_date": "2026-11-16", "reason": "test", "items": [{"meter": meters[0]}]}), "Issued")
+	stock = rows_of(run_report(USERS["bm"], "Meter Stock"))
+	eq(sum(int(r.get("Issued") or 0) for r in stock) >= 1, True, "stock shows the issued meter")
+	run_report(USERS["bm"], "Meter Store Movements", from_date="2026-01-01", to_date="2026-12-31")
+	expect_error(lambda: run_report(USERS["cashier"], "Meter Stock"))
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

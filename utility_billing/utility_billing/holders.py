@@ -35,7 +35,9 @@ def record(conn, change_type, day, old_value=None, new_value=None, old_consumer=
 
 def changes_in(connection, start, end, change_type):
 	"""Changes of a type that fall inside a reading period: after its first day and on or before its last."""
-	if not (start and end):
+	from utility_billing.utility_billing import runcache  # noqa: PLC0415
+
+	if not (start and end) or runcache.none_for("changed", connection):
 		return []
 	start, end = getdate(start), getdate(end)
 	rows = frappe.get_all("Connection Change", filters={"parent": connection, "parenttype": "Connection", "change_type": change_type},
@@ -61,6 +63,10 @@ def split(units, start, end, change, method, previous_reading=0, multiplier=1) -
 # ---------------------------------------------------------------- former holders' balances
 def former_outstanding(connection, as_of=None) -> float:
 	"""What former holders of the account still owe (negative: owed back to them); `as_of` counts payments made by that day."""
+	from utility_billing.utility_billing import runcache  # noqa: PLC0415
+
+	if runcache.none_for("former", connection):
+		return 0.0
 	total = 0.0
 	for b in frappe.get_all("Former Occupant Balance", filters={"connection": connection, "status": ["!=", "Written Off"]},
 	                        fields=["name", "amount", "surcharge", "paid", "written_off", "change_date"]):

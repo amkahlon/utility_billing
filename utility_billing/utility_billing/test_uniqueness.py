@@ -87,3 +87,28 @@ class IntegrationTestUniqueness(IntegrationTestCase):
 		b.save()  # the same value, spelt differently: still not a change
 		b.seal_no = "SEAL-8"
 		b.save()
+
+	def test_the_check_is_one_lookup_in_unique_key_and_keeps_up(self):
+		m = self.meter("TST-UNQ-K1")
+		keys = frappe.get_all("Unique Key", filters={"ref_doctype": "Meter", "ref_name": m.name}, fields=["key_group", "key_value"])
+		self.assertEqual(keys, [{"key_group": "Meter number", "key_value": "TSTUNQK1"}])
+		m.seal_no = "SEAL-K1"
+		m.save()
+		m.seal_no = "SEAL-K2"
+		m.save()
+		other = self.meter("TST-UNQ-K9")
+		other.seal_no = "seal k1"
+		other.save()  # the first seal number is free again
+		other.seal_no = "SEALK2"
+		self.assertRaises(frappe.DuplicateEntryError, other.save)
+		frappe.rename_doc("Meter", m.name, "TST-UNQ-K2", force=True)  # a meter number is changed by renaming the meter
+		self.meter("tst unq k1")  # the old number is free again
+		self.assertRaises(frappe.DuplicateEntryError, self.meter, "tstunqk2")
+		frappe.delete_doc("Meter", "TST-UNQ-K2")
+		self.meter("TST-UNQ-K2 ")  # deleted: free again
+		# a record removed outside the app leaves a stale key, which doesn't block anyone and is cleared
+		gone = self.meter("TST-UNQ-K3")
+		frappe.db.sql("delete from `tabMeter` where name = %s", gone.name)
+		self.meter("TST-UNQ-K3 ")
+		uniqueness.rebuild_keys()
+		self.assertTrue(frappe.db.exists("Unique Key", {"key_group": "Meter number", "key_value": "TSTUNQK3"}))

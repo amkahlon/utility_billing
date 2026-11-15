@@ -40,6 +40,10 @@ def owed_arrears(connection) -> float:
 
 
 def active_plan(connection):
+	from utility_billing.utility_billing import runcache  # noqa: PLC0415
+
+	if runcache.none_for("plans", connection):  # during a bill run: the accounts with plans are known (FS-RUN-07)
+		return None
 	return frappe.db.get_value("Installment Plan", {"connection": connection, "docstatus": 1, "plan_status": "Active"}, "name")
 
 

@@ -70,11 +70,90 @@ def _sql_norm(column, kind):
 	return f"trim(leading '0' from {expr})" if kind == "serial" else expr
 
 
+def scope_key(doc, scope) -> str:
+	return "|".join(str(doc.get(s) or "") for s in scope)
+
+
 def clash(doc, group, field_dt, field, scope):
-	"""The first other record in the group's namespace with the same value, as (doctype, name), or None."""
+	"""The first other record in the group's namespace with the same value, as (doctype, name), or None. One indexed lookup in
+	Unique Key (increment 23: a scan of every meter got slow at 20,000 meters); before that table exists, the scan."""
 	value = norm(doc.get(field), group["kind"])
 	if not value:
 		return None
+	if not frappe.db.table_exists("Unique Key"):
+		return clash_by_scan(doc, group, field_dt, field, scope, value)
+	rows = frappe.get_all("Unique Key", filters={"key_group": group["label"], "key_value": value, "scope_key": scope_key(doc, scope)},
+	                      fields=["name", "ref_doctype", "ref_name"])
+	for r in rows:
+		if not doc.is_new() and r.ref_doctype == doc.doctype and r.ref_name == doc.name:
+			continue  # a saved record leaves itself out (a new one doesn't: its name may already be the number)
+		cond = {"name": r.ref_name}
+		if frappe.get_meta(r.ref_doctype).is_submittable:
+			cond["docstatus"] = ["<", 2]
+		if frappe.db.exists(r.ref_doctype, cond):
+			return r.ref_doctype, r.ref_name
+		frappe.db.delete("Unique Key", {"name": r.name})  # its record went without the app (for example a direct clean-up)
+	return None
+
+
+def keys_of(doc) -> list[dict]:
+	out = []
+	for g in GROUPS:
+		for dt, field, scope in g["members"]:
+			if dt == doc.doctype and doc.meta.has_field(field):
+				value = norm(doc.get(field), g["kind"])
+				if value:
+					out.append({"key_group": g["label"], "key_value": value, "scope_key": scope_key(doc, scope)})
+	return out
+
+
+def write_keys(doc):
+	frappe.db.delete("Unique Key", {"ref_doctype": doc.doctype, "ref_name": doc.name})
+	if doc.meta.is_submittable and doc.docstatus == 2:
+		return
+	for k in keys_of(doc):
+		frappe.get_doc({"doctype": "Unique Key", **k, "ref_doctype": doc.doctype, "ref_name": doc.name}).db_insert()
+
+
+def on_update(doc, method=None):
+	if frappe.db.table_exists("Unique Key"):
+		write_keys(doc)
+
+
+def on_cancel(doc, method=None):
+	if frappe.db.table_exists("Unique Key"):
+		frappe.db.delete("Unique Key", {"ref_doctype": doc.doctype, "ref_name": doc.name})
+
+
+def on_trash(doc, method=None):
+	on_cancel(doc)
+
+
+def after_rename(doc, method=None, old=None, new=None, merge=False):
+	if frappe.db.table_exists("Unique Key"):
+		frappe.db.delete("Unique Key", {"ref_doctype": doc.doctype, "ref_name": old})
+		write_keys(doc)
+
+
+def rebuild_keys():
+	"""Every key from the data as it is (the patch that adds Unique Key, and after a bulk load by SQL)."""
+	frappe.db.delete("Unique Key")
+	for dt in DOCTYPES:
+		if not frappe.db.table_exists(dt):
+			continue
+		meta = frappe.get_meta(dt)
+		fields = {f for g in GROUPS for d, f, s in g["members"] if d == dt and meta.has_field(f)}
+		fields |= {s for g in GROUPS for d, f, sc in g["members"] if d == dt for s in sc if meta.has_field(s)}
+		for row in frappe.get_all(dt, fields=["name", *fields, *(["docstatus"] if meta.is_submittable else [])]):
+			doc = frappe._dict(row, doctype=dt, meta=meta)
+			if meta.is_submittable and row.docstatus == 2:
+				continue
+			for k in keys_of(doc):
+				frappe.get_doc({"doctype": "Unique Key", **k, "ref_doctype": dt, "ref_name": row.name}).db_insert()
+
+
+def clash_by_scan(doc, group, field_dt, field, scope, value):
+	"""The check before Unique Key existed: the normalised value compared in SQL, table by table."""
 	for dt, f, member_scope in group["members"]:
 		if not frappe.db.table_exists(dt) or not frappe.get_meta(dt).has_field(f):
 			continue

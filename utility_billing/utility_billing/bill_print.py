@@ -65,16 +65,26 @@ def build_snapshot(bill) -> dict:
 	g = bill.get
 	society = frappe.get_cached_doc("Society", g("society"))
 	conn = frappe.get_cached_doc("Connection", g("connection"))
-	prop = frappe.db.get_value("Property", conn.property, ["property_no", "block", "sector", "area", "area_unit"],
-	                           as_dict=True) or {}
+	from utility_billing.utility_billing import runcache  # noqa: PLC0415
+
+	prop_fields = ["property_no", "block", "sector", "area", "area_unit"]
+	props = runcache.bulk(("snapshot properties", g("society")), lambda: {  # a bill run reads them once (FS-RUN-07)
+		p.name: p for p in frappe.get_all("Property", filters={"society": g("society")}, fields=["name", *prop_fields])})
+	prop = (props.get(conn.property) if props is not None else None) or frappe.db.get_value("Property", conn.property, prop_fields,
+	                                                                                        as_dict=True) or {}
 	# the bill's own consumer: on a final bill the outgoing holder, not the account's holder now (increment 22)
 	consumer = frappe.db.get_value("Consumer", g("consumer") or conn.consumer, ["consumer_name", "mobile_no", "address"], as_dict=True) or {}
-	reading = frappe.db.get_value(
-		"Meter Reading", g("meter_reading"),
-		["meter", "previous_reading", "previous_reading_date", "present_reading", "reading_date", "multiplier",
-		 "consumption_type", "status"], as_dict=True,
-	) if g("meter_reading") else None
-	category = frappe.db.get_value("Consumer Category", g("consumer_category"), "category_name") if g("consumer_category") else ""
+	reading_fields = ["meter", "previous_reading", "previous_reading_date", "present_reading", "reading_date", "multiplier",
+	                  "consumption_type", "status"]
+	cycle = runcache.tariff(("cycle", g("bill_run")), lambda: frappe.db.get_value("Bill Run", g("bill_run"), "reading_cycle")) \
+		if g("bill_run") and runcache.active() else None
+	run_readings = runcache.bulk(("snapshot readings", cycle), lambda: {
+		r.name: r for r in frappe.get_all("Meter Reading", filters={"reading_cycle": cycle}, fields=["name", *reading_fields])}) if cycle else None
+	reading = None
+	if g("meter_reading"):
+		reading = (run_readings or {}).get(g("meter_reading")) or frappe.db.get_value("Meter Reading", g("meter_reading"), reading_fields,
+		                                                                              as_dict=True)
+	category = frappe.get_cached_value("Consumer Category", g("consumer_category"), "category_name") if g("consumer_category") else ""
 	from utility_billing.utility_billing import branding  # noqa: PLC0415
 
 	brand = branding.effective(society, g("issue_date"))  # the branding in force on the issue date (FS-CLT-09)
