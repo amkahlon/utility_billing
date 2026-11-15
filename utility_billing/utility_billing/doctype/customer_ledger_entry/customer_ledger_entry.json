@@ -123,7 +123,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Type",
-   "options": "Bill\nSurcharge\nPayment\nFee\nCredit Note\nDebit Note\nRefund\nWrite-off\nDeposit offset\nReversal\nOpening",
+   "options": "Bill\nSurcharge\nPayment\nFee\nCredit Note\nDebit Note\nRefund\nWrite-off\nDeposit offset\nReversal\nOpening\nTransfer",
    "read_only": 1
   },
   {
@@ -269,7 +269,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 22:00:00.000000",
+ "modified": "2026-11-16 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Customer Ledger Entry",

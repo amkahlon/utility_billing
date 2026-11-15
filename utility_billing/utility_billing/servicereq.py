@@ -25,7 +25,9 @@ NEW, TEMP, METER, DISC, RECON, CLOSE, CAT, LOAD, OWNER, T_IN, T_OUT, NODUES, CON
 	"New connection", "Temporary connection", "Meter change", "Disconnection", "Reconnection", "Permanent disconnection",
 	"Change of category", "Load change", "Change of name or ownership", "Tenant moving in", "Tenant leaving", "No-dues certificate",
 	"Contact update", "Meter test", "Deposit change", "Detection bill")
+MERGE, SPLIT = "Merge accounts", "Split account"  # FS-WF-35 (increment 23)
 CREATES_CONNECTION = (NEW, TEMP)
+INSTALLS_METER = (NEW, TEMP, SPLIT)
 BO, BM, GM, AO, CASHIER, RO = "Billing Officer", "Billing Manager", "General Manager", "Accounts Officer", "Cashier", "Recovery Officer"
 
 # code, name, kind, steps (name, kind, role, days), documents (name, required)
@@ -55,6 +57,12 @@ DEFAULT_TYPES = (
 	("TEST", "Meter testing on complaint", TEST, (("Meter tested", "Field", BO, 5), ("Approval", "Approval", BM, 2)), ()),
 	("DEPOSIT", "Security deposit change", DEPOSIT, (("Worked out", "Office", AO, 2),), ()),
 	("DETECT", "Detection bill", DETECT, (("Inspection", "Field", BO, 2), ("Approval", "Approval", GM, 3)), (("Inspection report", 1),)),
+	("MERGE", "Merge two accounts", MERGE, (("Approval", "Approval", BM, 2), ("Final reading and meter removed", "Field", BO, 3)),
+	 (("Written request", 1),)),
+	("SPLIT", "Split an account", SPLIT,
+	 (("Documents checked", "Document check", BO, 2), ("Approval", "Approval", BM, 2), ("Demand notice paid", "Payment", CASHIER, 7),
+	  ("Meter installed and first reading", "Field", BO, 3)),
+	 (("Written request", 1), ("Site plan", 0))),
 )
 
 
@@ -108,23 +116,37 @@ def demand(sr):
 		                       "expires_on": sr.expires_on if sr.kind == TEMP else None})
 		conn.insert(ignore_permissions=True)
 		values["connection"] = sr.connection = conn.name
+	if sr.kind == SPLIT and not sr.new_connection:  # the new account, applied; the original keeps its balance (user decision 2026-11-16)
+		orig = frappe.get_doc("Connection", sr.connection)
+		conn = frappe.get_doc({"doctype": "Connection", "society": sr.society, "property": sr.property or orig.property, "consumer": sr.consumer or orig.consumer,
+		                       "utility": orig.utility, "consumer_category": sr.new_category or orig.consumer_category, "status": "Applied",
+		                       "sanctioned_load_kw": flt(sr.new_load_kw), "phase": sr.phase or orig.phase, "transformer": sr.transformer or orig.transformer,
+		                       "split_from": orig.name})
+		conn.insert(ignore_permissions=True)
+		values["new_connection"] = sr.new_connection = conn.name
+	billed = demand_account(sr)
 	fee_type = t.fee_type or (frappe.db.get_value("Society", sr.society, "reconnection_fee_type") if sr.kind == RECON else None)  # FS-CFG-18
-	if fee_type and sr.connection:
-		fee = frappe.get_doc({"doctype": "Fee Charge", "connection": sr.connection, "fee_type": fee_type, "source_type": "Service Request",
+	if fee_type and billed:
+		fee = frappe.get_doc({"doctype": "Fee Charge", "connection": billed, "fee_type": fee_type, "source_type": "Service Request",
 		                      "source_name": sr.name, "remarks": _("{0} ({1})").format(t.type_name, sr.name)})
 		fee.flags.ignore_permissions = True
 		fee.insert()
 		fee.submit()
 		values["fee_charge"] = fee.name
-	amount = flt(t.deposit_amount) if sr.kind in (NEW, TEMP, LOAD) else (flt(sr.deposit_amount) if sr.kind == DEPOSIT and sr.deposit_change == "Raise" else 0)
-	if amount > 0 and sr.connection:
+	amount = flt(t.deposit_amount) if sr.kind in (NEW, TEMP, LOAD, SPLIT) else (flt(sr.deposit_amount) if sr.kind == DEPOSIT and sr.deposit_change == "Raise" else 0)
+	if amount > 0 and billed:
 		values["security_deposit"] = new_deposit(sr, "Received", amount)
 	if values:
 		sr.db_set(values)
 
 
+def demand_account(sr):
+	"""The account the request's fee, deposit and demand belong to: the new account of a split, else the request's account."""
+	return sr.new_connection if sr.kind == SPLIT else sr.connection
+
+
 def new_deposit(sr, kind, amount):
-	d = frappe.get_doc({"doctype": "Security Deposit", "connection": sr.connection, "deposit_type": kind, "amount": amount,
+	d = frappe.get_doc({"doctype": "Security Deposit", "connection": demand_account(sr), "deposit_type": kind, "amount": amount,
 	                    "mode": None if kind == "Offset Against Arrears" else "Cash", "posting_date": nowdate(),
 	                    "remarks": _("For {0}").format(sr.name)})
 	d.flags.ignore_permissions = True
@@ -156,9 +178,9 @@ def check_step(sr, step, values):
 	elif step.step_kind == "Payment":
 		if sr.kind == RECON:
 			check_reconnection(sr)
-		elif sr.connection and account.balance(sr.connection) > 0.005:
+		elif demand_account(sr) and account.balance(demand_account(sr)) > 0.005:
 			frappe.throw(_("Account {0} still owes Rs {1}; the demand is paid when it owes nothing.").format(
-				sr.connection, f"{account.balance(sr.connection):,.2f}"))
+				demand_account(sr), f"{account.balance(demand_account(sr)):,.2f}"))
 		if sr.security_deposit and frappe.db.get_value("Security Deposit", sr.security_deposit, "docstatus") != 1:
 			frappe.throw(_("The security deposit {0} is not received and approved yet.").format(sr.security_deposit))
 	elif step.step_kind == "Field":
@@ -224,8 +246,9 @@ def undo_demand(sr, why):
 	if sr.security_deposit and frappe.db.get_value("Security Deposit", sr.security_deposit, "docstatus") == 0:
 		frappe.delete_doc("Security Deposit", sr.security_deposit, ignore_permissions=True, force=True)
 		sr.security_deposit = None
-	if sr.kind in CREATES_CONNECTION and sr.connection and frappe.db.get_value("Connection", sr.connection, "status") == "Applied":
-		frappe.db.set_value("Connection", sr.connection, "status", "Closed")
+	applied = sr.new_connection if sr.kind == SPLIT else (sr.connection if sr.kind in CREATES_CONNECTION else None)
+	if applied and frappe.db.get_value("Connection", applied, "status") == "Applied":
+		frappe.db.set_value("Connection", applied, "status", "Closed")
 
 
 @frappe.whitelist(methods=["POST"])
@@ -265,22 +288,91 @@ def check_no_dues(sr):
 
 
 def complete(sr):
+	"""Make the request's change. Accounts changed here pass the 'changes only through service requests' lock (FS-MST-16)."""
+	before = frappe.flags.via_service_request
+	frappe.flags.via_service_request = True
+	try:
+		_complete(sr)
+	finally:
+		frappe.flags.via_service_request = before
+
+
+def install_first_meter(sr, conn, day):
+	reading = flt(sr.new_meter_reading) or last_field_reading(sr) or 0  # the installer's reading when the form has none
+	if not sr.new_meter:
+		frappe.throw(_("Choose the meter that was installed."))
+	conn.append("meters", {"meter": sr.new_meter, "installed_on": day, "start_reading": flt(reading)})
+	conn.status, conn.connection_date = "Active", day
+	return reading
+
+
+def merge(sr, conn, day):
+	"""FS-WF-35, user decision 2026-11-16: the request's account goes into `merge_into`, with its balance, deposits and history link."""
+	keep = frappe.get_doc("Connection", sr.merge_into)
+	if keep.name == conn.name or keep.society != conn.society or keep.utility != conn.utility:
+		frappe.throw(_("Merge {0} into another {1} account of the same society.").format(conn.name, conn.utility))
+	if keep.status != "Active":
+		frappe.throw(_("Account {0} is {1}; merge into an active account.").format(keep.name, _(keep.status)))
+	final = flt(sr.old_meter_reading)
+	current = next((m for m in conn.meters if not m.removed_on), None)
+	if current:
+		from utility_billing.utility_billing.readings import last_actual  # noqa: PLC0415
+
+		last = last_actual(conn.name, add_days(day, 40))
+		billed_to = flt(last.present_reading) if last and last.meter == current.meter else flt(current.start_reading)
+		if final > billed_to + 0.0001:
+			frappe.throw(_("Account {0}'s meter shows {1} units more than its last bill (reading {2}). Merge it once that reading is billed: "
+			               "its last units are billed on its own account first.").format(conn.name, round(final - billed_to, 2), billed_to))
+		current.removed_on, current.end_reading = day, final or billed_to
+		current.removal_reason = _("Merged into {0} ({1})").format(keep.name, sr.name)
+	account.lock(conn.name)
+	account.lock(keep.name)
+	bal = account.balances(conn.name)
+	moved = flt(sum(bal.values()))
+	if any(flt(v) for v in bal.values()):
+		remarks = _("Balance moved by merging {0} into {1} ({2})").format(conn.name, keep.name, sr.name)
+		account.post(conn.name, "Transfer", {b: -v for b, v in bal.items()}, "Service Request", sr.name, day, remarks)
+		account.post(keep.name, "Transfer", bal, "Service Request", sr.name, day, remarks)
+	deposits = frappe.get_all("Security Deposit", filters={"connection": conn.name, "docstatus": ["<", 2]}, pluck="name")
+	for d in deposits:
+		frappe.db.set_value("Security Deposit", d, {"connection": keep.name, "transferred_from": conn.name}, update_modified=False)
+	for c in (conn.name, keep.name):
+		frappe.db.set_value("Connection", c, "security_deposit", held(c), update_modified=False)
+	holders.record(conn, "Merged", day, old_value=conn.name, new_value=keep.name, reading=final, sr=sr.name)
+	conn.status, conn.disconnected_on, conn.merged_into = "Closed", day, keep.name
+	conn.save(ignore_permissions=True)
+	holders.record(keep, "Merged", day, old_value=conn.name, new_value=keep.name, sr=sr.name)
+	keep.save(ignore_permissions=True)
+	return _("Account {0} merged into {1} on {2}: balance Rs {3} and {4} deposit record(s) moved; {0} is closed.").format(
+		conn.name, keep.name, day, f"{moved:,.2f}", len(deposits))
+
+
+def _complete(sr):
 	day = getdate(sr.effective_date or nowdate())
 	note = ""
 	conn = frappe.get_doc("Connection", sr.connection) if sr.connection else None
 	k = sr.kind
-	if k in (DISC, RECON, CLOSE, T_OUT) and not flt(sr.old_meter_reading) and last_field_reading(sr):
+	if k in (DISC, RECON, CLOSE, T_OUT, MERGE) and not flt(sr.old_meter_reading) and last_field_reading(sr):
 		sr.old_meter_reading = last_field_reading(sr)  # the reading taken on the visit
 	if k in CREATES_CONNECTION:
-		reading = flt(sr.new_meter_reading) or last_field_reading(sr) or 0  # the installer's reading when the form has none
-		if not sr.new_meter:
-			frappe.throw(_("Choose the meter that was installed."))
-		conn.append("meters", {"meter": sr.new_meter, "installed_on": day, "start_reading": flt(reading)})
-		conn.status, conn.connection_date = "Active", day
+		reading = install_first_meter(sr, conn, day)
 		conn.save(ignore_permissions=True)
 		if sr.seal_no:
 			frappe.db.set_value("Meter", sr.new_meter, "seal_no", sr.seal_no)
 		note = _("Connection {0} is active from {1} with meter {2} at {3}; billing starts with the part month.").format(conn.name, day, sr.new_meter, flt(reading))
+	elif k == SPLIT:
+		new = frappe.get_doc("Connection", sr.new_connection)
+		reading = install_first_meter(sr, new, day)
+		holders.record(new, "Split", day, old_value=conn.name, new_value=new.name, sr=sr.name)
+		new.save(ignore_permissions=True)
+		if sr.seal_no:
+			frappe.db.set_value("Meter", sr.new_meter, "seal_no", sr.seal_no)
+		holders.record(conn, "Split", day, old_value=conn.name, new_value=new.name, sr=sr.name)
+		conn.save(ignore_permissions=True)
+		note = _("Account {0} split off from {1}: active from {2} with meter {3} at {4}. {1} keeps its balance and history.").format(
+			new.name, conn.name, day, sr.new_meter, flt(reading))
+	elif k == MERGE:
+		note = merge(sr, conn, day)
 	elif k == METER:
 		if not sr.new_meter:
 			frappe.throw(_("Choose the new meter."))
@@ -447,3 +539,24 @@ def verify_certificate(code: str):
 		return {"valid": False}
 	return {"valid": True, "certificate_no": r.certificate_no, "account": r.connection, "consumer": r.consumer_name,
 	        "issued_on": str(getdate(r.completed_on)), "society": frappe.db.get_value("Society", r.society, "society_name")}
+
+
+def tell_consumer(sr, what=None):
+	"""The request's news for the consumer, in a line: received, a step done and the next one, completed, rejected or cancelled."""
+	from utility_billing.utility_billing import notify  # noqa: PLC0415
+
+	t = frappe.get_cached_value("Service Request Type", sr.request_type, "type_name") or sr.kind
+	nxt = next((s.step_name for s in sr.steps if s.idx == cint(sr.current_step)), None)
+	done = [s for s in sr.steps if s.status == "Done"]
+	if sr.status == "Completed":
+		text = _("{0} {1} is completed.").format(t, sr.name)
+	elif sr.status == "Rejected":
+		why = next((s.remarks for s in sr.steps if s.status == "Rejected"), "") or ""
+		text = _("{0} {1} was not approved: {2}").format(t, sr.name, why)
+	elif sr.status == "Cancelled":
+		text = _("{0} {1} was cancelled: {2}").format(t, sr.name, sr.result_note or "")
+	elif what:
+		text = _("{0} {1} is {2}.").format(t, sr.name, what) + (" " + _("Next: {0}.").format(nxt) if nxt else "")
+	else:
+		text = _("{0} {1}: {2} done.").format(t, sr.name, done[-1].step_name if done else "") + (" " + _("Next: {0}.").format(nxt) if nxt else "")
+	return notify.request_updated(sr, text.strip())

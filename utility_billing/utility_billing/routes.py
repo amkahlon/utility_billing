@@ -30,3 +30,19 @@ def apply(cycle) -> int:
 			frappe.db.set_value("Meter Reading", r.name, values, update_modified=False)
 			n += 1
 	return n
+
+
+def check_meters(cycle) -> int:
+	"""A Check Meter Reading for each check-meter stop on the cycle's assigned routes, in route order with its reader (FS-RDG-12)."""
+	have = set(frappe.get_all("Check Meter Reading", filters={"reading_cycle": cycle.name}, pluck="meter"))
+	made = 0
+	for a in cycle.route_assignments:
+		route = frappe.get_doc("Reading Route", a.route)
+		for s in sorted(route.stops, key=lambda r: r.sequence or 0):
+			if s.stop_type != "Check Meter" or not s.meter or s.meter in have:
+				continue
+			frappe.get_doc({"doctype": "Check Meter Reading", "reading_cycle": cycle.name, "meter": s.meter, "route": route.route_code,
+			                "route_sequence": s.sequence, "assigned_reader": a.reader}).insert()
+			have.add(s.meter)
+			made += 1
+	return made

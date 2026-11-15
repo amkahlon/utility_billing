@@ -93,6 +93,11 @@ def network_losses(society, month, by="Feeder") -> list[dict]:
 	inputs = {r.item: flt(r.kwh) for r in mis.sql(
 		f"""select i.{key} item, sum(i.input_kwh) kwh from `tabDISCO Input Row` i join `tabDISCO Bill` d on d.name = i.parent
 		where d.society = %(s)s and d.billing_month = %(m)s and ifnull(i.{key}, '') != '' group by i.{key}""", {"s": society, "m": month})}
+	# a feeder or transformer the DISCO bill gives no input for: its check meter's units read on the route (FS-RDG-12, increment 23)
+	for r in mis.sql(f"""select {key} item, sum(units) kwh from `tabCheck Meter Reading` where society = %(s)s and billing_month = %(m)s
+	                     and status = 'Read' and ifnull({key}, '') != '' and (%(tx)s or ifnull(transformer, '') = '') group by {key}""",
+	                 {"s": society, "m": month, "tx": 1 if by == "Transformer" else 0}):
+		inputs.setdefault(r.item, flt(r.kwh))
 	billed = {(r.item or ""): r for r in mis.sql(
 		f"""select c.{key} item, count(*) connections, sum(b.units) kwh from `tabUtility Bill` b join `tabConnection` c on c.name = b.connection
 		where b.society = %(s)s and b.docstatus = 1 and b.billing_month = %(m)s group by c.{key}""", {"s": society, "m": month})}

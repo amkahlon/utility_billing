@@ -29,7 +29,7 @@
    "fieldname": "change_type",
    "fieldtype": "Select",
    "label": "Change",
-   "options": "Category\nHolder",
+   "options": "Category\nHolder\nMerged\nSplit",
    "reqd": 1,
    "in_list_view": 1,
    "columns": 1
@@ -90,7 +90,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-11-16 09:00:00.000000",
+ "modified": "2026-11-16 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection Change",

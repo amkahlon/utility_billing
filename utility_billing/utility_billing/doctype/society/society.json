@@ -147,6 +147,7 @@
   "escalate_to_role",
   "cb_rules",
   "disconnection_notice_days",
+  "changes_through_requests",
   "reconnection_fee_type",
   "channel_fees_section",
   "channel_fees",
@@ -999,6 +1000,13 @@
    "description": "A disconnection takes effect at least this many days after it is requested, except for safety."
   },
   {
+   "fieldname": "changes_through_requests",
+   "fieldtype": "Check",
+   "label": "Account Changes Only Through Service Requests",
+   "default": "1",
+   "description": "An active account's category, load, holder and meters are changed by a service request, not on the account form. The Administrator can still correct data (kept in the version log)."
+  },
+  {
    "fieldname": "reconnection_fee_type",
    "fieldtype": "Link",
    "label": "Reconnection Fee",
@@ -1157,7 +1165,7 @@
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 14:00:00.000000",
+ "modified": "2026-11-16 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

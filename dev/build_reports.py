@@ -108,7 +108,7 @@ GROUPS = [
 	("Approvals", [("Page", "ub-approvals", "Approval Inbox"), ("DocType", "Approval Delegation"), ("DocType", "User Access")]),
 	("Consumers", [("Page", "ub-consumer-360", "Consumer 360"), ("DocType", "Consumer"), ("DocType", "Property"), ("DocType", "Connection"),
 	               ("DocType", "Security Deposit")]),
-	("Meter Readings", [("DocType", "Reading Cycle"), ("DocType", "Meter Reading"), ("DocType", "Reading Route")]),
+	("Meter Readings", [("Page", "ub-readings", "Reading Dashboard"), ("DocType", "Reading Cycle"), ("DocType", "Check Meter Reading"), ("DocType", "Meter Reading"), ("DocType", "Reading Route")]),
 	("Billing", [("DocType", "Bill Run"), ("DocType", "Utility Bill"), ("DocType", "Combined Bill"), ("DocType", "Tariff Adjustment"),
 	             ("DocType", "Billing Account"), ("DocType", "Service Agreement")]),
 	("Payments", [("DocType", "Cashier Day"), ("DocType", "Payment Receipt"), ("DocType", "Fee Charge"),

@@ -22,3 +22,4 @@ utility_billing.patches.v0_1.set_branding_ums
 utility_billing.patches.v0_1.sidebar_ums
 utility_billing.patches.v0_1.tax_utilities
 utility_billing.patches.v0_1.defective_codes
+utility_billing.patches.v0_1.merge_split_types

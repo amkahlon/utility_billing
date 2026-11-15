@@ -140,8 +140,9 @@ def create_reading_sheet(cycle: str):
 		frappe.get_doc({"doctype": "Meter Reading", "reading_cycle": c.name, "connection": conn, "source": "Office"}).insert()
 		created += 1
 	routes.apply(c)
+	checks = routes.check_meters(c)  # the routes' check meters are read with the month (FS-RDG-12)
 	c.refresh_counts()
-	return {"created": created, "total": c.total_readings}
+	return {"created": created, "total": c.total_readings, "check_meters": checks}
 
 
 @frappe.whitelist()

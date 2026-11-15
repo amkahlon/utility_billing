@@ -57,6 +57,9 @@
   "cb5",
   "assessed_units",
   "assessed_amount",
+  "merge_section",
+  "merge_into",
+  "new_connection",
   "steps_section",
   "steps",
   "docs_section",
@@ -190,7 +193,7 @@
    "fieldname": "connection_section",
    "fieldtype": "Section Break",
    "label": "Connection",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Change of category' || doc.kind=='Load change'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Change of category' || doc.kind=='Load change' || doc.kind=='Split account'"
   },
   {
    "fieldname": "utility",
@@ -204,13 +207,13 @@
    "fieldtype": "Link",
    "label": "Category",
    "options": "Consumer Category",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Change of category'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Change of category' || doc.kind=='Split account'"
   },
   {
    "fieldname": "new_load_kw",
    "fieldtype": "Float",
    "label": "Sanctioned Load (kW)",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Load change'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Load change' || doc.kind=='Split account'"
   },
   {
    "fieldname": "cb3",
@@ -221,14 +224,14 @@
    "fieldtype": "Select",
    "label": "Phase",
    "options": "\nSingle\nThree",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Split account'"
   },
   {
    "fieldname": "transformer",
    "fieldtype": "Link",
    "label": "Transformer (from the survey)",
    "options": "Transformer",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Split account'"
   },
   {
    "fieldname": "expires_on",
@@ -240,26 +243,26 @@
    "fieldname": "meter_section",
    "fieldtype": "Section Break",
    "label": "Meter",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Disconnection' || doc.kind=='Reconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Meter test'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Disconnection' || doc.kind=='Reconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Meter test' || doc.kind=='Split account' || doc.kind=='Merge accounts'"
   },
   {
    "fieldname": "new_meter",
    "fieldtype": "Link",
    "label": "New Meter",
    "options": "Meter",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Split account'"
   },
   {
    "fieldname": "new_meter_reading",
    "fieldtype": "Float",
    "label": "New Meter's First Reading",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Split account'"
   },
   {
    "fieldname": "old_meter_reading",
    "fieldtype": "Float",
    "label": "Old Meter's Last Reading",
-   "depends_on": "eval:doc.kind=='Meter change' || doc.kind=='Disconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Reconnection'",
+   "depends_on": "eval:doc.kind=='Meter change' || doc.kind=='Disconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Reconnection' || doc.kind=='Merge accounts'",
    "description": "For a disconnection, the reading when the supply was cut; for a reconnection, the reading when it was restored."
   },
   {
@@ -277,7 +280,7 @@
    "fieldname": "seal_no",
    "fieldtype": "Data",
    "label": "Seal No",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Split account'"
   },
   {
    "fieldname": "meter_reason",
@@ -412,6 +415,29 @@
    "depends_on": "eval:doc.kind=='Detection bill'"
   },
   {
+   "fieldname": "merge_section",
+   "fieldtype": "Section Break",
+   "label": "Merge or split",
+   "depends_on": "eval:doc.kind=='Merge accounts' || doc.kind=='Split account'"
+  },
+  {
+   "fieldname": "merge_into",
+   "fieldtype": "Link",
+   "label": "Merge Into Account",
+   "options": "Connection",
+   "depends_on": "eval:doc.kind=='Merge accounts'",
+   "description": "The account that stays. The request's account is closed and its balance, deposits and history link move here."
+  },
+  {
+   "fieldname": "new_connection",
+   "fieldtype": "Link",
+   "label": "New Account",
+   "options": "Connection",
+   "read_only": 1,
+   "depends_on": "eval:doc.kind=='Split account'",
+   "description": "The account split off. It starts at zero with its own meter; the original keeps its balance and history."
+  },
+  {
    "fieldname": "steps_section",
    "fieldtype": "Section Break",
    "label": "Steps"
@@ -492,7 +518,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 09:00:00.000000",
+ "modified": "2026-11-16 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Service Request",
