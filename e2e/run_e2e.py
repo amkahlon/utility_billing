@@ -1919,6 +1919,32 @@ def t_opening_balances(d: Desk):
 	expect_error(lambda: USERS["cashier"].save_doc({"doctype": "Opening Balance Import", "society": soc, "as_of_date": yesterday}))
 
 
+@case("QA-80", "FS-ACC-04, gap 10: approvals in sequence set on the Society; level 1 approves from the form, then the covering level")
+def t_approvals_in_turn(d: Desk):
+	AP = "utility_billing.utility_billing.approval"
+	soc = S["society"]
+	s = d.get("Society", soc)
+	keep = {"approval_order": s.get("approval_order"), "approval_levels": s.get("approval_levels")}
+	d.save_doc(dict(s, approval_order="Each level in turn", approval_levels=[
+		{"transaction": "Account Adjustment", "up_to_amount": "50", "approver_role": "Billing Manager"},
+		{"transaction": "Account Adjustment", "up_to_amount": "0", "approver_role": "General Manager"}]))
+	try:
+		note = USERS["bo"].save_doc({"doctype": "Account Adjustment", "note_type": "Debit Note", "connection": S["conn"]["name"], "bucket": "Current bill",
+		                             "amount": "60", "reason_code": "BILL-ERROR", "remarks": "Meter charge missed on the bill"})
+		note = USERS["bo"].workflow(note, "Submit for Approval")
+		st = USERS["gm"].call(f"{AP}.level_status", doctype="Account Adjustment", name=note["name"])
+		eq((st["in_turn"], st["chain"], st["next_role"]), (True, ["Billing Manager", "General Manager"], "Billing Manager"), "two levels in turn")
+		expect_error(lambda: USERS["gm"].workflow(note, "Approve"), "level 1")
+		inbox = [x["name"] for x in USERS["gm"].call("utility_billing.utility_billing.access.inbox")]
+		eq(note["name"] in inbox, False, "not in the General Manager's inbox before level 1")
+		eq(USERS["bm"].call(f"{AP}.approve_level", doctype="Account Adjustment", name=note["name"])["next_role"], "General Manager", "level 1 approved")
+		eq(USERS["bm"].get("Account Adjustment", note["name"])["workflow_state"], "Pending Approval", "still pending after level 1")
+		note = USERS["gm"].workflow(note, "Approve")
+		eq((note["workflow_state"], note["docstatus"]), ("Approved", 1), "approved by the covering level")
+	finally:
+		d.save_doc(dict(d.get("Society", soc), **keep))
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

@@ -128,6 +128,7 @@
   "cb_arr",
   "write_off_account",
   "deposit_liability_account",
+  "approval_order",
   "approval_levels",
   "approvals_section",
   "remind_after_days",
@@ -836,6 +837,14 @@
    "description": "Where written-off receivables are booked (bad debts)."
   },
   {
+   "fieldname": "approval_order",
+   "fieldtype": "Select",
+   "label": "Approval Order",
+   "options": "Any level that covers the amount\nEach level in turn",
+   "default": "Any level that covers the amount",
+   "description": "Each level in turn: a document above level 1's limit is approved by level 1, then level 2 and so on up to the level that covers its amount; one person can't approve at two levels."
+  },
+  {
    "fieldname": "approval_levels",
    "fieldtype": "Table",
    "label": "Approval Levels by Amount",
@@ -1000,7 +1009,7 @@
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 22:00:00.000000",
+ "modified": "2026-11-15 23:30:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

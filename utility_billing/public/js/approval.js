@@ -57,10 +57,41 @@ utility_billing.setup_approval_form = function (frm) {
 			"red"
 		);
 	}
+	if (frm.doc.workflow_state === "Pending Approval" && frm.doc.society) {
+		// approvals in turn (FS-ACC-04): show who has approved and whose level is next
+		frappe.call({ method: "utility_billing.utility_billing.approval.level_status", args: { doctype: frm.doctype, name: frm.doc.name } }).then((r) => {
+			const s = r.message || {};
+			if (!s.in_turn) return;
+			const e = frappe.utils.escape_html;
+			const steps = s.chain.map((role, i) => {
+				const d = s.done[i];
+				if (d) return `${i + 1}. ${e(role)} ✓ ${e(frappe.user.full_name(d.user) || d.user)}`;
+				return i === s.done.length ? `<b>${i + 1}. ${e(role)} — ${__("next")}</b>` : `${i + 1}. ${e(role)}`;
+			});
+			frm.dashboard.set_headline_alert(`${__("Approval in turn")}: ${steps.join(" → ")}`, "blue");
+		});
+	}
 };
 
 utility_billing.before_workflow_action = function (frm) {
 	const action = frm.selected_workflow_action;
+	if (action === "Approve" && frm.doc.society) {
+		// approvals in turn: below the final level, Approve records this level and the document waits for the next
+		return frappe
+			.call({ method: "utility_billing.utility_billing.approval.level_status", args: { doctype: frm.doctype, name: frm.doc.name } })
+			.then((r) => {
+				const s = r.message || {};
+				if (!s.in_turn || s.final) return;
+				return frappe
+					.call({ method: "utility_billing.utility_billing.approval.approve_level", args: { doctype: frm.doctype, name: frm.doc.name } })
+					.then((res) => {
+						frappe.dom.unfreeze();
+						frappe.show_alert({ message: __("Approved at level {0}. It now waits for: {1}", [res.message.level, res.message.next_role]), indicator: "green" });
+						frm.reload_doc();
+						return Promise.reject(); // the workflow's own Approve doesn't run
+					});
+			});
+	}
 	if (action === "Cancel" && frm.fields_dict.cancellation_reason) {
 		return utility_billing.ask_reason(frm, {
 			title: __("Reverse {0}", [__(frm.doctype)]),

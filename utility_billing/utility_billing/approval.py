@@ -75,6 +75,112 @@ def required_roles(doc) -> list[str] | None:
 	return [levels[-1].approver_role]
 
 
+# ----- approvals in sequence (FS-ACC-04, gap 10) -----
+# With the Society's Approval Order "Each level in turn", a document above level 1's limit is approved by level 1, then level 2, and so
+# on up to the level that covers its amount. The intermediate approvals are rows in the approval history (LEVEL_ACTION, remarks = the
+# role); the document stays Pending Approval until the covering level uses the workflow's Approve. Nobody approves at two levels.
+IN_TURN = "Each level in turn"
+LEVEL_ACTION = "Approve (level)"
+
+
+def level_chain(doc) -> list[str] | None:
+	"""The roles that approve this document one after the other, lowest first, or None (approval by any covering level)."""
+	field = AMOUNT_FIELD.get(doc.doctype)
+	if not field or not doc.get("society"):
+		return None
+	soc = frappe.get_cached_doc("Society", doc.society)
+	if soc.get("approval_order") != IN_TURN:
+		return None
+	levels = [r for r in soc.get("approval_levels") or [] if r.transaction == doc.doctype]
+	levels.sort(key=lambda r: (flt(r.up_to_amount) == 0, flt(r.up_to_amount)))
+	amount = flt(doc.get(field))
+	for i, r in enumerate(levels):
+		if flt(r.up_to_amount) == 0 or amount <= flt(r.up_to_amount):
+			chain = [x.approver_role for x in levels[: i + 1]]
+			return chain if len(chain) > 1 else None
+	return [x.approver_role for x in levels] if len(levels) > 1 else None
+
+
+def levels_done(doc) -> list[tuple[str, str]]:
+	"""[(role, user)] approved at a level since the latest submission."""
+	done = []
+	for row in doc.get("approval_log") or []:
+		if row.to_state == PENDING and row.from_state != PENDING:
+			done = []  # a (re)submission starts a new round
+		elif row.action == LEVEL_ACTION:
+			done.append((row.remarks, row.user))
+	return done
+
+
+def level_state(doc) -> dict:
+	chain = level_chain(doc)
+	if not chain:
+		return {"in_turn": False}
+	done = levels_done(doc)
+	i = min(len(done), len(chain) - 1)
+	return {"in_turn": True, "chain": chain, "done": [{"role": r, "user": u} for r, u in done], "next_role": chain[i], "level": i + 1,
+	        "final": i == len(chain) - 1}
+
+
+def _check_level_approver(doc, user, role, done):
+	assert_not_maker(doc, user)
+	if user != "Administrator" and role not in frappe.get_roles(user):
+		frappe.throw(_("Level {0} of this {1} is for a {2}.").format(len(done) + 1, _(doc.doctype).lower(), role), frappe.PermissionError,
+		             title=_("Not your level"))
+	if user in {u for _r, u in done}:
+		frappe.throw(_("You approved this {0} at an earlier level; another person approves the next.").format(_(doc.doctype).lower()),
+		             frappe.PermissionError, title=_("Not allowed"))
+
+
+@frappe.whitelist()
+def level_status(doctype: str, name: str) -> dict:
+	doc = frappe.get_doc(doctype, name)
+	doc.check_permission("read")
+	return level_state(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def approve_level(doctype: str, name: str) -> dict:
+	"""Approve at the next level below the final one; the document stays Pending Approval for the next level."""
+	doc = frappe.get_doc(doctype, name)
+	doc.check_permission("read")
+	if doc.get("workflow_state") != PENDING:
+		frappe.throw(_("Only a document that is pending approval can be approved."))
+	state = level_state(doc)
+	if not state["in_turn"]:
+		frappe.throw(_("This {0} is approved in one step.").format(_(doctype).lower()))
+	if state["final"]:
+		frappe.throw(_("Yours is the final level: use Approve."))
+	done = levels_done(doc)
+	role = state["next_role"]
+	_check_level_approver(doc, frappe.session.user, role, done)
+	clear_notifications(doc)
+	row = doc.append("approval_log", {"action": LEVEL_ACTION, "from_state": PENDING, "to_state": PENDING, "user": frappe.session.user,
+	                                  "on": now_datetime(), "remarks": role})
+	row.db_insert()
+	nxt = state["chain"][len(done) + 1]
+	enabled = set(frappe.get_all("User", filters={"enabled": 1}, pluck="name"))
+	users = [u for u in users_with_role(nxt) if u in enabled and u != frappe.session.user and u not in {x for _r, x in done}]
+	if users:
+		from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
+
+		enqueue_create_notification(users, {"type": "Alert", "document_type": doc.doctype, "document_name": doc.name, "from_user": frappe.session.user,
+		                                    "subject": _("{0} {1} was approved at level {2} and waits for you (level {3})").format(
+		                                        _(doc.doctype), frappe.bold(doc.get_title() or doc.name), len(done) + 1, len(done) + 2)})
+	return {"level": len(done) + 1, "next_role": nxt}
+
+
+def approve(doc):
+	"""Approve as the current user: at the next level when approvals go in turn and this isn't the last one, else the workflow's
+	Approve (the Approval Inbox uses this)."""
+	from frappe.model.workflow import apply_workflow
+
+	state = level_state(doc)
+	if state["in_turn"] and not state["final"]:
+		return approve_level(doc.doctype, doc.name)
+	return apply_workflow(doc, "Approve")
+
+
 def assert_level(doc, user: str):
 	"""The approver must hold the role the amount needs, or a higher level's (Administrator always may)."""
 	roles = required_roles(doc)
@@ -131,6 +237,12 @@ def validate_transition(doc):
 		doc.rejection_reason = None
 	elif old == PENDING and new in (APPROVED, REJECTED):
 		assert_not_maker(doc, user)
+		if new == APPROVED and (chain := level_chain(doc)):
+			done = levels_done(before)
+			if len(done) < len(chain) - 1:
+				frappe.throw(_("This {0} is approved at each level in turn: level {1} ({2}) is next.").format(label, len(done) + 1, chain[len(done)]),
+				             frappe.PermissionError, title=_("Approvals in turn"))
+			_check_level_approver(doc, user, chain[-1], done)
 		assert_level(doc, user)
 		if new == APPROVED:
 			doc.approved_by = user
@@ -390,7 +502,8 @@ def notify(doc, approver_role: str):
 	label = _(doc.doctype)
 	if new == PENDING:
 		enabled = set(frappe.get_all("User", filters={"enabled": 1}, pluck="name"))
-		role = (required_roles(doc) or [approver_role])[0]  # the level the amount needs
+		chain = level_chain(doc)
+		role = chain[0] if chain else (required_roles(doc) or [approver_role])[0]  # the first level in turn, or the level the amount needs
 		users = [u for u in users_with_role(role) if u in enabled and u != actor]
 		subject = _("{0} {1} is waiting for your approval").format(label, frappe.bold(title))
 		if doc.get("changes_since_last_submission"):  # set only when there was a previous submission
