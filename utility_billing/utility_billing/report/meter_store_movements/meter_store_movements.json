@@ -1,0 +1,43 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2026-11-15 16:25:10.337073",
+ "disable_prepared_report_automation": 0,
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "doctype_to_sync": [],
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": null,
+ "modified": "2026-11-15 16:25:10.337073",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Meter Store Movements",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Meter Store Movement",
+ "report_name": "Meter Store Movements",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Management"
+  },
+  {
+   "role": "Billing Auditor"
+  },
+  {
+   "role": "General Manager"
+  },
+  {
+   "role": "Billing Manager"
+  },
+  {
+   "role": "Billing Officer"
+  }
+ ],
+ "snapshot_report": 0,
+ "timeout": 0
+}

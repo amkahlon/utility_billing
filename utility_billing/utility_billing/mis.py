@@ -651,7 +651,7 @@ def estimated_bills(f):
 # ================================================================ 12. meter register (RPT-16)
 @report("meter_register", "Meter Register", BILLING,
         [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
-         dict(fieldname="status", label="Status", fieldtype="Select", options="\nIn Store\nInstalled\nDefective\nRemoved")],
+         dict(fieldname="status", label="Status", fieldtype="Select", options="\nIn Store\nIssued\nInstalled\nDefective\nRemoved\nScrapped")],
         "Meters in store, installed, defective and removed, with the account and how long each has been installed.",
         ref_doctype="Meter")
 def meter_register(f):
@@ -676,7 +676,7 @@ def meter_register(f):
 		r["changed_on"] = changed.get(r.name)
 	counts["Under test"] = sum(r["under_test"] for r in rows)
 	counts["Changed"] = sum(1 for r in rows if r["changed_on"])
-	order = ("In Store", "Installed", "Defective", "Removed", "Changed", "Under test")
+	order = ("In Store", "Issued", "Installed", "Defective", "Removed", "Scrapped", "Changed", "Under test")
 	summary = [{"value": counts[k], "label": _(k), "datatype": "Int",
 	            "indicator": "Red" if k in ("Defective", "Under test") else "Blue"} for k in order]
 	return {"columns": [col("Meter", "name", "Link", 120, "Meter"), col("Serial No", "serial_no", width=120), col("Make", "make", width=100),

@@ -13,7 +13,7 @@ frappe.query_reports["Meter Register"] = {
   "fieldname": "status",
   "label": "Status",
   "fieldtype": "Select",
-  "options": "\nIn Store\nInstalled\nDefective\nRemoved"
+  "options": "\nIn Store\nIssued\nInstalled\nDefective\nRemoved\nScrapped"
  }
 ],
 };

@@ -117,6 +117,9 @@ class Connection(Document):
 		open_rows = [r for r in rows if not r.removed_on]
 		self.current_meter = open_rows[0].meter if open_rows else None
 		if self.current_meter:
+			from utility_billing.utility_billing.doctype.meter_store_movement.meter_store_movement import check_installable  # noqa: PLC0415
+
+			check_installable(self.current_meter)
 			elsewhere = frappe.db.get_value(
 				"Connection Meter",
 				{"meter": self.current_meter, "removed_on": ["is", "not set"], "parent": ["!=", self.name]},
@@ -144,7 +147,7 @@ class Connection(Document):
 			if not r.removed_on:
 				if current.current_connection != self.name or current.status == "In Store":
 					status = "Defective" if current.status == "Defective" else "Installed"
-					frappe.db.set_value("Meter", r.meter, {"current_connection": self.name, "status": status})
+					frappe.db.set_value("Meter", r.meter, {"current_connection": self.name, "status": status, "issued_to": None})
 			elif current.current_connection == self.name:
 				status = "Defective" if current.status == "Defective" else "Removed"
 				frappe.db.set_value("Meter", r.meter, {"current_connection": None, "status": status})
