@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "field_order": [
+  "change_date",
+  "change_type",
+  "old_value",
+  "new_value",
+  "old_consumer",
+  "new_consumer",
+  "owner_liable",
+  "reading",
+  "has_reading",
+  "service_request"
+ ],
+ "fields": [
+  {
+   "fieldname": "change_date",
+   "fieldtype": "Date",
+   "label": "Effective",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "change_type",
+   "fieldtype": "Select",
+   "label": "Change",
+   "options": "Category\nHolder",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "old_value",
+   "fieldtype": "Data",
+   "label": "From",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "new_value",
+   "fieldtype": "Data",
+   "label": "To",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "old_consumer",
+   "fieldtype": "Link",
+   "label": "Outgoing Consumer",
+   "options": "Consumer"
+  },
+  {
+   "fieldname": "new_consumer",
+   "fieldtype": "Link",
+   "label": "Incoming Consumer",
+   "options": "Consumer"
+  },
+  {
+   "fieldname": "owner_liable",
+   "fieldtype": "Check",
+   "label": "Owner Liable for What the Outgoing Holder Owes"
+  },
+  {
+   "fieldname": "reading",
+   "fieldtype": "Float",
+   "label": "Reading on the Day",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "has_reading",
+   "fieldtype": "Check",
+   "label": "Reading Taken"
+  },
+  {
+   "fieldname": "service_request",
+   "fieldtype": "Link",
+   "label": "Service Request",
+   "options": "Service Request",
+   "in_list_view": 1,
+   "columns": 2
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Connection Change",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "states": []
+}

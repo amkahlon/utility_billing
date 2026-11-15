@@ -67,7 +67,8 @@ def build_snapshot(bill) -> dict:
 	conn = frappe.get_cached_doc("Connection", g("connection"))
 	prop = frappe.db.get_value("Property", conn.property, ["property_no", "block", "sector", "area", "area_unit"],
 	                           as_dict=True) or {}
-	consumer = frappe.db.get_value("Consumer", conn.consumer, ["consumer_name", "mobile_no", "address"], as_dict=True) or {}
+	# the bill's own consumer: on a final bill the outgoing holder, not the account's holder now (increment 22)
+	consumer = frappe.db.get_value("Consumer", g("consumer") or conn.consumer, ["consumer_name", "mobile_no", "address"], as_dict=True) or {}
 	reading = frappe.db.get_value(
 		"Meter Reading", g("meter_reading"),
 		["meter", "previous_reading", "previous_reading_date", "present_reading", "reading_date", "multiplier",
@@ -247,7 +248,7 @@ def bill_context(bill, duplicate=0) -> dict:
 		"lines": [{"label": l.label, "quantity": qty(l.quantity) if l.basis in MEASURED else "",
 		           "rate": rate(l.rate) if l.basis in MEASURED else "", "amount": money(l.amount), "note": l.note}
 		          for l in lines],
-		"title": _(TITLES.get(bill.utility, "Utility Bill")),
+		"title": _(TITLES.get(bill.utility, f"{bill.utility} Bill" if bill.utility else "Utility Bill")),
 		"month": month_name(bill.billing_month), "issue_date": date(bill.issue_date), "due_date": date(bill.due_date),
 		"logo": logo_data_uri(soc.get("logo")),
 		"signatory": soc.get("signatory"), "signature": logo_data_uri((soc.get("signatory") or {}).get("signature")),

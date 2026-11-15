@@ -347,3 +347,45 @@ def revenue_assurance(f):
 	                    col("Open", "open", "Int", 70), col("Closed", "closed", "Int", 70), col("No Issue", "no_issue", "Int", 80),
 	                    col("Confirmed %", "hit_rate", "Percent", 100), col("At Risk (open)", "at_risk", "Currency", 120),
 	                    col("Recovered", "recovered", "Currency", 120)], "data": data, "summary": summary}
+
+
+# ---------------------------------------------------------------- increment 22: defective meters (FS-WF-08), former occupants (SC-13)
+@report("defective_meters", "Defective Meters", BILLING + ["Recovery Officer"], [PERIOD[0]],
+        "Meters marked defective and still installed: since when, months billed on averages against the society's limit, and the meter "
+        "change request. Those over the limit are billed fixed charges only until replaced.", ref_doctype="Meter")
+def defective_meters(f):
+	from utility_billing.utility_billing import defective  # noqa: PLC0415
+
+	data = defective.still_defective(society_of(f))
+	over = sum(1 for d in data if d["over_limit"])
+	return {"columns": [col("Meter", "meter", "Link", 130, "Meter"), col("Account", "connection", "Link", 110, "Connection"),
+	                    col("Defective Since", "defective_since", "Date", 110), col("Days", "days", "Int", 70),
+	                    col("Months Averaged", "months_averaged", "Int", 120), col("Limit", "limit", "Int", 70),
+	                    col("Over the Limit", "over_limit", "Check", 100), col("Meter Change Request", "request", "Link", 150, "Service Request"),
+	                    col("Request Status", "request_status", width=120)],
+	        "data": data,
+	        "summary": [{"value": len(data), "label": _("Defective meters"), "datatype": "Int", "indicator": "Orange"},
+	                    {"value": over, "label": _("Over the averaging limit"), "datatype": "Int", "indicator": "Red"}]}
+
+
+@report("former_occupant_balances", "Former Occupant Balances", RECOVERY, [PERIOD[0],
+        dict(fieldname="status", label="Status", fieldtype="Select", options="\nOpen\nSettled", default="Open")],
+        "What outgoing tenants and owners still owe after their final bills, and who answers for it (the former holder, or the owner "
+        "when the tenancy made the owner liable).", ref_doctype="Former Occupant Balance")
+def former_occupant_balances(f):
+	filters = {"society": society_of(f)}
+	if f.get("status"):
+		filters["status"] = f.status
+	data = frappe.get_all("Former Occupant Balance", filters=filters, order_by="change_date desc",
+	                      fields=["name", "connection", "consumer", "consumer_name", "liable_consumer", "change_date", "final_bill", "amount",
+	                              "surcharge", "paid", "outstanding", "status"])
+	for d in data:
+		d["liable_name"] = frappe.db.get_value("Consumer", d.liable_consumer, "consumer_name") if d.liable_consumer else None
+	if data:
+		data.append(total_row("consumer_name", _("Total"), data, ("amount", "surcharge", "paid", "outstanding")))
+	return {"columns": [col("Balance", "name", "Link", 100, "Former Occupant Balance"), col("Account", "connection", "Link", 110, "Connection"),
+	                    col("Former Holder", "consumer_name", width=160), col("Who Pays", "liable_name", width=160), col("Left On", "change_date", "Date", 100),
+	                    col("Final Bill", "final_bill", "Link", 140, "Utility Bill"), col("Owed at the Change", "amount", "Currency", 130),
+	                    col("Surcharge", "surcharge", "Currency", 100), col("Paid", "paid", "Currency", 100),
+	                    col("Outstanding", "outstanding", "Currency", 110), col("Status", "status", width=90)],
+	        "data": data}

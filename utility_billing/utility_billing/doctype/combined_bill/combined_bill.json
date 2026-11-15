@@ -1,0 +1,208 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 14:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "billing_account",
+  "consumer_name",
+  "society",
+  "billing_month",
+  "cb1",
+  "issue_date",
+  "due_date",
+  "payable_within_due",
+  "payable_after_due",
+  "items_section",
+  "items",
+  "current_amount",
+  "arrears",
+  "surcharge_amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "billing_account",
+   "fieldtype": "Link",
+   "label": "Billing Account",
+   "options": "Billing Account",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "label": "Customer",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "billing_month",
+   "fieldtype": "Date",
+   "label": "Month",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "issue_date",
+   "fieldtype": "Date",
+   "label": "Issued",
+   "read_only": 1
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Date",
+   "label": "Due",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "payable_within_due",
+   "fieldtype": "Currency",
+   "label": "Payable Within Due Date",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "payable_after_due",
+   "fieldtype": "Currency",
+   "label": "Payable After Due Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Services"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Bills",
+   "options": "Combined Bill Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "current_amount",
+   "fieldtype": "Currency",
+   "label": "Current Bills",
+   "read_only": 1
+  },
+  {
+   "fieldname": "arrears",
+   "fieldtype": "Currency",
+   "label": "Arrears",
+   "read_only": 1
+  },
+  {
+   "fieldname": "surcharge_amount",
+   "fieldtype": "Currency",
+   "label": "Surcharge if Late",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Combined Bill",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  }
+ ],
+ "in_create": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

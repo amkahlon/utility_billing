@@ -12,7 +12,8 @@
   "start_reading",
   "removed_on",
   "end_reading",
-  "removal_reason"
+  "removal_reason",
+  "unreadable"
  ],
  "fields": [
   {
@@ -52,13 +53,19 @@
    "label": "Meter",
    "options": "Meter",
    "reqd": 1
+  },
+  {
+   "fieldname": "unreadable",
+   "fieldtype": "Check",
+   "label": "Couldn't Be Read at Removal",
+   "description": "The averaged months stand: no true-up from this meter."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-11-13 21:45:45.056329",
+ "modified": "2026-11-16 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection Meter",

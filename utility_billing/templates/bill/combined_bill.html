@@ -1,0 +1,66 @@
+{#- A combined bill (increment 22, FS-BIL-06): one billing account's services in one bill, each in its own section, with one total.
+    Each service's bill is printed from its own stored lines; tables only (wkhtmltopdf has no flexbox or grid). -#}
+{%- set c = soc.colour or "#1F5F8B" -%}
+<style>
+	.cb { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 9pt; color: #1d2329; line-height: 1.3; }
+	.cb table { border-collapse: collapse; width: 100%; }
+	.cb td, .cb th { padding: 0; vertical-align: top; }
+	.cb .band { background: {{ c }}; color: #fff; }
+	.cb .title { font-size: 11pt; font-weight: 700; padding: 1.5mm 3mm; }
+	.cb .muted { color: #5b6670; } .cb .small { font-size: 7.5pt; } .cb .right { text-align: right; } .cb .strong { font-weight: 700; }
+	.cb .name { font-size: 15pt; font-weight: 700; color: {{ c }}; }
+	.cb .box { border: 1px solid #c9d1d8; }
+	.cb .grid th { background: #eef2f5; font-size: 7.5pt; font-weight: 700; color: #3b4650; padding: 1mm 1.5mm; text-align: left; border-bottom: 1px solid #c9d1d8; }
+	.cb .grid td { padding: .9mm 1.5mm; border-bottom: 1px solid #edf0f2; }
+	.cb .grid th.right, .cb .grid td.right { text-align: right; }
+	.cb .svc { font-weight: 700; background: #f6f8fa; padding: 1.2mm 1.5mm; }
+	.cb .pay td { padding: 1.6mm 2mm; font-size: 10.5pt; font-weight: 700; }
+	.cb .pay .within { background: {{ c }}; color: #fff; } .cb .pay .after { background: #fdf0ef; color: #8f1d12; }
+	.cb .ref { font-size: 15pt; font-weight: 700; letter-spacing: 1px; color: {{ c }}; }
+	.cb .sp { height: 2.5mm; } .cb .gap { width: 3mm; }
+</style>
+<div class="cb">
+<table><tr>
+	{%- if soc.logo %}<td style="width: 22mm;"><img src="{{ soc.logo }}" style="width: 19mm; height: 19mm;"></td>{% endif %}
+	<td><div class="name">{{ soc.name | e }}</div>{% for l in soc.letterhead %}<div class="small muted">{{ l | e }}</div>{% else %}<div class="small muted">{{ (soc.address or "") | e }}</div>{% endfor %}</td>
+	<td class="right small muted" style="width: 40mm;">{{ _("Combined bill") }}</td>
+</tr></table>
+<div class="sp"></div>
+<table class="band"><tr>
+	<td class="title">{{ _("Combined Bill") }} &nbsp;—&nbsp; {{ month }}</td>
+	<td class="title right">{{ cb.name | e }}</td>
+</tr></table>
+<div class="sp"></div>
+<table><tr>
+	<td style="width: 58%;"><div class="box" style="padding: 2mm;">
+		<div class="small muted">{{ _("Customer") }}</div><div class="strong">{{ (cb.consumer_name or "") | e }}</div>
+		<div class="small muted" style="margin-top: 1mm;">{{ _("Services") }}: {{ items | length }}</div>
+	</div></td>
+	<td class="gap"></td>
+	<td><div class="box" style="padding: 2mm;">
+		<table><tr><td>
+			<div class="small muted">{{ _("Billing account") }}</div><div class="ref">{{ cb.billing_account | e }}</div>
+			{%- if barcode %}<img src="{{ barcode }}" style="height: 11mm; width: 52mm; display: block; margin-top: 1mm;">{% endif %}
+			<div class="small" style="margin-top: 1mm;">{{ _("Issue date") }} {{ date(cb.issue_date) }} &nbsp;·&nbsp; <b>{{ _("Due date") }} {{ date(cb.due_date) }}</b></div>
+		</td>{% if qr %}<td style="width: 25mm;"><img src="{{ qr }}" style="width: 23mm; height: 23mm;"></td>{% endif %}</tr></table>
+	</div></td>
+</tr></table>
+<div class="sp"></div>
+<table class="grid box">
+	<tr><th>{{ _("Charges") }}</th><th class="right">{{ _("Units") }}</th><th class="right">{{ _("Rate") }}</th><th class="right">{{ _("Amount (Rs)") }}</th></tr>
+	{%- for s in items %}
+	<tr><td colspan="4" class="svc">{{ s.title | e }} · {{ _("account") }} {{ s.reference | e }}{% if s.note %} <span class="small muted">({{ s.note | e }})</span>{% endif %}</td></tr>
+	{%- for l in s.lines %}
+	<tr><td>{{ l.label | e }}{% if l.note %}<div class="small muted">{{ l.note | e }}</div>{% endif %}</td><td class="right">{{ l.quantity }}</td><td class="right">{{ l.rate }}</td><td class="right">{{ l.amount }}</td></tr>
+	{%- endfor %}
+	<tr><td colspan="3" class="strong">{{ _("Current bill") }}: {{ s.title | e }}</td><td class="right strong">{{ money(s.current) }}</td></tr>
+	{%- if s.arrears %}<tr><td colspan="3">{{ _("Arrears") }}: {{ s.title | e }}</td><td class="right">{{ money(s.arrears) }}</td></tr>{% endif %}
+	{%- endfor %}
+</table>
+<table class="pay" style="margin-top: 1.5mm;">
+	<tr class="within"><td>{{ _("Payable within due date") }} <span style="font-weight: 400; font-size: 8pt;">({{ date(cb.due_date) }})</span></td><td class="right">Rs {{ money(cb.payable_within_due) }}</td></tr>
+	<tr class="after"><td>{{ _("Payable after due date") }}</td><td class="right">Rs {{ money(cb.payable_after_due) }}</td></tr>
+</table>
+<div class="small muted" style="margin-top: 2mm;">{{ _("Pay the total with the billing account number; it is shared over the services, each bill's amount due first.") }}</div>
+{%- if soc.signatory %}<div class="right small" style="margin-top: 2mm;">{% if soc.signature %}<img src="{{ soc.signature }}" style="height: 10mm;"><br>{% endif %}<b>{{ soc.signatory.name | e }}</b><br>{{ soc.signatory.designation | e }}</div>{% endif %}
+</div>

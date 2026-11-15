@@ -10,12 +10,15 @@ frappe.ui.form.on("Tariff", {
 
 	utility(frm) {
 		frm.set_value("consumer_category", null);
+		show_energy_pricing(frm);
 	},
 
 	refresh(frm) {
-		if (frm.doc.docstatus === 1) {
-			frm.add_custom_button(__("Preview Charge"), () => preview_charge(frm));
-		}
+		show_energy_pricing(frm).then((metered) => {
+			if (frm.doc.docstatus === 1 && metered) {
+				frm.add_custom_button(__("Preview Charge"), () => preview_charge(frm));
+			}
+		});
 		utility_billing.add_impact_button(frm, "tariff_impact");
 		utility_billing.render_approval_history(frm);
 		if (frm.doc.workflow_state === "Rejected" && frm.doc.rejection_reason) {
@@ -112,4 +115,15 @@ function preview_charge(frm) {
 		__("Preview Energy Charge"),
 		__("Calculate")
 	);
+}
+
+// A service without a meter (maintenance, by plot size) has no units to price: no energy pricing section (increment 22).
+function show_energy_pricing(frm) {
+	const apply = (metered) => {
+		frm.toggle_display(["pricing_section", "slabs"], metered);
+		frm.toggle_reqd("flat_rate", metered && frm.doc.pricing_method === "Flat rate");
+		return metered;
+	};
+	if (!frm.doc.utility) return Promise.resolve(apply(true));
+	return frappe.db.get_value("Utility Type", frm.doc.utility, "is_metered").then((r) => apply(!!(r.message && r.message.is_metered)));
 }

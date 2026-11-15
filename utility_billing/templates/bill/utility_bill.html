@@ -69,7 +69,7 @@
 </table>
 <div class="sp"></div>
 <table class="band"><tr>
-	<td class="title">{{ title | e }} &nbsp;—&nbsp; {{ month | e }}</td>
+	<td class="title">{% if bill.final_bill %}{{ _("FINAL BILL") }} · {% endif %}{{ title | e }} &nbsp;—&nbsp; {{ month | e }}{% if bill.period_note %}<div class="small" style="font-weight: 400;">{{ bill.period_note | e }}</div>{% endif %}</td>
 	<td class="title right">{{ t("Bill No") }} {{ bill.name | e }}{% if bill.revision_no and bill.revision_no > 1 %} &nbsp;({{ _("Revised, version") }} {{ bill.revision_no }}){% endif %}</td>
 </tr></table>
 <div class="sp"></div>

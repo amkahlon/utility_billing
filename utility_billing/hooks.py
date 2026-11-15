@@ -148,6 +148,8 @@ scheduler_events = {
 		"utility_billing.utility_billing.access.daily",
 		# On the 1st: revenue assurance checks for last month (FS-RA)
 		"utility_billing.utility_billing.revenue_assurance.monthly",
+		# Service agreements renewed or ended (FS-MST-19, increment 22)
+		"utility_billing.utility_billing.doctype.service_agreement.service_agreement.daily",
 	],
 }
 

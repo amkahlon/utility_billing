@@ -25,6 +25,8 @@ FIXED = "Fixed"
 PER_AREA = "Per Area"
 PERCENT = "Percentage of Charges"
 ONE_OFF = "One-off"
+BY_PLOT_SIZE = "By Plot Size"  # resolved to a fixed monthly amount for the property's plot size class before calculating
+SURCHARGE_WITH_ARREARS = "Percentage of current bill and arrears"
 
 
 def D(v) -> Decimal:
@@ -126,18 +128,20 @@ def calculate(
 
 	for seg in segs:
 		u, trf, frac, seg_note = D(seg["units"]), seg["tariff"], D(seg["fraction"]), seg.get("note") or ""
-		# 1. Energy
-		e = calculate_energy(u, trf.get("method"), flat_rate=trf.get("flat_rate"), slabs=trf.get("slabs") or (),
-		                     minimum_charge=trf.get("minimum_charge"))
-		energy_note = "; ".join(f"{fmt(x['units'])} × {fmt(x['rate'])}" for x in e.lines)
-		if e.minimum_applied:
-			energy_note += f" (minimum charge {fmt(e.amount)})"
-		if len(segs) > 1 and seg_note:
-			energy_note = f"{seg_note}: {energy_note}"
-		avg_rate = (e.amount / u) if u else D(trf.get("flat_rate"))
-		lines.append(Line(energy.charge_type, energy.label, energy.group, energy.order, PER_UNIT, u,
-		                  avg_rate.quantize(Decimal("0.0001")), rnd(e.amount, energy.rounding), energy_note))
-		energy_amount = rnd(e.amount, energy.rounding)
+		# 1. Energy (none for a service billed without a meter: `energy` is None, increment 22)
+		energy_amount = Decimal(0)
+		if energy is not None:
+			e = calculate_energy(u, trf.get("method"), flat_rate=trf.get("flat_rate"), slabs=trf.get("slabs") or (),
+			                     minimum_charge=trf.get("minimum_charge"))
+			energy_note = "; ".join(f"{fmt(x['units'])} × {fmt(x['rate'])}" for x in e.lines)
+			if e.minimum_applied:
+				energy_note += f" (minimum charge {fmt(e.amount)})"
+			if len(segs) > 1 and seg_note:
+				energy_note = f"{seg_note}: {energy_note}"
+			avg_rate = (e.amount / u) if u else D(trf.get("flat_rate"))
+			lines.append(Line(energy.charge_type, energy.label, energy.group, energy.order, PER_UNIT, u,
+			                  avg_rate.quantize(Decimal("0.0001")), rnd(e.amount, energy.rounding), energy_note))
+			energy_amount = rnd(e.amount, energy.rounding)
 
 		seg_charges = list(seg["charges"])
 		split_note = seg_note if len(segs) > 1 else fraction_note
@@ -199,10 +203,13 @@ def calculate(
 	if installment is not None:  # under a plan only the installment of the arrears is due now
 		result.installment = rnd(installment, NONE)
 		result.payable_within_due = result.current + result.installment
-	# 7. Surcharge on the current bill only (FS-BIL-04)
+	# 7. Surcharge on the current bill only (FS-BIL-04), or, where the society chooses it, on the current bill and unpaid arrears
+	# (the Park View bills: the surcharge grows with every unpaid month; increment 22)
 	s = surcharge or {}
 	if s.get("basis") == "Fixed amount":
 		sur = D(s.get("fixed_amount"))
+	elif s.get("basis") == SURCHARGE_WITH_ARREARS:
+		sur = rnd((result.current + max(result.arrears, Decimal(0))) * D(s.get("rate", 10)) / 100, bill_rounding)
 	else:
 		sur = rnd(result.current * D(s.get("rate", 10)) / 100, bill_rounding)
 	if D(s.get("cap")) > 0:

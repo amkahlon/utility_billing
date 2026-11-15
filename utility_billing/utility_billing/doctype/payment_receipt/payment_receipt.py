@@ -16,7 +16,7 @@ from frappe.model.document import Document
 from frappe.model.naming import make_autoname
 from frappe.utils import flt, getdate, now_datetime, nowdate
 
-from utility_billing.utility_billing import account, notify
+from utility_billing.utility_billing import account, billaccounts, notify
 from utility_billing.utility_billing.doctype.cashier_day.cashier_day import open_day_of, refresh_totals
 
 CHANNEL_ROLES = {"System Manager", "Accounts Officer"}
@@ -46,11 +46,19 @@ class PaymentReceipt(Document):
 	def validate(self):
 		self.reference_no = (self.reference_no or "").strip()
 		self.connection = account.connection_of(self.reference_no)
-		if not self.connection:
+		ba = None if self.connection else billaccounts.account_of(self.reference_no)
+		if not self.connection and not ba:
 			frappe.throw(_("No account with reference number {0}.").format(self.reference_no))
-		info = account.enquiry_of(self.connection) if self.flags.api_client else account.enquiry(self.connection)
+		if ba:  # paid by billing account number: shared over its services (increment 22)
+			self.billing_account = ba
+			self.connection = billaccounts.members(ba)[0]
+			info = billaccounts.enquiry(ba)
+		else:
+			self.billing_account = None
+			info = account.enquiry_of(self.connection) if self.flags.api_client else account.enquiry(self.connection)
 		self.consumer_name, self.society = info["consumer_name"], info["society"]
-		self.latest_bill, self.bill_due_date = info["bill"], info["due_date"]
+		self.latest_bill = None if ba else info["bill"]  # a Combined Bill isn't a Utility Bill
+		self.bill_due_date = info["due_date"]
 		self.payable_within_due, self.payable_after_due = info["payable_within_due"], info["payable_after_due"]
 		self.balance_before = info["balance"]
 		self.amount = flt(self.amount, 2)
@@ -83,12 +91,17 @@ class PaymentReceipt(Document):
 			frappe.throw(_("Enter the {0} number.").format(_(self.mode).lower()))
 
 	def before_submit(self):
+		from utility_billing.utility_billing import holders  # noqa: PLC0415
+
+		holders.check_payment(self)  # a payment for a former occupant's balance (increment 22)
 		if self.payment_channel == "Counter":
 			status = frappe.db.get_value("Cashier Day", self.cashier_day, "status")
 			if status != "Open":
 				frappe.throw(_("Cashier day {0} is closed; no more receipts can be taken on it.").format(self.cashier_day))
 
 	def on_submit(self):
+		if self.billing_account:
+			return self.post_shared()
 		entry, deltas = account.post_payment(self)
 		self.db_set({
 			"alloc_current": -flt(deltas["current"]), "alloc_arrears": -flt(deltas["arrears"]),
@@ -97,19 +110,56 @@ class PaymentReceipt(Document):
 			"ledger_entry": entry.name, "status": "Posted",
 		})
 		self.update_day()
+		if self.get("former_balance"):
+			from utility_billing.utility_billing import holders  # noqa: PLC0415
+
+			holders.refresh(self.former_balance)
 		notify.payment_received(self)  # FS-PAY-09: the receipt notification
 
 	def before_cancel(self):
 		if not self.flags.reversal:
 			frappe.throw(_("A posted receipt can't be cancelled. A Billing Manager reverses it with a reason."))
 
+	def post_shared(self):
+		"""A billing account payment: one ledger entry on each service's account, its share as worked out at posting."""
+		billaccounts.check_payment(self.billing_account, self.society, self.amount)
+		rows = billaccounts.allocate(self.billing_account, self.amount)
+		self.set("allocations", [])
+		totals = {"current": 0, "arrears": 0, "surcharge": 0, "fees": 0, "credit": 0}
+		first = last = None
+		for row in rows:
+			part = frappe._dict(name=self.name, connection=row["connection"], society=self.society, amount=row["amount"], shared=1,
+			                    mode=self.mode, payment_date=self.payment_date)
+			entry, deltas = account.post_payment(part)
+			for k in totals:
+				totals[k] += flt(deltas[k])
+			first, last = first or entry, entry
+			child = self.append("allocations", {**row, "ledger_entry": entry.name})
+			child.parent, child.parenttype, child.parentfield, child.idx = self.name, self.doctype, "allocations", len(self.allocations)
+			child.db_insert()
+		self.db_set({"alloc_current": -totals["current"], "alloc_arrears": -totals["arrears"], "alloc_surcharge": -totals["surcharge"],
+		             "alloc_fees": -totals["fees"], "alloc_credit": totals["credit"], "ledger_entry": first.name if first else None,
+		             "balance_after": billaccounts.enquiry(self.billing_account)["balance"], "status": "Posted"})
+		self.update_day()
+		notify.payment_received(self)
+
 	def on_cancel(self):
 		r = self.flags.reversal
-		account.reverse_entry(self.ledger_entry, "Payment Receipt", self.name,
-		                      remarks=_("Receipt {0} reversed: {1}").format(self.name, r["remarks"]))
+		if self.billing_account:  # every service's share is reversed
+			for row in self.allocations:
+				if row.ledger_entry:
+					account.reverse_entry(row.ledger_entry, "Payment Receipt", self.name,
+					                      remarks=_("Receipt {0} reversed: {1}").format(self.name, r["remarks"]))
+		else:
+			account.reverse_entry(self.ledger_entry, "Payment Receipt", self.name,
+			                      remarks=_("Receipt {0} reversed: {1}").format(self.name, r["remarks"]))
 		self.db_set({"status": "Reversed", "reversal_reason": r["reason_code"], "reversal_remarks": r["remarks"],
 		             "reversed_by": frappe.session.user, "reversed_on": now_datetime()})
 		self.update_day()
+		if self.get("former_balance"):
+			from utility_billing.utility_billing import holders  # noqa: PLC0415
+
+			holders.refresh(self.former_balance)  # the reversed payment no longer counts against the former holder's balance
 		notify.payment_received(self, reversed_=True)
 
 	def update_day(self):

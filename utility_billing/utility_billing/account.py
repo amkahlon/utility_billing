@@ -138,8 +138,11 @@ def reverse_bill(bill):
 
 
 def arrears_for_new_bill(connection) -> float:
-	"""Everything owed before a new bill: arrears, unpaid current bill, surcharge and fees, less credit."""
-	return balance(connection)
+	"""Everything owed before a new bill: arrears, unpaid current bill, surcharge and fees, less credit, less what former holders still
+	owe (their final bills and balances are theirs: user decision 2026-11-16, the incoming holder starts clean)."""
+	from utility_billing.utility_billing import holders  # noqa: PLC0415
+
+	return round(balance(connection) - holders.former_outstanding(connection), 2)
 
 
 # ---------------------------------------------------------------- surcharge (FS-REC-03, FS-PAY-08)
@@ -154,8 +157,15 @@ NOTHING_PAID = "Nothing paid by the due date"
 def paid_in_time(bill, deadline) -> bool:
 	"""Whether the bill escapes the surcharge, counting payments by the date the consumer paid (FS-PAY-08).
 	Default rule: the account was fully paid by the deadline. Societies that waive the surcharge on any
-	payment ("Nothing paid by the due date") only need a payment made between issue and deadline."""
-	if balance_as_of(bill.connection, deadline) <= 0:
+	payment ("Nothing paid by the due date") only need a payment made between issue and deadline.
+	A final bill is paid in time when its former holder's balance is; the current holder's bills leave former holders' balances out."""
+	from utility_billing.utility_billing import holders  # noqa: PLC0415
+
+	if cint(bill.get("final_bill")):
+		fob = frappe.db.get_value("Former Occupant Balance", {"final_bill": bill.name}, ["name", "amount", "surcharge"], as_dict=True)
+		if fob:
+			return flt(fob.amount) - holders.paid_by(fob.name, deadline) <= 0.005
+	if balance_as_of(bill.connection, deadline) - holders.former_outstanding(bill.connection, deadline) <= 0:
 		return True
 	if frappe.db.get_value("Society", bill.society, "surcharge_rule") == NOTHING_PAID:
 		return bool(frappe.db.exists("Customer Ledger Entry", {
@@ -192,6 +202,10 @@ def apply_surcharges(as_of=None, society=None):
 		entry = post(bill.connection, "Surcharge", deltas, "Utility Bill", bill.name, periods.next_open_date(bill.society, add_days(deadline, 1)),
 		             _("Late payment surcharge on the {0} bill").format(getdate(bill.billing_month).strftime("%B %Y")))
 		bill.db_set({"surcharge_status": "Posted", "surcharge_entry": entry.name}, update_modified=False)
+		if cint(bill.get("final_bill")):  # the surcharge on a final bill is the former holder's (increment 22)
+			from utility_billing.utility_billing import holders  # noqa: PLC0415
+
+			holders.surcharge_added(bill, bill.surcharge_amount)
 		posted += 1
 	return posted
 
@@ -225,10 +239,11 @@ def post_payment(receipt):
 	society = frappe.get_cached_doc("Society", receipt.society)
 	owed = engine.total(before)
 	amount = engine.D(receipt.amount)
-	if amount > max(owed, engine.D(0)) and not cint(society.allow_overpayment):
-		frappe.throw(_("The account owes Rs {0}; this society doesn't accept overpayments.").format(flt(max(owed, 0))))
-	if amount < owed and not cint(society.allow_part_payment):
-		frappe.throw(_("The account owes Rs {0}; this society doesn't accept part payments.").format(flt(owed)))
+	if not receipt.get("shared"):  # a billing account's payment is checked once for all its services (billaccounts.check_payment)
+		if amount > max(owed, engine.D(0)) and not cint(society.allow_overpayment):
+			frappe.throw(_("The account owes Rs {0}; this society doesn't accept overpayments.").format(flt(max(owed, 0))))
+		if amount < owed and not cint(society.allow_part_payment):
+			frappe.throw(_("The account owes Rs {0}; this society doesn't accept part payments.").format(flt(owed)))
 	deltas = engine.payment(before, amount, engine.order_of(society.payment_posting_order))
 	entry = post(receipt.connection, "Payment", deltas, "Payment Receipt", receipt.name, receipt.payment_date,
 	             _("{0} payment").format(_(receipt.mode)))
@@ -335,6 +350,12 @@ def enquiry(reference_no: str):
 	"""Bill enquiry for counters and channels (FS-PAY-05): consumer, latest bill, amounts, balances."""
 	connection = connection_of(reference_no)
 	if not connection:
+		from utility_billing.utility_billing import billaccounts  # noqa: PLC0415
+
+		ba = billaccounts.account_of(reference_no)  # a billing account number: all its services at once (increment 22)
+		if ba:
+			frappe.get_doc("Billing Account", ba).check_permission("read")
+			return billaccounts.enquiry(ba)
 		frappe.throw(_("No account with reference number {0}.").format(reference_no))
 	frappe.get_doc("Connection", connection).check_permission("read")
 	return enquiry_of(connection)
@@ -350,6 +371,9 @@ def enquiry_of(connection):
 	)
 	bal = balances(connection)
 	owed = flt(engine.total(bal))
+	from utility_billing.utility_billing import holders  # noqa: PLC0415
+
+	former = holders.former_outstanding(connection)  # what former holders still owe: collected from them, not the current holder
 	return {
 		"connection": connection, "consumer_name": conn.consumer_name, "society": conn.society, "status": conn.status,
 		"bill": bill.name if bill else None,
@@ -357,9 +381,9 @@ def enquiry_of(connection):
 		"due_date": str(bill.extended_due_date or bill.due_date) if bill else None,
 		"payable_within_due": flt(bill.payable_within_due) if bill else 0,
 		"payable_after_due": flt(bill.payable_after_due) if bill else 0,
-		"balance": owed, "balances": {b: flt(v) for b, v in bal.items()},
-		# What to collect today: the whole balance (which already includes any posted surcharge).
-		"amount_due": _amount_due(connection, bill, owed),
+		"balance": owed, "balances": {b: flt(v) for b, v in bal.items()}, "former_balance": former,
+		# What to collect today: the whole balance (which already includes any posted surcharge), less former holders' balances.
+		"amount_due": _amount_due(connection, bill, round(owed - former, 2)),
 	}
 
 

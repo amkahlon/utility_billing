@@ -36,7 +36,9 @@
   "current_meter",
   "meters",
   "flags_section",
-  "connection_flags"
+  "connection_flags",
+  "changes_section",
+  "changes"
  ],
  "fields": [
   {
@@ -228,12 +230,26 @@
    "fieldtype": "Date",
    "label": "MDI Read On",
    "read_only": 1
+  },
+  {
+   "fieldname": "changes_section",
+   "fieldtype": "Section Break",
+   "label": "Changes",
+   "collapsible": 1,
+   "description": "Category and holder changes made through service requests; a bill whose period contains one is split at its date."
+  },
+  {
+   "fieldname": "changes",
+   "fieldtype": "Table",
+   "label": "Changes",
+   "options": "Connection Change",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 18:00:00.000000",
+ "modified": "2026-11-16 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection",

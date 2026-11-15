@@ -11,8 +11,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate
 
+from utility_billing.utility_billing import defective, readings
 from utility_billing.utility_billing import reading_engine as engine
-from utility_billing.utility_billing import readings
 
 INPUTS = ("present_reading", "reading_date", "exception_code")
 
@@ -123,6 +123,7 @@ class MeterReading(Document):
 			self.status = "Valid"
 
 	def reset_result(self):
+		self.defective = 0
 		self.units = self.raw_units = 0
 		self.consumption_type = None
 		self.checks = None
@@ -135,8 +136,14 @@ class MeterReading(Document):
 			if self.exception_code
 			else "Estimate"
 		)
+		self.defective = 0
 		if treatment == "Bill zero":
 			units, note = 0, _("Not read ({0}): billed zero.").format(self.exception_code)
+		elif treatment == defective.TREATMENT:  # FS-WF-08: the society's defective-meter method, the meter marked, a change order raised
+			units, note = defective.units_for(self)
+			note = _("Not read: {0}. ").format(self.exception_code) + note
+			self.defective = 1
+			defective.mark_meter(self)
 		else:
 			est = engine.estimate(
 				method,

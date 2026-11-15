@@ -26,6 +26,8 @@
   "slabs",
   "charges_section",
   "charges",
+  "plot_rates_section",
+  "plot_rates",
   "approval_section",
   "requested_by",
   "requested_on",
@@ -269,13 +271,25 @@
    "fieldname": "approval_history_html",
    "fieldtype": "HTML",
    "label": "Approval History View"
+  },
+  {
+   "fieldname": "plot_rates_section",
+   "fieldtype": "Section Break",
+   "label": "Rates by plot size",
+   "description": "For charges of the basis 'By Plot Size' (for example maintenance or sewerage): the monthly amount for each plot size class."
+  },
+  {
+   "fieldname": "plot_rates",
+   "fieldtype": "Table",
+   "label": "Plot Size Rates",
+   "options": "Plot Size Rate"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-13 23:03:59.851034",
+ "modified": "2026-11-16 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Tariff",
