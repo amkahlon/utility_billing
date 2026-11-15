@@ -1,0 +1,277 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 14:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "agreement_title",
+  "connection",
+  "consumer",
+  "society",
+  "utility",
+  "cb1",
+  "status",
+  "start_date",
+  "end_date",
+  "terms_section",
+  "tariff",
+  "arrears_liability",
+  "deposit_amount",
+  "cb2",
+  "auto_renew",
+  "renewal_months",
+  "notice_days",
+  "terms",
+  "end_section",
+  "terminated_on",
+  "termination_reason",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "agreement_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Connection",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "consumer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Consumer",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "utility",
+   "fieldtype": "Link",
+   "label": "Utility",
+   "options": "Utility Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nActive\nEnded\nTerminated",
+   "default": "Draft",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Start",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "label": "End",
+   "in_list_view": 1,
+   "description": "Empty: open-ended."
+  },
+  {
+   "fieldname": "terms_section",
+   "fieldtype": "Section Break",
+   "label": "Terms"
+  },
+  {
+   "fieldname": "tariff",
+   "fieldtype": "Link",
+   "label": "Contract Tariff",
+   "options": "Tariff",
+   "description": "A special or negotiated tariff that replaces the category tariff while the agreement is in force (FS-CFG-32). Empty: the category tariff."
+  },
+  {
+   "fieldname": "arrears_liability",
+   "fieldtype": "Select",
+   "label": "Liable for Arrears",
+   "options": "Customer\nOwner",
+   "default": "Customer"
+  },
+  {
+   "fieldname": "deposit_amount",
+   "fieldtype": "Currency",
+   "label": "Security Deposit Required"
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "auto_renew",
+   "fieldtype": "Check",
+   "label": "Renew Automatically"
+  },
+  {
+   "fieldname": "renewal_months",
+   "fieldtype": "Int",
+   "label": "Renew for (months)",
+   "default": "12",
+   "depends_on": "eval:doc.auto_renew"
+  },
+  {
+   "fieldname": "notice_days",
+   "fieldtype": "Int",
+   "label": "Notice to End (days)",
+   "default": "30"
+  },
+  {
+   "fieldname": "terms",
+   "fieldtype": "Small Text",
+   "label": "Other Terms"
+  },
+  {
+   "fieldname": "end_section",
+   "fieldtype": "Section Break",
+   "label": "Ending",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "terminated_on",
+   "fieldtype": "Date",
+   "label": "Terminated On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "termination_reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "Service Agreement",
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Service Agreement",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "format:SA-{#####}",
+ "title_field": "agreement_title",
+ "is_submittable": 1,
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1,
+   "submit": 1,
+   "cancel": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1,
+   "submit": 1,
+   "cancel": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "create": 1,
+   "write": 1,
+   "submit": 1,
+   "cancel": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

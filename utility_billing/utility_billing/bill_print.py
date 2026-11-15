@@ -248,7 +248,7 @@ def bill_context(bill, duplicate=0) -> dict:
 		"lines": [{"label": l.label, "quantity": qty(l.quantity) if l.basis in MEASURED else "",
 		           "rate": rate(l.rate) if l.basis in MEASURED else "", "amount": money(l.amount), "note": l.note}
 		          for l in lines],
-		"title": _(TITLES.get(bill.utility, "Utility Bill")),
+		"title": _(TITLES.get(bill.utility, f"{bill.utility} Bill" if bill.utility else "Utility Bill")),
 		"month": month_name(bill.billing_month), "issue_date": date(bill.issue_date), "due_date": date(bill.due_date),
 		"logo": logo_data_uri(soc.get("logo")),
 		"signatory": soc.get("signatory"), "signature": logo_data_uri((soc.get("signatory") or {}).get("signature")),

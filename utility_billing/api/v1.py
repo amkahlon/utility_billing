@@ -12,7 +12,7 @@ from frappe import _
 from frappe.utils import cint, flt, getdate, nowdate
 
 from utility_billing.api.guard import REGISTRY, check_society, endpoint
-from utility_billing.utility_billing import account
+from utility_billing.utility_billing import account, billaccounts
 
 VERSION = "1.0.0"
 TXN_MAX = 64
@@ -100,6 +100,12 @@ def service_request(client, request):
 
 
 # ---------------------------------------------------------------- payments
+def enquiry_for(reference):
+	"""The enquiry of an account, or of a billing account (all its services together; increment 22)."""
+	ba = billaccounts.account_of(reference) if not frappe.db.exists("Connection", reference) else None
+	return billaccounts.enquiry(ba) if ba else account.enquiry_of(reference)
+
+
 def accepted_amounts(e, paid_on) -> set:
 	"""What a full payment on this date may be: the balance owed today, and the bill's within-due or after-due amount."""
 	amounts = {round(flt(e["amount_due"]), 2)}
@@ -122,7 +128,7 @@ def post_channel_payment(client, connection, amount, paid_on, transaction_id):
 	if frappe.db.exists("Payment Receipt", {"channel_txn_id": transaction_id}):
 		raise frappe.DuplicateEntryError(_("Transaction {0} is already posted.").format(transaction_id))
 	if not cint(client.partial_payments):
-		allowed = accepted_amounts(account.enquiry_of(connection), paid_on)
+		allowed = accepted_amounts(enquiry_for(connection), paid_on)
 		if amount not in allowed:
 			frappe.throw(_("The amount must be the full amount payable ({0}).").format(", ".join(f"{a:,.2f}" for a in sorted(allowed)) or "0"))
 	r = frappe.get_doc({"doctype": "Payment Receipt", "reference_no": connection, "payment_channel": "Bank / Channel", "payment_date": str(getdate(paid_on)),

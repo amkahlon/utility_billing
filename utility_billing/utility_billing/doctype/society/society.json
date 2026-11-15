@@ -87,6 +87,7 @@
   "show_barcode",
   "qr_content",
   "qr_link_template",
+  "bill_presentation",
   "second_language",
   "bill_notices_second",
   "payment_instructions_second",
@@ -424,7 +425,7 @@
    "fieldname": "surcharge_basis",
    "fieldtype": "Select",
    "label": "Surcharge Basis",
-   "options": "Percentage of current bill\nFixed amount",
+   "options": "Percentage of current bill\nFixed amount\nPercentage of current bill and arrears",
    "reqd": 1
   },
   {
@@ -576,6 +577,14 @@
    "fieldname": "show_qr_code",
    "fieldtype": "Check",
    "label": "Show QR Code"
+  },
+  {
+   "fieldname": "bill_presentation",
+   "fieldtype": "Select",
+   "label": "Bills per Service",
+   "default": "Separate bill per service",
+   "options": "Separate bill per service\nOne combined bill per billing account",
+   "description": "Separate: each service (electricity, maintenance, water...) gets its own bill. Combined: the services of a billing account are printed and paid as one bill, each with its own section."
   },
   {
    "fieldname": "show_barcode",
@@ -1148,7 +1157,7 @@
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 09:00:00.000000",
+ "modified": "2026-11-16 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

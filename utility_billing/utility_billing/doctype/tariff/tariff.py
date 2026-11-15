@@ -110,8 +110,11 @@ class Tariff(Document):
 			frappe.throw(_("Effective To can't be before Effective From."))
 
 	def validate_pricing(self):
-		if self.pricing_method == FLAT:
-			if flt(self.flat_rate) <= 0:
+		from utility_billing.utility_billing.billing import is_metered  # noqa: PLC0415
+
+		metered = is_metered(self.utility)
+		if self.pricing_method == FLAT or not metered:
+			if metered and flt(self.flat_rate) <= 0:  # a service without a meter has no rate per unit (increment 22)
 				frappe.throw(_("Enter a Rate per Unit greater than 0."))
 			self.slabs = []
 		else:
@@ -127,6 +130,8 @@ class Tariff(Document):
 			if row.charge_type in seen:
 				frappe.throw(_("Row {0}: {1} is listed twice.").format(row.idx, row.charge_type))
 			seen.add(row.charge_type)
+			if row.rate is None and frappe.db.get_value("Charge Type", row.charge_type, "calculation_basis") == "By Plot Size":
+				row.rate = 0  # the amounts are in the Plot Size Rates table
 			if flt(row.rate) < 0:
 				frappe.throw(_("Row {0}: rate can't be negative.").format(row.idx))
 

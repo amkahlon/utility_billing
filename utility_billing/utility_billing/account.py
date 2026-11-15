@@ -239,10 +239,11 @@ def post_payment(receipt):
 	society = frappe.get_cached_doc("Society", receipt.society)
 	owed = engine.total(before)
 	amount = engine.D(receipt.amount)
-	if amount > max(owed, engine.D(0)) and not cint(society.allow_overpayment):
-		frappe.throw(_("The account owes Rs {0}; this society doesn't accept overpayments.").format(flt(max(owed, 0))))
-	if amount < owed and not cint(society.allow_part_payment):
-		frappe.throw(_("The account owes Rs {0}; this society doesn't accept part payments.").format(flt(owed)))
+	if not receipt.get("shared"):  # a billing account's payment is checked once for all its services (billaccounts.check_payment)
+		if amount > max(owed, engine.D(0)) and not cint(society.allow_overpayment):
+			frappe.throw(_("The account owes Rs {0}; this society doesn't accept overpayments.").format(flt(max(owed, 0))))
+		if amount < owed and not cint(society.allow_part_payment):
+			frappe.throw(_("The account owes Rs {0}; this society doesn't accept part payments.").format(flt(owed)))
 	deltas = engine.payment(before, amount, engine.order_of(society.payment_posting_order))
 	entry = post(receipt.connection, "Payment", deltas, "Payment Receipt", receipt.name, receipt.payment_date,
 	             _("{0} payment").format(_(receipt.mode)))
@@ -349,6 +350,12 @@ def enquiry(reference_no: str):
 	"""Bill enquiry for counters and channels (FS-PAY-05): consumer, latest bill, amounts, balances."""
 	connection = connection_of(reference_no)
 	if not connection:
+		from utility_billing.utility_billing import billaccounts  # noqa: PLC0415
+
+		ba = billaccounts.account_of(reference_no)  # a billing account number: all its services at once (increment 22)
+		if ba:
+			frappe.get_doc("Billing Account", ba).check_permission("read")
+			return billaccounts.enquiry(ba)
 		frappe.throw(_("No account with reference number {0}.").format(reference_no))
 	frappe.get_doc("Connection", connection).check_permission("read")
 	return enquiry_of(connection)

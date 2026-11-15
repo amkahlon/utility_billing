@@ -27,6 +27,8 @@
   "channel_txn_id",
   "account_section",
   "connection",
+  "billing_account",
+  "allocations",
   "consumer_name",
   "society",
   "cb2",
@@ -185,6 +187,22 @@
    "label": "Connection",
    "options": "Connection",
    "read_only": 1
+  },
+  {
+   "fieldname": "billing_account",
+   "fieldtype": "Link",
+   "label": "Billing Account",
+   "options": "Billing Account",
+   "read_only": 1,
+   "description": "Paid by billing account number: the amount is shared over its services, each bill's amount due first."
+  },
+  {
+   "fieldname": "allocations",
+   "fieldtype": "Table",
+   "label": "Shared Over",
+   "options": "Payment Allocation",
+   "read_only": 1,
+   "depends_on": "eval:doc.billing_account"
   },
   {
    "fieldname": "consumer_name",
@@ -366,7 +384,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-16 10:00:00.000000",
+ "modified": "2026-11-16 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Payment Receipt",

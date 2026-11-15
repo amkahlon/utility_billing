@@ -35,6 +35,38 @@ def charge_of(charge_type, rate=0, basis=None):
 	)
 
 
+def is_metered(utility) -> bool:
+	return bool(frappe.utils.cint(frappe.get_cached_value("Utility Type", utility, "is_metered")))
+
+
+def tariff_charges(tariff, plot_class=None) -> list:
+	"""The tariff's own charges; a charge 'By Plot Size' becomes the monthly amount set for the property's plot size class
+	(maintenance or sewerage by plot size; increment 22)."""
+	out = []
+	for c in tariff.charges:
+		basis = frappe.get_cached_value("Charge Type", c.charge_type, "calculation_basis")
+		if basis == engine.BY_PLOT_SIZE:
+			rate = next((r.rate for r in tariff.get("plot_rates") or [] if r.charge_type == c.charge_type
+			             and (r.plot_size_class or "").strip().lower() == (plot_class or "").strip().lower()), None)
+			if rate is None:
+				raise BillProblem(_("Tariff {0} has no {1} amount for plot size {2}.").format(
+					tariff.name, frappe.get_cached_value("Charge Type", c.charge_type, "charge_name"), plot_class or _("(not set on the property)")))
+			out.append(charge_of(c.charge_type, rate=rate, basis=engine.FIXED))
+		else:
+			out.append(charge_of(c.charge_type, rate=c.rate))
+	return out
+
+
+def contract_tariff(connection, month):
+	"""The service agreement in force on the account in `month` that carries a contract tariff, or None (FS-MST-19, FS-CFG-32)."""
+	start, end = readings.month_start(month), frappe.utils.get_last_day(month)
+	rows = frappe.get_all("Service Agreement", filters={"connection": connection, "docstatus": 1, "status": "Active",
+	                                                    "start_date": ["<=", end], "tariff": ["is", "set"]},
+	                      or_filters=[["end_date", "is", "not set"], ["end_date", ">=", start]], fields=["name", "tariff"],
+	                      order_by="start_date desc", limit=1)
+	return rows[0] if rows else None
+
+
 def approved_adjustment(society, utility, month, adjustment_type):
 	name = frappe.db.get_value(
 		"Tariff Adjustment",
@@ -95,7 +127,7 @@ def taxes_for(society, month, category, consumer, extra=None, without=None, util
 	return specs
 
 
-def tariff_segments(run, category, reading, units, fraction, fraction_note):
+def tariff_segments(run, category, reading, units, fraction, fraction_note, plot_class=None):
 	"""One segment per tariff in force during the reading period, when a tariff changed inside it (FS-CFG-05, FS-BIL-02); None when
 	one tariff covers the whole period, the dates are missing or the tariffs leave a gap."""
 	start, end = reading.get("previous_reading_date"), reading.get("reading_date")
@@ -119,13 +151,13 @@ def tariff_segments(run, category, reading, units, fraction, fraction_note):
 		segments.append({
 			"units": share, "fraction": whole * engine.D(days) / engine.D(total),
 			"tariff": {"method": t.pricing_method, "flat_rate": t.flat_rate, "slabs": t.slabs, "minimum_charge": t.minimum_charge},
-			"charges": [charge_of(c.charge_type, rate=c.rate) for c in t.charges], "tariff_name": name,
+			"charges": tariff_charges(t, plot_class), "tariff_name": name,
 			"note": _("{0} of {1} days at {2}").format(days, total, t.tariff_title) + (f"; {fraction_note}" if fraction_note else ""),
 		})
 	return segments
 
 
-def category_segments(run, conn, reading, units, fraction, fraction_note, method):
+def category_segments(run, conn, reading, units, fraction, fraction_note, method, plot_class=None):
 	"""Two parts of one bill when the category changed inside the reading period (increment 22; FS-BIL-02): each part at its category's
 	tariff and charges, the units by the change-day reading when the society says so and one was taken, else by days. None otherwise."""
 	start, end = reading.get("previous_reading_date"), reading.get("reading_date")
@@ -148,7 +180,7 @@ def category_segments(run, conn, reading, units, fraction, fraction_note, method
 		segments.append({
 			"units": share, "fraction": whole * engine.D(days) / engine.D(total) if total else whole,
 			"tariff": {"method": t.pricing_method, "flat_rate": t.flat_rate, "slabs": t.slabs, "minimum_charge": t.minimum_charge},
-			"charges": [charge_of(c.charge_type, rate=c.rate) for c in t.charges], "tariff_name": tariff_name,
+			"charges": tariff_charges(t, plot_class), "tariff_name": tariff_name,
 			"note": _("{0}: {1}").format(frappe.db.get_value("Consumer Category", category, "category_name") or category, how)
 			        + (f"; {fraction_note}" if fraction_note else ""),
 		})
@@ -197,6 +229,9 @@ def build_bill(run, connection, override=None) -> dict:
 	keep_fixed = conn.status == "Disconnected" and society.get("disconnected_fixed_charges") == "Continue"
 	if not reading and keep_fixed:
 		reading = frappe._dict(name=None, status="Valid", units=0, consumption_type=_("Disconnected"), defective=0)
+	metered = is_metered(run.utility)
+	if not metered:  # a service billed without a meter (maintenance, flat water, sewerage; increment 22): no reading, no energy
+		reading = frappe._dict(name=None, status="Valid", units=0, consumption_type=_("Not metered"), defective=0)
 	if not reading:
 		raise BillProblem(_("No meter reading in cycle {0}.").format(run.reading_cycle))
 	if reading.status not in readings.DONE:
@@ -205,19 +240,23 @@ def build_bill(run, connection, override=None) -> dict:
 
 	category = override.get("category") or conn.consumer_category
 	units = flt(override.get("units")) if override.get("units") is not None else reading.units
-	tariff_name = override.get("tariff") or get_applicable_tariff(run.society, run.utility, category, month)
+	agreement = None if override.get("tariff") else contract_tariff(connection, month)  # a service agreement's tariff (FS-CFG-32)
+	tariff_name = override.get("tariff") or (agreement and agreement.tariff) or get_applicable_tariff(run.society, run.utility, category, month)
 	if not tariff_name:
 		raise BillProblem(_("No approved tariff for {0} in {1}.").format(category, month_label(month)))
 	tariff = frappe.get_cached_doc("Tariff", tariff_name)
 
-	if not society.energy_charge_type:
-		raise BillProblem(_("Set the Energy Charge Type on society {0}.").format(society.name))
-	energy = charge_of(society.energy_charge_type, basis=engine.PER_UNIT)
-	charges = [charge_of(c.charge_type, rate=c.rate) for c in tariff.charges]
+	energy = None
+	if metered:
+		if not society.energy_charge_type:
+			raise BillProblem(_("Set the Energy Charge Type on society {0}.").format(society.name))
+		energy = charge_of(society.energy_charge_type, basis=engine.PER_UNIT)
+	plot_class = frappe.db.get_value("Property", conn.property, "plot_size_class")
+	charges = tariff_charges(tariff, plot_class)
 
 	adjustments = []
 	for adj_type, used in (("FPA", society.charges_fpa), ("QTA", society.charges_qta)):
-		if not used or part.get("no_adjustments") or keep_fixed and not reading.name:
+		if not used or not metered or part.get("no_adjustments") or keep_fixed and not reading.name:
 			continue
 		adj = approved_adjustment(run.society, run.utility, month, adj_type)
 		if not adj:
@@ -257,17 +296,17 @@ def build_bill(run, connection, override=None) -> dict:
 	segments = None
 	splitting = society.tariff_split_method in ("By days", holders.BY_READING)
 	if splitting and not override.get("tariff") and not override.get("category") and not part:
-		segments = category_segments(run, conn, reading, units, fraction, fraction_note, society.tariff_split_method)
+		segments = category_segments(run, conn, reading, units, fraction, fraction_note, society.tariff_split_method, plot_class)
 		if segments:
 			tariff = frappe.get_cached_doc("Tariff", segments[-1]["tariff_name"])
 	if splitting and not segments and not override.get("tariff") and not part:
-		segments = tariff_segments(run, category, reading, units, fraction, fraction_note)
+		segments = tariff_segments(run, category, reading, units, fraction, fraction_note, plot_class)
 		if segments:
 			tariff = frappe.get_cached_doc("Tariff", segments[-1]["tariff_name"])  # the bill carries the tariff in force now
 	result = engine.calculate(
 		units,
 		{"method": tariff.pricing_method, "flat_rate": tariff.flat_rate, "slabs": tariff.slabs,
-		 "minimum_charge": 0 if fixed_only else tariff.minimum_charge},
+		 "minimum_charge": 0 if fixed_only or not metered else tariff.minimum_charge},
 		energy, charges=charges, adjustments=adjustments, area=area,
 		arrears=override["arrears"] if override.get("arrears") is not None else arrears_of(connection, month),
 		minimum_bill=0 if fixed_only else society.minimum_bill,
@@ -311,6 +350,8 @@ def build_bill(run, connection, override=None) -> dict:
 
 # ----- bill run -----
 def check_run_prerequisites(run):
+	if not is_metered(run.utility):
+		return None  # a service billed without a meter has no reading cycle (increment 22)
 	cycle = frappe.db.get_value(
 		"Reading Cycle", {"society": run.society, "utility": run.utility, "billing_month": readings.month_start(run.billing_month)},
 		["name", "status"], as_dict=True,
@@ -464,6 +505,9 @@ def post_run(doc):
 			change = frappe.get_all("Connection Change", filters={"parent": bill.connection, "change_type": holders.HOLDER, "old_consumer": bill.consumer},
 			                        fields=["change_date", "owner_liable"], order_by="change_date desc", limit=1)
 			holders.after_final_bill(bill, change[0] if change else frappe._dict(change_date=bill.issue_date, owner_liable=0))
+	from utility_billing.utility_billing import billaccounts  # noqa: PLC0415
+
+	billaccounts.after_run_posted(doc)  # combined bills gather the services' new bills (increment 22)
 
 
 def check_run_cancellable(doc):

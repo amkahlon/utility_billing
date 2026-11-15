@@ -18,7 +18,7 @@ from frappe.utils import flt, getdate, nowdate
 
 from utility_billing.api import v1
 from utility_billing.api.guard import check_society, endpoint
-from utility_billing.utility_billing import account
+from utility_billing.utility_billing import account, billaccounts
 
 CODES = {"ok": "00", "not_found": "01", "blocked": "02", "duplicate": "03", "invalid": "04", "failed": "05"}
 LAYOUT = {"amount_digits": 13, "name_length": 30}
@@ -57,9 +57,16 @@ def _client_is_channel(client):
 
 
 def _connection(client, consumer_number):
-	"""(connection, response code or None)."""
+	"""(connection or billing account number, response code or None)."""
 	connection = account.connection_of((consumer_number or "").strip())
 	if not connection:
+		ba = billaccounts.account_of(consumer_number)  # a billing account number: its services together (increment 22)
+		if ba:
+			try:
+				check_society(client, frappe.db.get_value("Billing Account", ba, "society"))
+			except frappe.PermissionError:
+				return None, CODES["not_found"]
+			return ba, None
 		return None, CODES["not_found"]
 	try:
 		check_society(client, frappe.db.get_value("Connection", connection, "society"))
@@ -71,7 +78,8 @@ def _connection(client, consumer_number):
 
 
 def _last_payment_since(connection, since):
-	return frappe.db.get_value("Payment Receipt", {"connection": connection, "docstatus": 1, "payment_date": [">=", since]},
+	key = "billing_account" if billaccounts.account_of(connection) else "connection"
+	return frappe.db.get_value("Payment Receipt", {key: connection, "docstatus": 1, "payment_date": [">=", since]},
 	                           ["payment_date", "amount", "channel_txn_id", "name"], order_by="payment_date desc, creation desc", as_dict=True)
 
 
@@ -81,7 +89,7 @@ def inquiry_reply(client, consumer_number):
 	         "amount_after_dueDate": amount_out(0), "billing_month": "", "date_paid": "", "amount_paid": "", "tran_auth_Id": "", "reserved": ""}
 	if not connection:
 		return reply
-	e = account.enquiry_of(connection)
+	e = v1.enquiry_for(connection)
 	reply["consumer_Detail"] = (e["consumer_name"] or "").upper()[: LAYOUT["name_length"]]
 	if code:
 		reply["bill_status"] = "B"
@@ -92,7 +100,7 @@ def inquiry_reply(client, consumer_number):
 	reply.update({"due_date": date_out(e["due_date"]), "amount_within_dueDate": amount_out(due),
 	              "amount_after_dueDate": amount_out(due + surcharge if before_due and due > 0 else due)})
 	if e["bill"]:
-		month, issue = frappe.db.get_value("Utility Bill", e["bill"], ["billing_month", "issue_date"])
+		month, issue = frappe.db.get_value("Combined Bill" if e.get("billing_account") else "Utility Bill", e["bill"], ["billing_month", "issue_date"])
 		reply["billing_month"] = getdate(month).strftime("%y%m")
 		paid = _last_payment_since(connection, issue)
 		if paid and due <= 0:
@@ -157,7 +165,8 @@ def bill_reversal(client, consumer_number, tran_auth_id, reserved=None):
 	connection, code = _connection(client, consumer_number)
 	if not connection:
 		return dict(reply, response_Code=code)
-	receipt = frappe.db.get_value("Payment Receipt", {"channel_txn_id": (tran_auth_id or "").strip(), "connection": connection}, ["name", "docstatus"], as_dict=True)
+	key = "billing_account" if billaccounts.account_of(connection) else "connection"
+	receipt = frappe.db.get_value("Payment Receipt", {"channel_txn_id": (tran_auth_id or "").strip(), key: connection}, ["name", "docstatus"], as_dict=True)
 	if not receipt:
 		return dict(reply, response_Code=CODES["not_found"])
 	if receipt.docstatus == 2:

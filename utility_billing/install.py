@@ -4,10 +4,11 @@
 import frappe
 
 # name, unit of measure, reference code (first digit of consumer reference numbers)
-UTILITIES = [
-	("Electricity", "kWh", 1),
-	("Water", "m³", 2),
-	("Gas", "m³", 3),
+UTILITIES = [  # name, unit, reference code, metered
+	("Electricity", "kWh", 1, 1),
+	("Water", "m³", 2, 1),
+	("Gas", "m³", 3, 1),
+	("Maintenance", "month", 4, 0),  # billed without a meter: fixed, per area or by plot size (increment 22)
 ]
 
 
@@ -171,6 +172,7 @@ def create_default_flags():
 
 def after_migrate():
 	"""Defaults added by later increments reach sites that were installed before them."""
+	create_default_utilities()  # Maintenance, billed without a meter (increment 22)
 	create_default_flags()
 	create_default_reason_codes()
 	from utility_billing.utility_billing import servicereq  # noqa: PLC0415
@@ -204,14 +206,14 @@ def create_default_exception_codes():
 
 
 def create_default_utilities():
-	for name, uom, code in UTILITIES:
+	for name, uom, code, metered in UTILITIES:
 		if not frappe.db.exists("Utility Type", name):
 			frappe.get_doc(
 				{
 					"doctype": "Utility Type",
 					"utility_name": name,
 					"unit_of_measure": uom,
-					"is_metered": 1,
+					"is_metered": metered,
 					"reference_code": code,
 				}
 			).insert(ignore_permissions=True)

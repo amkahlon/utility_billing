@@ -1985,6 +1985,49 @@ def t_completeness_settings(d: Desk):
 	d.save_doc(dict(d.get("Society", soc), disconnected_fixed_charges="Stop from the disconnection date"))
 
 
+@case("QA-83", "FS-BIL-06, FS-MST-20/21, FS-CFG-03: maintenance by plot size without a meter; a billing account's combined bill paid with its number")
+def t_flexibility(d: Desk):
+	soc = S["society"]
+	p = d.save_doc({"doctype": "Property", "society": soc, "property_no": f"M {RUN}", "sector": "M", "property_type": "House", "status": "Occupied",
+	                "area": "10", "area_unit": "Marla", "plot_size_class": "10 Marla",
+	                "occupants": [{"consumer": S["owner"], "occupant_role": "Owner", "from_date": "2020-01-01", "share_percent": "100",
+	                               "is_billed": 1, "liable_for_arrears": 1}]})
+	ct = d.save_doc({"doctype": "Charge Type", "charge_name": f"Maintenance {RUN}", "charge_group": "Society", "calculation_basis": "By Plot Size",
+	                 "bill_order": "30"})["name"]
+	cat = d.save_doc({"doctype": "Consumer Category", "category_name": f"Maintenance {RUN}", "utility": "Maintenance"})["name"]
+	t = USERS["bm"].save_doc({"doctype": "Tariff", "naming_series": "TRF-.YYYY.-.####", "society": soc, "utility": "Maintenance", "consumer_category": cat,
+	                          "effective_from": "2026-01-01", "pricing_method": "Flat rate", "flat_rate": "0", "minimum_charge": "0",
+	                          "charges": [{"charge_type": ct}],
+	                          "plot_rates": [{"charge_type": ct, "plot_size_class": "10 Marla", "rate": "2500"}]})
+	t = USERS["gm"].workflow(USERS["bm"].workflow(t, "Submit for Approval"), "Approve")
+	eq(t["docstatus"], 1, "maintenance tariff approved without a rate per unit")
+	maint = d.save_doc({"doctype": "Connection", "society": soc, "property": p["name"], "consumer": S["owner"], "utility": "Maintenance",
+	                    "consumer_category": cat, "status": "Active"})["name"]
+	ba = d.save_doc({"doctype": "Billing Account", "society": soc, "consumer": S["owner"], "bill_mode": "One combined bill",
+	                 "connections": [{"connection": maint}]})
+	eq((ba["name"][0], len(ba["name"])), ("9", 10), "billing account number")
+	expect_error(lambda: d.save_doc({"doctype": "Billing Account", "society": soc, "consumer": S["owner"], "connections": [{"connection": maint}]}),
+	             "billing account")
+	run = USERS["bo"].save_doc({"doctype": "Bill Run", "naming_series": "BRUN-.YYYY.-.####", "society": soc, "utility": "Maintenance",
+	                            "billing_month": "2026-12-01", "issue_date": "2027-01-01"})
+	USERS["bo"].call(f"{BIL}.calculate_run", run=run["name"])
+	run = USERS["bo"].get("Bill Run", run["name"])
+	eq((run["calculation_status"], run["bill_count"]), ("Calculated", 1), "one maintenance bill, no reading needed")
+	USERS["bm"].workflow(USERS["bo"].workflow(run, "Submit for Approval"), "Approve")
+	cbs = d.s.get(f"{URL}/api/resource/Combined Bill", params={"filters": json.dumps([["billing_account", "=", ba["name"]]]),
+	                                                           "fields": json.dumps(["name", "payable_within_due"])}).json()["data"]
+	eq([float(c["payable_within_due"]) for c in cbs], [2500.0], "combined bill made when the run was posted")
+	_reader, text = get_pdf_at(USERS["bm"], "utility_billing.utility_billing.billaccounts.download_combined", name=cbs[0]["name"])
+	for part in ("Combined Bill", ba["name"], "Maintenance Bill", "2,500"):
+		if part not in text:
+			raise AssertionError(f"{part!r} missing from the combined bill PDF")
+	r = d.save_doc({"doctype": "Payment Receipt", "payment_channel": "Bank / Channel", "reference_no": ba["name"], "amount": "2500",
+	                "mode": "Bank Transfer", "channel_txn_id": f"QA83-{RUN}"})
+	r = d.save_doc(r, action="Submit")
+	eq((r["billing_account"], [(a["connection"], float(a["amount"])) for a in r["allocations"]]), (ba["name"], [(maint, 2500.0)]), "shared payment")
+	eq(d.call(f"{ACC}.enquiry", reference_no=maint)["amount_due"], 0.0, "maintenance paid")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 
