@@ -126,6 +126,8 @@ scheduler_events = {
 		"utility_billing.utility_billing.plans.daily",
 		# Reminders and escalation of waiting approvals; delegations start and end (FS-ACC-07)
 		"utility_billing.utility_billing.access.daily",
+		# On the 1st: revenue assurance checks for last month (FS-RA)
+		"utility_billing.utility_billing.revenue_assurance.monthly",
 	],
 }
 

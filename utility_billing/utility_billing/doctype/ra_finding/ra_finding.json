@@ -1,0 +1,286 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 18:30:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "finding_title",
+  "society",
+  "check_type",
+  "billing_month",
+  "cb1",
+  "status",
+  "score",
+  "amount_at_risk",
+  "subject_section",
+  "subject_type",
+  "subject",
+  "connection",
+  "cb2",
+  "finding_key",
+  "details",
+  "evidence",
+  "work_section",
+  "assigned_to",
+  "notes",
+  "cb3",
+  "result",
+  "result_doctype",
+  "result_document",
+  "amount_recovered",
+  "closed_by",
+  "closed_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "finding_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "check_type",
+   "fieldtype": "Select",
+   "label": "Check",
+   "options": "RA-01 Consumption drop\nRA-02 Not billed\nRA-03 Meter records\nRA-04 Tariff or load mismatch\nRA-05 Repeated estimates\nRA-06 Wrong multiplier\nRA-07 Network imbalance\nRA-08 Unusual reversals or adjustments\nRA-10 Consumption outlier",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "billing_month",
+   "fieldtype": "Date",
+   "label": "Month",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nAssigned\nInvestigating\nClosed",
+   "default": "Open",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "score",
+   "fieldtype": "Int",
+   "label": "Score",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "0 to 100: how strongly the data points to lost revenue."
+  },
+  {
+   "fieldname": "amount_at_risk",
+   "fieldtype": "Currency",
+   "label": "Estimated Revenue at Risk",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "subject_section",
+   "fieldtype": "Section Break",
+   "label": "What was found"
+  },
+  {
+   "fieldname": "subject_type",
+   "fieldtype": "Link",
+   "label": "Subject Type",
+   "options": "DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Dynamic Link",
+   "label": "Subject",
+   "options": "subject_type",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Connection",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "finding_key",
+   "fieldtype": "Data",
+   "label": "Key",
+   "read_only": 1,
+   "unique": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "details",
+   "fieldtype": "Small Text",
+   "label": "Details",
+   "read_only": 1
+  },
+  {
+   "fieldname": "evidence",
+   "fieldtype": "JSON",
+   "label": "Figures",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "work_section",
+   "fieldtype": "Section Break",
+   "label": "Investigation (FS-RA-09)"
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "label": "Assigned To",
+   "options": "User",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Text",
+   "label": "Investigation Notes"
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "result",
+   "fieldtype": "Select",
+   "label": "Result",
+   "options": "\nDetection bill\nBill revision\nCorrection\nMaster data fixed\nNo issue\nOther",
+   "depends_on": "eval:doc.status=='Closed'",
+   "mandatory_depends_on": "eval:doc.status=='Closed'"
+  },
+  {
+   "fieldname": "result_doctype",
+   "fieldtype": "Link",
+   "label": "Settled By (Type)",
+   "options": "DocType",
+   "depends_on": "eval:doc.status=='Closed'"
+  },
+  {
+   "fieldname": "result_document",
+   "fieldtype": "Dynamic Link",
+   "label": "Settled By",
+   "options": "result_doctype",
+   "depends_on": "eval:doc.status=='Closed'"
+  },
+  {
+   "fieldname": "amount_recovered",
+   "fieldtype": "Currency",
+   "label": "Amount Recovered",
+   "depends_on": "eval:doc.status=='Closed'"
+  },
+  {
+   "fieldname": "closed_by",
+   "fieldtype": "Link",
+   "label": "Closed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Datetime",
+   "label": "Closed On",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 18:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "RA Finding",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "autoname": "format:RAF-{#####}",
+ "title_field": "finding_title",
+ "search_fields": "check_type,subject,connection",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recovery Officer",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Officer"
+  }
+ ]
+}

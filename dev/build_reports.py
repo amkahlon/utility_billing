@@ -119,6 +119,7 @@ GROUPS = [
 	               ("DocType", "Installment Plan"), ("DocType", "Write Off")]),
 	("Recovery", [("Page", "ub-recovery", "Defaulters and Recovery"), ("DocType", "Recovery Case"), ("DocType", "Recovery Run"),
 	              ("DocType", "Recovery Notice"), ("DocType", "Recovery Target")]),
+	("Revenue Assurance", [("DocType", "RA Finding", "Findings")]),
 	("Period Control", [("DocType", "Billing Period"), ("DocType", "Year End Close"), ("DocType", "Run Snapshot")]),
 	("Accounting", [("DocType", "GL Journal"), ("DocType", "Receivables Reconciliation"), ("DocType", "Ledger Account"),
 	                ("DocType", "Journal Export Layout"), ("DocType", "Revenue Target")]),

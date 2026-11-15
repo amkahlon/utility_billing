@@ -9,7 +9,7 @@ from frappe import _
 from frappe.utils import add_months, cint, flt, getdate, nowdate
 
 from utility_billing.utility_billing.mis import (
-	BILLING, BLOCK, FINANCE, RECOVERY, col, month_start, pct, report, society_of, sql, total_row,
+	BILLING, BLOCK, EXEC, FINANCE, RECOVERY, col, month_start, pct, report, society_of, sql, total_row,
 )
 
 PERIOD = [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
@@ -302,3 +302,48 @@ def _forecast(s, month):
 		data.append({"month": getdate(m).strftime("%b %Y"), "forecast": round(fc, 2), "basis": how})
 	return {"columns": [col("Month", "month", width=110), col("Forecast Billing", "forecast", "Currency", 150), col("How", "basis", width=320)],
 	        "data": data if any(d["forecast"] for d in data) else [], "message": _("A simple forecast of billing from the society's own history.")}
+
+
+
+# ---------------------------------------------------------------- revenue assurance (FS-RA-09; increment 21)
+@report("revenue_assurance", "Revenue Assurance Findings", EXEC + ["Recovery Officer"],
+        [PERIOD[0], dict(fieldname="from_month", label="From Month", fieldtype="Date"), dict(fieldname="to_month", label="To Month", fieldtype="Date"),
+         dict(fieldname="view", label="Show", fieldtype="Select", options="By Check\nBy Officer\nOpen Findings", default="By Check")],
+        "Revenue assurance findings: how many each check raised, how many are open or closed, the revenue at risk and what was recovered; or the open findings to work.",
+        ref_doctype="RA Finding")
+def revenue_assurance(f):
+	s = society_of(f)
+	cond, values = ["society = %(s)s"], {"s": s}
+	if f.get("from_month"):
+		cond.append("(billing_month is null or billing_month >= %(fm)s)")
+		values["fm"] = month_start(f.from_month)
+	if f.get("to_month"):
+		cond.append("(billing_month is null or billing_month <= %(tm)s)")
+		values["tm"] = month_start(f.to_month)
+	where = " and ".join(cond)
+	view = f.get("view") or "By Check"
+	if view == "Open Findings":
+		data = sql(f"""select name, check_type, billing_month, subject, connection, score, amount_at_risk, status, assigned_to, details
+		               from `tabRA Finding` where {where} and status != 'Closed' order by score desc, amount_at_risk desc""", values)
+		return {"columns": [col("Finding", "name", "Link", 100, "RA Finding"), col("Check", "check_type", width=200), col("Month", "billing_month", "Date", 95),
+		                    col("Subject", "subject", width=130), col("Account", "connection", "Link", 110, "Connection"), col("Score", "score", "Int", 65),
+		                    col("At Risk", "amount_at_risk", "Currency", 100), col("Status", "status", width=95), col("Assigned To", "assigned_to", width=150),
+		                    col("Details", "details", width=380)], "data": data}
+	key = "check_type" if view == "By Check" else "ifnull(assigned_to, 'Not assigned')"
+	data = sql(f"""select {key} item, count(*) findings, sum(status != 'Closed') open, sum(status = 'Closed') closed,
+	                      sum(status = 'Closed' and result = 'No issue') no_issue, sum(case when status != 'Closed' then amount_at_risk else 0 end) at_risk,
+	                      sum(amount_recovered) recovered
+	               from `tabRA Finding` where {where} group by {key} order by {key}""", values)
+	for d in data:
+		for k in ("findings", "open", "closed", "no_issue"):
+			d[k] = cint(d[k])
+		d["hit_rate"] = pct(d["closed"] - d["no_issue"], d["closed"]) if d["closed"] else None
+	if data:
+		data.append(total_row("item", _("Total"), data, ("findings", "open", "closed", "no_issue", "at_risk", "recovered")))
+	summary = [{"value": sum(cint(d["open"]) for d in data[:-1]), "label": _("Open findings"), "datatype": "Int", "indicator": "Orange"},
+	           {"value": sum(flt(d["at_risk"]) for d in data[:-1]), "label": _("Revenue at risk (open)"), "datatype": "Currency", "indicator": "Red"},
+	           {"value": sum(flt(d["recovered"]) for d in data[:-1]), "label": _("Recovered"), "datatype": "Currency", "indicator": "Green"}] if data else []
+	return {"columns": [col("Check" if view == "By Check" else "Officer", "item", width=240), col("Findings", "findings", "Int", 85),
+	                    col("Open", "open", "Int", 70), col("Closed", "closed", "Int", 70), col("No Issue", "no_issue", "Int", 80),
+	                    col("Confirmed %", "hit_rate", "Percent", 100), col("At Risk (open)", "at_risk", "Currency", 120),
+	                    col("Recovered", "recovered", "Currency", 120)], "data": data, "summary": summary}

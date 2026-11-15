@@ -1500,8 +1500,9 @@ def t_taxes_and_previews(d: Desk):
 	P = "utility_billing.utility_billing.preview."
 	bm, ao, cashier = USERS["bm"], USERS["ao"], USERS["cashier"]
 	tax = {"doctype": "Tax", "society": S["society"], "tax_name": "Society Duty", "tax_code": f"SD{RUN}", "rate": "10", "applies_to": "Charge groups",
-	       "charge_rows": [{"charge_group": "Society"}], "enabled": "1", "calculation_order": "10"}
+	       "charge_rows": [{"charge_group": "Society"}], "enabled": "1", "calculation_order": "10", "utilities": [{"utility": "Electricity"}]}
 	expect_error(lambda: bm.save_doc(dict(tax, rate="101", tax_code=f"BAD{RUN}")), "between 0 and 100")
+	expect_error(lambda: bm.save_doc(dict(tax, utilities=[], tax_code=f"NU{RUN}")), "utilities")  # each tax names the utilities it is charged on
 	expect_error(lambda: cashier.save_doc(dict(tax)))
 	saved = bm.save_doc(dict(tax, enabled="0"))  # saved switched off: the preview shows what it would add
 	eq((saved["tax_title"], float(saved["rate"])), ("Society Duty 10%", 10.0), "tax saved from the form")
@@ -1811,6 +1812,32 @@ def t_reports_more(d: Desk):
 	budget = rows_of(run_report(ao, "Revenue against Target", society=soc, year="2026"))
 	eq(any(float(r.get("budget_billed") or 0) == 25000 for r in budget), True, "target month shown")
 	expect_error(lambda: run_report(USERS["reader"], "Channel Fees and Commissions", **wide))
+
+
+# ---------------------------------------------------------------- increment 21
+@case("QA-77", "FS-RA-03/09: revenue assurance checks run by a manager; a finding is investigated and closed from the form; findings report")
+def t_revenue_assurance(d: Desk):
+	RA = "utility_billing.utility_billing.revenue_assurance.run_now"
+	bm, rec, soc = USERS["bm"], USERS["rec"], S["society"]
+	expect_error(lambda: USERS["cashier"].call(RA, society=soc, month="2026-11-01"), "Only a Billing Manager")
+	loose = d.save_doc({"doctype": "Meter", "serial_no": f"QA{RUN}-DUP", "society": soc, "utility": "Electricity"})
+	d.save_doc({"doctype": "Meter", "serial_no": f"qa{RUN} dup", "society": soc, "utility": "Electricity"})  # the same meter typed again
+	out = bm.call(RA, society=soc, month="2026-11-01")
+	eq(out["month"], "2026-11-01", "checks ran for November")
+	found = d.s.get(f"{URL}/api/resource/RA Finding", params={"filters": json.dumps({"society": soc, "subject": loose["name"]}),
+	                                                          "fields": json.dumps(["name", "check_type", "status"])}).json()["data"]
+	eq([(f["check_type"], f["status"]) for f in found], [("RA-03 Meter records", "Open")], "the same meter entered twice is a finding")
+	f = rec.get("RA Finding", found[0]["name"])
+	expect_error(lambda: rec.save_doc(dict(f, status="Closed")), "result")
+	closed = rec.save_doc(dict(f, status="Closed", result="Master data fixed", notes="Meter was returned to the store; record corrected"))
+	eq((closed["status"], closed["closed_by"]), ("Closed", EMAIL["rec"]), "closed by the recovery officer")
+	again = bm.call(RA, society=soc, month="2026-11-01")
+	eq(rec.get("RA Finding", f["name"])["status"], "Closed", "running again doesn't reopen it")
+	rows = rows_of(run_report(bm, "Revenue Assurance Findings", society=soc))
+	meter_row = next((r for r in rows if r.get("item") == "RA-03 Meter records"), None)
+	if not meter_row or int(meter_row["closed"]) < 1:
+		raise AssertionError(f"findings report: {rows} (second run {again})")
+	expect_error(lambda: run_report(USERS["cashier"], "Revenue Assurance Findings", society=soc))
 
 
 def _notice_pdf(desk, run):

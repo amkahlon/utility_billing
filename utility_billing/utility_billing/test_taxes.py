@@ -5,8 +5,8 @@ FS-REC-17). House N 2308 (spec test case 1): the October bill is energy 264 x 70
 
 import frappe
 
-from utility_billing.install import create_default_reason_codes
-from utility_billing.utility_billing import account, gl, mis, preview
+from utility_billing.install import create_default_reason_codes, create_default_utilities
+from utility_billing.utility_billing import account, billing, gl, mis, preview
 from utility_billing.utility_billing.test_billing import SOC, BillingCase, ensure
 from utility_billing.utility_billing.testing import GENERAL_MANAGER, act
 
@@ -24,7 +24,7 @@ class IntegrationTestTaxes(BillingCase):
 	# ---- helpers
 	def tax(self, **kw):
 		values = {"doctype": "Tax", "society": SOC, "tax_name": "Society Duty", "tax_code": "SOC", "rate": 10, "applies_to": "Charge groups",
-		          "charge_rows": [{"charge_group": "Society"}], "account_code": None, "enabled": 1, **kw}
+		          "charge_rows": [{"charge_group": "Society"}], "account_code": None, "enabled": 1, "utilities": [{"utility": "Electricity"}], **kw}
 		return frappe.get_doc(values).insert()
 
 	def october(self):
@@ -49,7 +49,8 @@ class IntegrationTestTaxes(BillingCase):
 	# ---- the tax document
 	def test_the_tax_document_is_checked(self):
 		for bad in ({"rate": 101}, {"rate": -1}, {"effective_from": "2026-12-01", "effective_to": "2026-11-01"}, {"charge_rows": []},
-		            {"status_rates": [{"tax_status": "Filer", "rate": 5}, {"tax_status": "Filer", "rate": 6}]}):
+		            {"status_rates": [{"tax_status": "Filer", "rate": 5}, {"tax_status": "Filer", "rate": 6}]},
+		            {"utilities": []}, {"utilities": [{"utility": "Electricity"}, {"utility": "Electricity"}]}):
 			with self.assertRaises(frappe.ValidationError, msg=str(bad)):
 				self.tax(tax_code="BAD", **bad)
 		self.tax()
@@ -80,6 +81,19 @@ class IntegrationTestTaxes(BillingCase):
 
 		html = bill_print.bill_html(bill.name)
 		self.assertIn("Society Duty", html)
+
+	def test_a_tax_is_charged_only_on_the_utilities_chosen_for_it(self):
+		"""User, 2026-11-15: a society may charge a tax on electricity bills but not on water, gas or other charges."""
+		create_default_utilities()
+		self.tax(utilities=[{"utility": "Water"}])
+		self.assertEqual(self.october_bill().tax_amount, 0)  # a water tax isn't on an electricity bill
+		t = frappe.get_doc("Tax", {"tax_code": "SOC"})
+		t.append("utilities", {"utility": "Electricity"})
+		t.save()
+		self.assertEqual(billing.tax_spec(t, "2026-10-01", self.cat, {}, "Water").code, t.name)
+		self.assertIsNone(billing.tax_spec(t, "2026-10-01", self.cat, {}, "Gas"))
+		names = [s.code for s in billing.taxes_for(SOC, "2026-10-01", self.cat, {})]  # utility taken from the category: Electricity
+		self.assertEqual(names, [t.name])
 
 	def test_an_included_tax_leaves_the_total_and_is_recorded(self):
 		self.tax(tax_name="VAT", tax_code="VAT", rate=17, inclusive=1, applies_to="All charges", charge_rows=[])

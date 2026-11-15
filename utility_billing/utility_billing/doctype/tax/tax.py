@@ -1,5 +1,6 @@
 # Copyright (c) 2026, SoftVerx. All rights reserved. See license.txt.
-"""Tax: a tax or duty a society charges on its bills (FS-CFG-14): rate, the charges it applies to, included or added, calculation
+"""Tax: a tax or duty a society charges on its bills (FS-CFG-14): the utilities whose bills carry it (user, 2026-11-15: for example
+on electricity but not on water or gas), rate, the charges it applies to, included or added, calculation
 order and tax on tax, categories and exemptions, rates by tax status, rounding, account and effective dates. Several can be in
 force at once; none is the default. Use *Impact Preview* before switching one on: it shows what it would have added to last
 cycle's bills."""
@@ -25,6 +26,11 @@ class Tax(Document):
 			frappe.throw(_("{0} already uses the code {1}.").format(other, self.tax_code))
 		if self.effective_from and self.effective_to and getdate(self.effective_to) < getdate(self.effective_from):
 			frappe.throw(_("Effective To is before Effective From."))
+		utilities = [r.utility for r in self.utilities if r.utility]
+		if not utilities:
+			frappe.throw(_("Choose the utilities whose bills carry this tax (for example Electricity)."))
+		if len(set(utilities)) != len(utilities):
+			frappe.throw(_("Utilities: each utility can be listed once."))
 		if self.applies_to == "Charge groups" and not any(r.charge_group for r in self.charge_rows):
 			frappe.throw(_("List the charge groups this tax applies to."))
 		if self.applies_to == "Charge types" and not any(r.charge_type for r in self.charge_rows):

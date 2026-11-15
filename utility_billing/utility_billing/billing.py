@@ -51,10 +51,12 @@ def arrears_of(connection, month):
 	return account.arrears_for_new_bill(connection)
 
 
-def tax_spec(t, month, category, consumer):
-	"""The TaxSpec of a Tax document for a bill, or None when it doesn't apply (not yet or no longer in force, other category,
-	exempt category). Whether the tax is switched on is the caller's business."""
+def tax_spec(t, month, category, consumer, utility=None):
+	"""The TaxSpec of a Tax document for a bill, or None when it doesn't apply (another utility's tax, not yet or no longer in force,
+	other category, exempt category). Whether the tax is switched on is the caller's business."""
 	month = readings.month_start(month)
+	if utility and utility not in {r.utility for r in t.get("utilities") or []}:
+		return None
 	if (t.effective_from and getdate(t.effective_from) > getdate(month)) or (t.effective_to and getdate(t.effective_to) < getdate(month)):
 		return None
 	if t.categories and category not in {c.consumer_category for c in t.categories}:
@@ -72,20 +74,22 @@ def tax_spec(t, month, category, consumer):
 		order=frappe.utils.cint(t.calculation_order), on_taxes=tuple(r.tax for r in t.on_taxes), rounding=t.rounding_rule or engine.NEAREST)
 
 
-def taxes_for(society, month, category, consumer, extra=None, without=None) -> list:
-	"""The taxes in force for a bill: enabled, effective in the billing month, for this category and consumer (FS-CFG-14).
+def taxes_for(society, month, category, consumer, extra=None, without=None, utility=None) -> list:
+	"""The taxes in force for a bill: enabled, chosen for the bill's utility, effective in the billing month, for this category and
+	consumer (FS-CFG-14). The utility defaults to the category's.
 	`extra` adds a tax document that isn't switched on yet and `without` leaves one out (the impact preview uses both)."""
 	if consumer and frappe.utils.cint(consumer.get("tax_exempt")):
 		return []
+	utility = utility or (category and frappe.db.get_value("Consumer Category", category, "utility"))
 	specs = []
 	for name in frappe.get_all("Tax", filters={"society": society, "enabled": 1}, pluck="name", order_by="calculation_order, name"):
 		if name == without:
 			continue
-		spec = tax_spec(frappe.get_cached_doc("Tax", name), month, category, consumer)
+		spec = tax_spec(frappe.get_cached_doc("Tax", name), month, category, consumer, utility)
 		if spec:
 			specs.append(spec)
 	if extra:
-		spec = tax_spec(extra, month, category, consumer)
+		spec = tax_spec(extra, month, category, consumer, utility)
 		if spec:
 			specs.append(spec)
 	return specs
@@ -200,7 +204,7 @@ def build_bill(run, connection, override=None) -> dict:
 		surcharge={"basis": society.surcharge_basis, "rate": society.surcharge_rate,
 		           "fixed_amount": society.surcharge_fixed_amount, "cap": society.surcharge_cap},
 		bill_rounding=society.rounding_rule or engine.NEAREST,
-		taxes=taxes_for(run.society, month, category, consumer), fraction=fraction, fraction_note=fraction_note,
+		taxes=taxes_for(run.society, month, category, consumer, utility=run.utility), fraction=fraction, fraction_note=fraction_note,
 		installment=engine.D(installment) if installment else None, segments=segments,
 	)
 	bill = {

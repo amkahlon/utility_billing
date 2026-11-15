@@ -137,7 +137,16 @@
   "disconnection_notice_days",
   "reconnection_fee_type",
   "channel_fees_section",
-  "channel_fees"
+  "channel_fees",
+  "ra_section",
+  "ra_drop_own_percent",
+  "ra_drop_peer_percent",
+  "ra_history_months",
+  "ra_max_estimates",
+  "cb_ra",
+  "ra_residential_max_kw",
+  "ra_adjustment_limit",
+  "ra_outlier_z"
  ],
  "fields": [
   {
@@ -900,13 +909,69 @@
    "fieldtype": "Table",
    "label": "Fees",
    "options": "Channel Fee"
+  },
+  {
+   "fieldname": "ra_section",
+   "fieldtype": "Section Break",
+   "label": "Revenue assurance",
+   "collapsible": 1,
+   "description": "Thresholds for the monthly revenue assurance checks (FS-RA). Each finding becomes a case to investigate."
+  },
+  {
+   "fieldname": "ra_drop_own_percent",
+   "fieldtype": "Percent",
+   "label": "Drop: Below % of Own Average",
+   "default": "50",
+   "description": "Flag a bill whose units are below this share of the account's average over the history months."
+  },
+  {
+   "fieldname": "ra_drop_peer_percent",
+   "fieldtype": "Percent",
+   "label": "Drop: Below % of Similar Accounts",
+   "default": "50",
+   "description": "\u2026and below this share of the median of similar accounts (same category and plot size)."
+  },
+  {
+   "fieldname": "ra_history_months",
+   "fieldtype": "Int",
+   "label": "History Months",
+   "default": "6"
+  },
+  {
+   "fieldname": "ra_max_estimates",
+   "fieldtype": "Int",
+   "label": "Estimated Bills Allowed in a Row",
+   "default": "2"
+  },
+  {
+   "fieldname": "cb_ra",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ra_residential_max_kw",
+   "fieldtype": "Float",
+   "label": "Residential Load Limit (kW)",
+   "default": "7",
+   "description": "A residential account whose sanctioned load or maximum demand (MDI) is above this is flagged."
+  },
+  {
+   "fieldname": "ra_adjustment_limit",
+   "fieldtype": "Currency",
+   "label": "Adjustments by One User in a Month Above",
+   "description": "Flag a user whose reversals and adjustments in a month add up to more than this (0 = only the statistical check)."
+  },
+  {
+   "fieldname": "ra_outlier_z",
+   "fieldtype": "Float",
+   "label": "Outlier Threshold (standard deviations)",
+   "default": "3"
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 15:00:00.000000",
+ "modified": "2026-11-15 18:30:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",
