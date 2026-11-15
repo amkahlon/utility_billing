@@ -33,6 +33,7 @@
   "new_meter",
   "new_meter_reading",
   "old_meter_reading",
+  "old_meter_unreadable",
   "cb4",
   "seal_no",
   "meter_reason",
@@ -262,6 +263,13 @@
    "description": "For a disconnection, the reading when the supply was cut; for a reconnection, the reading when it was restored."
   },
   {
+   "fieldname": "old_meter_unreadable",
+   "fieldtype": "Check",
+   "label": "Old Meter Can't Be Read",
+   "depends_on": "eval:doc.kind=='Meter change'",
+   "description": "Tick when the removed meter shows no usable reading: the months billed on averages stand."
+  },
+  {
    "fieldname": "cb4",
    "fieldtype": "Column Break"
   },
@@ -484,7 +492,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 10:00:00.000000",
+ "modified": "2026-11-16 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Service Request",

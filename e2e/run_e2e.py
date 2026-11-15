@@ -1968,6 +1968,23 @@ def t_client_setup(d: Desk):
 	expect_error(lambda: USERS["cashier"].call(f"{OB}.open_for", society=soc))
 
 
+# ---------------------------------------------------------------- increment 22
+@case("QA-82", "FS-WF-08, FS-BIL-02, SC-13: defective-meter, disconnection and split settings saved from the Society form; their reports")
+def t_completeness_settings(d: Desk):
+	soc = S["society"]
+	s = d.get("Society", soc)
+	saved = d.save_doc(dict(s, defective_billing_method="Load × load factor × hours", defective_average_months="3", defective_max_months="2",
+	                        defective_load_factor="35", defective_hours="720", disconnected_fixed_charges="Continue",
+	                        tariff_split_method="By the change-day reading, else by days"))
+	eq((saved["defective_billing_method"], int(saved["defective_max_months"]), saved["disconnected_fixed_charges"], saved["tariff_split_method"]),
+	   ("Load × load factor × hours", 2, "Continue", "By the change-day reading, else by days"), "settings saved")
+	eq(USERS["bm"].get("Reading Exception Code", "Defective")["billing_treatment"], "Defective meter", "Defective is billed by the defective-meter rules")
+	run_report(USERS["bm"], "Defective Meters", society=soc)
+	run_report(USERS["rec"], "Former Occupant Balances", society=soc, status="Open")
+	expect_error(lambda: run_report(USERS["cashier"], "Defective Meters", society=soc))
+	d.save_doc(dict(d.get("Society", soc), disconnected_fixed_charges="Stop from the disconnection date"))
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

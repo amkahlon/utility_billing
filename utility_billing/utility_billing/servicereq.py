@@ -18,7 +18,7 @@ from frappe import _
 from frappe.model.naming import getseries
 from frappe.utils import add_days, cint, flt, getdate, now_datetime, nowdate
 
-from utility_billing.utility_billing import account
+from utility_billing.utility_billing import account, holders
 from utility_billing.utility_billing.doctype.security_deposit.security_deposit import held
 
 NEW, TEMP, METER, DISC, RECON, CLOSE, CAT, LOAD, OWNER, T_IN, T_OUT, NODUES, CONTACT, TEST, DEPOSIT, DETECT = (
@@ -287,11 +287,15 @@ def complete(sr):
 		old = [r for r in conn.meters if not r.removed_on]
 		for r in old:
 			r.removed_on, r.end_reading, r.removal_reason = day, flt(sr.old_meter_reading), sr.meter_reason or _("Meter change {0}").format(sr.name)
+			r.unreadable = cint(sr.get("old_meter_unreadable"))  # FS-WF-08: no true-up of averaged months from an unreadable meter
 		conn.append("meters", {"meter": sr.new_meter, "installed_on": day, "start_reading": flt(sr.new_meter_reading)})
 		conn.save(ignore_permissions=True)
 		if sr.seal_no:
 			frappe.db.set_value("Meter", sr.new_meter, "seal_no", sr.seal_no)
 		note = _("Meter {0} replaced by {1} on {2}; the month's units are split between them.").format(old[0].meter if old else "-", sr.new_meter, day)
+		if old and frappe.db.get_value("Meter", old[0].meter, "status") == "Defective":
+			note += " " + (_("The months billed on averages stand: the old meter couldn't be read.") if cint(sr.get("old_meter_unreadable"))
+			               else _("The next reading trues up the months billed on averages from the old meter's final reading."))
 	elif k == DISC:
 		conn.status, conn.disconnected_on = "Disconnected", day
 		conn.save(ignore_permissions=True)
@@ -315,6 +319,8 @@ def complete(sr):
 			note = _("Account closed; no deposit held.") + (_(" It still owes Rs {0}: recover or write it off.").format(f"{owed:,.2f}") if owed > 0.005 else "")
 	elif k == CAT:
 		old, conn.consumer_category = conn.consumer_category, sr.new_category
+		# the bill whose period contains the change is split at it (increment 22): by the visit's reading when one was taken
+		holders.record(conn, holders.CATEGORY, day, old_value=old, new_value=sr.new_category, reading=last_field_reading(sr), sr=sr.name)
 		conn.save(ignore_permissions=True)
 		note = _("Category changed from {0} to {1}, effective {2}.").format(old, sr.new_category, day)
 	elif k == LOAD:
@@ -324,14 +330,14 @@ def complete(sr):
 	elif k == OWNER:
 		check_no_dues(sr)
 		old = conn.consumer
-		change_holder(conn, sr.new_consumer, day, role="Owner")
+		change_holder(conn, sr.new_consumer, day, role="Owner", sr=sr)
 		note = _("Account transferred from {0} to {1} on {2}; its history stays with the account.").format(old, sr.new_consumer, day)
 	elif k == T_IN:
-		change_holder(conn, sr.new_consumer, day, role="Tenant", owner_liable=cint(sr.owner_liable))
+		change_holder(conn, sr.new_consumer, day, role="Tenant", owner_liable=cint(sr.owner_liable), sr=sr)
 		note = _("Bills go to tenant {0} from {1}.").format(sr.new_consumer, day)
 	elif k == T_OUT:
 		tenant = conn.consumer
-		change_holder(conn, sr.new_consumer, day, role="Owner", leaving=tenant)
+		change_holder(conn, sr.new_consumer, day, role="Owner", leaving=tenant, sr=sr)
 		note = _("Tenant {0} left on {1}; bills go to {2} again.").format(tenant, day, sr.new_consumer)
 	elif k == NODUES:
 		check_no_dues(sr)
@@ -360,12 +366,16 @@ def complete(sr):
 	sr.save(ignore_permissions=True)
 
 
-def change_holder(conn, new_consumer, day, role, owner_liable=1, leaving=None):
+def change_holder(conn, new_consumer, day, role, owner_liable=1, leaving=None, sr=None):
 	"""The account is billed to `new_consumer` from `day`; the property's occupants follow (FS-MST-03, FS-WF-27, 28)."""
 	if not new_consumer:
 		frappe.throw(_("Choose the new consumer."))
 	prop = frappe.get_doc("Property", conn.property)
 	before = add_days(day, -1)
+	# a tenant leaving: the owner answers for what the tenant leaves unpaid when the tenancy said so (increment 22)
+	owner_answers = leaving and any(r.occupant_role == "Owner" and not cint(r.is_billed) and cint(r.liable_for_arrears) and not r.to_date
+	                                for r in prop.occupants)
+	outgoing = conn.consumer
 	for r in list(prop.occupants):
 		if r.to_date and getdate(r.to_date) < day:
 			continue
@@ -386,6 +396,10 @@ def change_holder(conn, new_consumer, day, role, owner_liable=1, leaving=None):
 	prop.save(ignore_permissions=True)
 	conn.consumer = new_consumer
 	conn.consumer_name = frappe.db.get_value("Consumer", new_consumer, "consumer_name")
+	if outgoing and outgoing != new_consumer:  # the month is split into a final bill and the incoming holder's bill (increment 22)
+		holders.record(conn, holders.HOLDER, day, old_value=frappe.db.get_value("Consumer", outgoing, "consumer_name"), new_value=conn.consumer_name,
+		               old_consumer=outgoing, new_consumer=new_consumer, reading=last_field_reading(sr) if sr else None,
+		               sr=sr.name if sr else None, owner_liable=1 if owner_answers else 0)
 	conn.save(ignore_permissions=True)
 
 

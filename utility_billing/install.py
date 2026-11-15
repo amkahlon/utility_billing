@@ -13,8 +13,8 @@ UTILITIES = [
 
 # Why a meter couldn't be read (FS-RDG-06): code, description, billing treatment
 EXCEPTION_CODES = [
-	("Defective", "Meter is faulty or not recording", "Estimate"),
-	("Burnt", "Meter is burnt", "Estimate"),
+	("Defective", "Meter is faulty or not recording", "Defective meter"),  # FS-WF-08 (increment 22)
+	("Burnt", "Meter is burnt", "Defective meter"),
 	("Stuck", "Dial or register is stuck", "Estimate"),
 	("Display Off", "Display is blank or unreadable", "Estimate"),
 	("Reversed", "Meter runs backwards", "Estimate"),

@@ -19,7 +19,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, formatdate, getdate, now_datetime, nowdate
 
-from utility_billing.utility_billing import access, dashboard, flags, mis, notify
+from utility_billing.utility_billing import access, dashboard, flags, holders, mis, notify
 from utility_billing.utility_billing import recovery_engine as engine
 
 RUNNERS = ["Recovery Officer", "Billing Manager", "General Manager", "Society Admin"]
@@ -83,6 +83,7 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 	disputed = frappe.db.sql("""select connection, sum(disputed_amount) a from `tabBill Dispute` where society = %s and status = 'Open' group by connection""",
 	                         society, as_dict=True)
 	disputed = {d.connection: flt(d.a) for d in disputed}  # money in dispute is left out of recovery (FS-WF-10)
+	former = holders.former_by_connection(society)
 	flagged = flags.held(society, flags.HOLD_RECOVERY, as_of)
 	see = access.sees_personal()
 	blocks = access.blocks_of(society=society)  # a recovery officer limited to some blocks sees only those (FS-ACC-01)
@@ -90,6 +91,7 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 	for r, parts in mis.aging_for(society, as_of, category, block):
 		overdue, oldest = overdue_view(parts)
 		r.balance = flt(r.balance) - disputed.get(r.connection, 0)
+		r.balance -= max(former.get(r.connection, 0), 0)  # a former holder's debt isn't the current holder's (increment 22)
 		if overdue <= 0 or r.balance <= 0:
 			continue
 		if blocks and (r.block or "") not in blocks:

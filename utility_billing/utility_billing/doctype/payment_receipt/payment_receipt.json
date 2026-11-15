@@ -16,6 +16,7 @@
   "cb1",
   "payment_date",
   "amount",
+  "former_balance",
   "mode",
   "status",
   "instrument_section",
@@ -111,6 +112,13 @@
    "in_list_view": 1,
    "label": "Amount Received",
    "reqd": 1
+  },
+  {
+   "fieldname": "former_balance",
+   "fieldtype": "Link",
+   "label": "For a Former Occupant's Balance",
+   "options": "Former Occupant Balance",
+   "description": "When the person paying is the account's former holder (or the liable owner), choose their balance: the payment settles it, not the current holder's bills."
   },
   {
    "default": "Cash",
@@ -358,7 +366,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-14 06:55:33.145691",
+ "modified": "2026-11-16 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Payment Receipt",

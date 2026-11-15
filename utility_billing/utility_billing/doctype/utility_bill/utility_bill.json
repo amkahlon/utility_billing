@@ -26,6 +26,8 @@
   "meter_reading",
   "units",
   "consumption_type",
+  "final_bill",
+  "period_note",
   "cb2",
   "tariff",
   "bill_run",
@@ -187,6 +189,19 @@
    "fieldname": "consumption_type",
    "fieldtype": "Data",
    "label": "Consumption Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "final_bill",
+   "fieldtype": "Check",
+   "label": "Final Bill",
+   "read_only": 1,
+   "description": "The outgoing holder's last bill (tenant or owner change)."
+  },
+  {
+   "fieldname": "period_note",
+   "fieldtype": "Data",
+   "label": "Period",
    "read_only": 1
   },
   {
@@ -484,7 +499,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-14 23:00:00.000000",
+ "modified": "2026-11-16 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Bill",

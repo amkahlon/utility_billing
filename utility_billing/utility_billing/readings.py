@@ -96,6 +96,8 @@ def reading_context(connection_name, month):
 	elif last:
 		# Meter changed since the last actual reading: bill the old meter up to its end reading.
 		old = next((m for m in conn.meters if m.meter == last.meter and m.removed_on), None)
+		if old and frappe.utils.cint(old.get("unreadable")):
+			return ctx  # FS-WF-08: the old meter couldn't be read at removal, so the months billed on averages stand (no true-up)
 		if old:
 			old_mult = flt(frappe.db.get_value("Meter", old.meter, "multiplier")) or 1
 			ctx.old_meter_units = max(0, (flt(old.end_reading) - flt(last.present_reading)) * old_mult)

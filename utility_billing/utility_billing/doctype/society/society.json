@@ -161,7 +161,15 @@
   "golive_section",
   "opening_balance_account",
   "cb_golive",
-  "go_live_date"
+  "go_live_date",
+  "defective_section",
+  "defective_billing_method",
+  "defective_average_months",
+  "defective_max_months",
+  "cb_defective",
+  "defective_load_factor",
+  "defective_hours",
+  "disconnected_fixed_charges"
  ],
  "fields": [
   {
@@ -932,10 +940,10 @@
   {
    "fieldname": "tariff_split_method",
    "fieldtype": "Select",
-   "label": "Tariff Changing in the Middle of a Cycle",
-   "options": "By days\nOff",
-   "default": "By days",
-   "description": "By days: the units are split between the old and the new tariff by the days of the reading period under each, and fixed charges follow the days (FS-CFG-05, FS-BIL-02)."
+   "label": "Splitting a Month at a Change",
+   "options": "By the change-day reading, else by days\nBy days\nOff",
+   "default": "By the change-day reading, else by days",
+   "description": "When the tariff, the category or the account holder changes inside a reading period, the month is billed in two parts: the units by the reading taken on the change day when there is one (else by days), fixed charges by days. A tariff change has no reading, so it is split by days. A holder change gives the outgoing holder a final bill. Off: a tariff or category change applies to the whole month; a holder change still gives a final bill, split by days (FS-CFG-05, FS-BIL-02)."
   },
   {
    "fieldname": "deposit_liability_account",
@@ -1081,13 +1089,66 @@
    "label": "Live Since",
    "read_only": 1,
    "description": "Set when opening balances are posted: nothing can be dated before this day."
+  },
+  {
+   "fieldname": "defective_section",
+   "fieldtype": "Section Break",
+   "label": "Defective meters and disconnected accounts",
+   "collapsible": 1,
+   "description": "How a defective meter is billed until it is replaced (FS-WF-08), and whether fixed charges continue while an account is disconnected."
+  },
+  {
+   "fieldname": "defective_billing_method",
+   "fieldtype": "Select",
+   "label": "Defective-Meter Billing",
+   "default": "Average of last N months",
+   "options": "Average of last N months\nSame month last year\nLoad \u00d7 load factor \u00d7 hours\nMinimum charge only"
+  },
+  {
+   "fieldname": "defective_average_months",
+   "fieldtype": "Int",
+   "label": "Months in the Average (N)",
+   "default": "3"
+  },
+  {
+   "fieldname": "defective_max_months",
+   "fieldtype": "Int",
+   "label": "Average Billing for at Most (months)",
+   "default": "3",
+   "description": "After this many months the meter is billed fixed charges only and stays on the Defective Meters report until replaced."
+  },
+  {
+   "fieldname": "cb_defective",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "defective_load_factor",
+   "fieldtype": "Percent",
+   "label": "Load Factor",
+   "default": "30",
+   "depends_on": "eval:doc.defective_billing_method=='Load \u00d7 load factor \u00d7 hours'"
+  },
+  {
+   "fieldname": "defective_hours",
+   "fieldtype": "Int",
+   "label": "Hours in a Month",
+   "default": "720",
+   "depends_on": "eval:doc.defective_billing_method=='Load \u00d7 load factor \u00d7 hours'"
+  },
+  {
+   "fieldname": "disconnected_fixed_charges",
+   "fieldtype": "Select",
+   "label": "Fixed Charges While Disconnected",
+   "default": "Stop from the disconnection date",
+   "options": "Stop from the disconnection date\nContinue",
+   "description": "Continue: disconnected accounts are billed their fixed and per-area charges every month (no energy, no minimum charge)."
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 01:00:00.000000",
+ "modified": "2026-11-16 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

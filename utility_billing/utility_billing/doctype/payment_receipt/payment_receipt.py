@@ -83,6 +83,9 @@ class PaymentReceipt(Document):
 			frappe.throw(_("Enter the {0} number.").format(_(self.mode).lower()))
 
 	def before_submit(self):
+		from utility_billing.utility_billing import holders  # noqa: PLC0415
+
+		holders.check_payment(self)  # a payment for a former occupant's balance (increment 22)
 		if self.payment_channel == "Counter":
 			status = frappe.db.get_value("Cashier Day", self.cashier_day, "status")
 			if status != "Open":
@@ -97,6 +100,10 @@ class PaymentReceipt(Document):
 			"ledger_entry": entry.name, "status": "Posted",
 		})
 		self.update_day()
+		if self.get("former_balance"):
+			from utility_billing.utility_billing import holders  # noqa: PLC0415
+
+			holders.refresh(self.former_balance)
 		notify.payment_received(self)  # FS-PAY-09: the receipt notification
 
 	def before_cancel(self):
@@ -110,6 +117,10 @@ class PaymentReceipt(Document):
 		self.db_set({"status": "Reversed", "reversal_reason": r["reason_code"], "reversal_remarks": r["remarks"],
 		             "reversed_by": frappe.session.user, "reversed_on": now_datetime()})
 		self.update_day()
+		if self.get("former_balance"):
+			from utility_billing.utility_billing import holders  # noqa: PLC0415
+
+			holders.refresh(self.former_balance)  # the reversed payment no longer counts against the former holder's balance
 		notify.payment_received(self, reversed_=True)
 
 	def update_day(self):
