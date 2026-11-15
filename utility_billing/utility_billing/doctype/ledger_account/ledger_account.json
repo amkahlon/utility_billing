@@ -42,7 +42,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Type",
-   "options": "Receivable\nIncome\nCash\nBank\nLiability\nExpense\nOther",
+   "options": "Receivable\nIncome\nCash\nBank\nLiability\nEquity\nExpense\nOther",
    "reqd": 1
   },
   {

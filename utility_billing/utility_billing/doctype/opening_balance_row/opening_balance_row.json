@@ -1,0 +1,137 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "reference_no",
+  "connection",
+  "consumer_name",
+  "current_bill",
+  "arrears",
+  "surcharge",
+  "fees",
+  "credit",
+  "cb1",
+  "security_deposit",
+  "plan_remaining",
+  "plan_installments",
+  "row_status",
+  "error",
+  "ledger_entry"
+ ],
+ "fields": [
+  {
+   "fieldname": "reference_no",
+   "fieldtype": "Data",
+   "label": "Reference Number",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Connection",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "label": "Consumer",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "current_bill",
+   "fieldtype": "Currency",
+   "label": "Current Bill",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "arrears",
+   "fieldtype": "Currency",
+   "label": "Arrears",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "surcharge",
+   "fieldtype": "Currency",
+   "label": "Surcharge",
+   "in_list_view": 0
+  },
+  {
+   "fieldname": "fees",
+   "fieldtype": "Currency",
+   "label": "Fees",
+   "in_list_view": 0
+  },
+  {
+   "fieldname": "credit",
+   "fieldtype": "Currency",
+   "label": "Credit",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "security_deposit",
+   "fieldtype": "Currency",
+   "label": "Security Deposit Held"
+  },
+  {
+   "fieldname": "plan_remaining",
+   "fieldtype": "Currency",
+   "label": "Installment Plan: Still to Pay"
+  },
+  {
+   "fieldname": "plan_installments",
+   "fieldtype": "Int",
+   "label": "Installment Plan: Installments Left"
+  },
+  {
+   "fieldname": "row_status",
+   "fieldtype": "Select",
+   "label": "Check",
+   "options": "\nOK\nError",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Small Text",
+   "label": "Problem",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "ledger_entry",
+   "fieldtype": "Link",
+   "label": "Ledger Entry",
+   "options": "Customer Ledger Entry",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 23:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Opening Balance Row",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50,
+ "permissions": []
+}

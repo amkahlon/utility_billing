@@ -1896,6 +1896,29 @@ def t_billing_api(d: Desk):
 	eq((page.status_code, "bill_inquiry" in page.text and "Idempotency-Key" in page.text), (200, True), "documentation page")
 
 
+@case("QA-79", "Gap 9: opening balances file uploaded, loaded and checked from the form; problems downloadable; can't be submitted with problems")
+def t_opening_balances(d: Desk):
+	OB = f"{URL}/api/method/utility_billing.utility_billing.opening"
+	ao, soc, conn = USERS["ao"], S["society"], S["conn"]["name"]
+	t = ao.s.get(f"{OB}.template")
+	header = t.text.lstrip("﻿").splitlines()[0].replace('"', "")
+	eq((t.status_code, header.startswith("reference_no,current_bill")), (200, True), f"template download ({header[:60]})")
+	csv = f"reference_no,current_bill,arrears\n{conn},1000,500\n9999999999,10,0\n"
+	up = ao.s.post(f"{URL}/api/method/upload_file", files={"file": ("opening.csv", csv.encode(), "text/csv")}, data={"is_private": "1"})
+	if up.status_code != 200:
+		raise ServerError(up.status_code, up.text[:300])
+	yesterday = time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400))
+	doc = ao.save_doc({"doctype": "Opening Balance Import", "society": soc, "as_of_date": yesterday, "import_file": up.json()["message"]["file_url"]})
+	out = ao.call("utility_billing.utility_billing.opening.load_file", name=doc["name"])
+	eq(out, {"rows": 2, "errors": 2}, "both rows have problems")
+	doc = ao.get("Opening Balance Import", doc["name"])
+	eq(["already has entries" in (doc["rows"][0]["error"] or ""), "no account" in (doc["rows"][1]["error"] or "")], [True, True], "problems per row")
+	rep = ao.s.get(f"{OB}.error_report", params={"name": doc["name"]})
+	eq((rep.status_code, len(rep.text.strip().splitlines())), (200, 3), "problems report: header and two rows")
+	expect_error(lambda: ao.workflow(doc, "Submit for Approval"), "problems")
+	expect_error(lambda: USERS["cashier"].save_doc({"doctype": "Opening Balance Import", "society": soc, "as_of_date": yesterday}))
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

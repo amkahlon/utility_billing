@@ -146,7 +146,11 @@
   "cb_ra",
   "ra_residential_max_kw",
   "ra_adjustment_limit",
-  "ra_outlier_z"
+  "ra_outlier_z",
+  "golive_section",
+  "opening_balance_account",
+  "cb_golive",
+  "go_live_date"
  ],
  "fields": [
   {
@@ -965,13 +969,38 @@
    "fieldtype": "Float",
    "label": "Outlier Threshold (standard deviations)",
    "default": "3"
+  },
+  {
+   "fieldname": "golive_section",
+   "fieldtype": "Section Break",
+   "label": "Go-live",
+   "collapsible": 1,
+   "description": "Opening balances brought over from the previous system (Opening Balance Import)."
+  },
+  {
+   "fieldname": "opening_balance_account",
+   "fieldtype": "Link",
+   "label": "Opening Balances Account",
+   "options": "Ledger Account",
+   "description": "The account the opening receivables and deposits are set against (for example an opening balance equity or suspense account)."
+  },
+  {
+   "fieldname": "cb_golive",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "go_live_date",
+   "fieldtype": "Date",
+   "label": "Live Since",
+   "read_only": 1,
+   "description": "Set when opening balances are posted: nothing can be dated before this day."
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 18:30:00.000000",
+ "modified": "2026-11-15 22:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

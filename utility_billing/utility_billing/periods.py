@@ -48,16 +48,35 @@ def is_closed(society, date) -> bool:
 
 
 def assert_open(society, date, what=None):
-	"""Refuse to change a closed period: the entry has to be dated in the open period instead."""
+	"""Refuse to change a closed period: the entry has to be dated in the open period instead. Before the society's go-live date
+	(set when opening balances are posted) everything is closed: those balances came from the previous system."""
+	live = go_live(society) if society and date else None
+	if live and getdate(date) < live:
+		frappe.throw(_("{0} can't be dated {1}: {2} went live on {3} with opening balances from its previous system.").format(
+			_(what) if what else _("The entry"), frappe.utils.formatdate(date), society, frappe.utils.formatdate(live)), title=_("Before go-live"))
 	if society and date and is_closed(society, date):
 		start = bounds(date)[0]
 		frappe.throw(_("{0} is closed for {1}: nothing can be dated in {2}. Post it in the open period (for example as an adjustment).").format(
 			_(what) if what else _("The period"), society, start.strftime("%B %Y")), title=_("Period closed"))
 
 
+def go_live(society):
+	"""The society's go-live date, or None."""
+	cache = _cache()
+	key = (society, "go_live")
+	if key not in cache:
+		v = frappe.db.get_value("Society", society, "go_live_date")
+		cache[key] = getdate(v) if v else None
+	return cache[key]
+
+
 def next_open_date(society, date):
-	"""`date`, or the first day of the next open month when its month is closed (for postings the system dates itself)."""
+	"""`date`, or the first day of the next open month when its month is closed (for postings the system dates itself); never before
+	the go-live date."""
 	d = getdate(date)
+	live = go_live(society)
+	if live and d < live:
+		d = live
 	while is_closed(society, d):
 		d = add_months(bounds(d)[0], 1)
 	return d

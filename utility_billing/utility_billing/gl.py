@@ -32,7 +32,7 @@ def settings(society):
 	return frappe._dict(
 		receivables=s.receivables_account, surcharge=s.surcharge_income_account, other=s.other_income_account,
 		adjustments=s.adjustments_account, write_off=s.write_off_account, payments={r.mode: r.account for r in s.payment_accounts},
-		deposits=s.get("deposit_liability_account"),
+		deposits=s.get("deposit_liability_account"), opening=s.get("opening_balance_account"),
 	)
 
 
@@ -90,6 +90,9 @@ def lines_for(entry_name):
 			acct = need(soc.other, _("the bill rounding difference (Society {0} → Other Billing Income)").format(e.society))
 			income[acct] = income.get(acct, 0) + diff
 		return [(rec, amount, 0)] + [(a, 0, v) if v >= 0 else (a, -v, 0) for a, v in income.items() if v]
+	if e.entry_type == "Opening":  # balances brought over at go-live: receivables against the opening balances account
+		opening = need(soc.opening, _("opening balances (Society {0} → Go-live → Opening Balances Account)").format(e.society))
+		return [(rec, amount, 0), (opening, 0, amount)] if amount >= 0 else [(opening, -amount, 0), (rec, 0, -amount)]
 	if e.entry_type == "Surcharge":
 		return [(rec, amount, 0), (need(soc.surcharge, _("surcharge income (Society {0} → Accounting)").format(e.society)), 0, amount)]
 	if e.entry_type == "Payment":
@@ -154,7 +157,10 @@ def deposit_journal(sd, reverse=False):
 	(FS-MST-10). `reverse` makes the opposite journal when the deposit document is cancelled. Raises MissingAccount (nothing saved)."""
 	soc = settings(sd.society)
 	held = need(soc.deposits, _("security deposits held (Society {0} → Security Deposits Held Account)").format(sd.society))
-	money = need(soc.payments.get(sd.mode), _("{0} payments (Society {1} → Accounting)").format(_(sd.mode or ""), sd.society))
+	if sd.mode == "Opening balance":  # a deposit brought over at go-live: no money moved now
+		money = need(soc.opening, _("opening balances (Society {0} → Go-live → Opening Balances Account)").format(sd.society))
+	else:
+		money = need(soc.payments.get(sd.mode), _("{0} payments (Society {1} → Accounting)").format(_(sd.mode or ""), sd.society))
 	amount = flt(sd.amount)
 	pairs = [(money, amount, 0), (held, 0, amount)] if sd.deposit_type == "Received" else [(held, amount, 0), (money, 0, amount)]
 	if reverse:
