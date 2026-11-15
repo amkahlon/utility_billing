@@ -38,6 +38,11 @@
 	.ub .wm { position: absolute; top: 85mm; left: 0; width: 100%; text-align: center; font-size: 64pt; font-weight: 700;
 		color: rgba(180, 35, 24, .13); -webkit-transform: rotate(-24deg); transform: rotate(-24deg); z-index: 0; }
 	.ub .sp { height: 2.5mm; }
+	.ub .l2 { font-family: "Noto Naskh Arabic", "DejaVu Sans", sans-serif; color: #5b6670; font-weight: 400; }
+	.ub .band .l2, .ub .pay .l2 { color: inherit; }
+	.ub .rtl { text-align: right; word-wrap: break-word; font-family: "Noto Naskh Arabic", "DejaVu Sans", sans-serif; }
+	.ub .stamp .l2 { display: block; }
+	.ub .barcode { display: block; height: 11mm; width: 52mm; margin-top: 1mm; }
 	.ub .gap { width: 3mm; }
 </style>
 <div class="ub">
@@ -58,27 +63,27 @@
 		</td>
 		<td class="right" style="width: 48mm;">
 			{%- if watermark %}<div class="tag">{{ watermark | e }}{% if duplicate %} {{ duplicate }}{% endif %}</div>{% endif %}
-			<div class="small muted" style="margin-top: 1mm;">{{ _("Consumer copy") }}</div>
+			<div class="small muted" style="margin-top: 1mm;">{{ t("Consumer copy") }}</div>
 		</td>
 	</tr>
 </table>
 <div class="sp"></div>
 <table class="band"><tr>
 	<td class="title">{{ title | e }} &nbsp;—&nbsp; {{ month | e }}</td>
-	<td class="title right">{{ _("Bill No") }} {{ bill.name | e }}{% if bill.revision_no and bill.revision_no > 1 %} &nbsp;({{ _("Revised, version") }} {{ bill.revision_no }}){% endif %}</td>
+	<td class="title right">{{ t("Bill No") }} {{ bill.name | e }}{% if bill.revision_no and bill.revision_no > 1 %} &nbsp;({{ _("Revised, version") }} {{ bill.revision_no }}){% endif %}</td>
 </tr></table>
 <div class="sp"></div>
 
 <table><tr>
 	<td style="width: 58%;">
 		<div class="box">
-			<div class="box-h">{{ _("Consumer") }}</div>
+			<div class="box-h">{{ t("Consumer") }}</div>
 			<table class="kv">
-				<tr><td class="k">{{ _("Name") }}</td><td class="strong">{{ (consumer.name or bill.consumer_name or "") | e }}</td></tr>
-				<tr><td class="k">{{ _("Property") }}</td><td>{{ (con.property_no or "") | e }}{% if con.block %}, {{ con.block | e }}{% endif %}{% if con.sector %}, {{ con.sector | e }}{% endif %}</td></tr>
-				<tr><td class="k">{{ _("Category") }}</td><td>{{ (con.category or "") | e }}{% if con.sanctioned_load_kw %} &nbsp;·&nbsp; {{ qty(con.sanctioned_load_kw) }} kW{% endif %}{% if con.phase %} &nbsp;·&nbsp; {{ con.phase | e }} {{ _("phase") }}{% endif %}</td></tr>
-				<tr><td class="k">{{ _("Meter No") }}</td><td>{{ ((reading or {}).get("meter") or "") | e }}</td></tr>
-				{%- if consumer.mobile %}<tr><td class="k">{{ _("Mobile") }}</td><td>{{ consumer.mobile | e }}</td></tr>{% endif %}
+				<tr><td class="k">{{ t("Name") }}</td><td class="strong">{{ (consumer.name or bill.consumer_name or "") | e }}</td></tr>
+				<tr><td class="k">{{ t("Property") }}</td><td>{{ (con.property_no or "") | e }}{% if con.block %}, {{ con.block | e }}{% endif %}{% if con.sector %}, {{ con.sector | e }}{% endif %}</td></tr>
+				<tr><td class="k">{{ t("Category") }}</td><td>{{ (con.category or "") | e }}{% if con.sanctioned_load_kw %} &nbsp;·&nbsp; {{ qty(con.sanctioned_load_kw) }} kW{% endif %}{% if con.phase %} &nbsp;·&nbsp; {{ con.phase | e }} {{ _("phase") }}{% endif %}</td></tr>
+				<tr><td class="k">{{ t("Meter No") }}</td><td>{{ ((reading or {}).get("meter") or "") | e }}</td></tr>
+				{%- if consumer.mobile %}<tr><td class="k">{{ t("Mobile") }}</td><td>{{ consumer.mobile | e }}</td></tr>{% endif %}
 			</table>
 		</div>
 	</td>
@@ -88,12 +93,13 @@
 			<table>
 				<tr>
 					<td style="padding: 2mm;">
-						<div class="small muted">{{ _("Reference No") }}</div>
+						<div class="small muted">{{ t("Reference No") }}</div>
 						<div class="ref">{{ (con.reference_no or "") | e }}</div>
+						{%- if barcode %}<img class="barcode" src="{{ barcode }}" alt="{{ (con.reference_no or "") | e }}">{% endif %}
 						<table class="kv" style="margin-top: 1mm;">
-							<tr><td class="k">{{ _("Bill month") }}</td><td>{{ month | e }}</td></tr>
-							<tr><td class="k">{{ _("Issue date") }}</td><td>{{ issue_date }}</td></tr>
-							<tr><td class="k">{{ _("Due date") }}</td><td class="strong">{{ due_date }}</td></tr>
+							<tr><td class="k">{{ t("Bill month") }}</td><td>{{ month | e }}</td></tr>
+							<tr><td class="k">{{ t("Issue date") }}</td><td>{{ issue_date }}</td></tr>
+							<tr><td class="k">{{ t("Due date") }}</td><td class="strong">{{ due_date }}</td></tr>
 						</table>
 					</td>
 					{%- if qr %}<td style="width: 25mm; padding: 2mm 2mm 0 0;"><img src="{{ qr }}" style="width: 23mm; height: 23mm;"></td>{% endif %}
@@ -107,8 +113,8 @@
 {%- if reading %}
 <table class="grid box">
 	<tr>
-		<th>{{ _("Previous reading") }}</th><th>{{ _("Present reading") }}</th>
-		<th class="right">{{ _("Multiplier") }}</th><th class="right">{{ _("Units") }}</th><th>{{ _("Reading") }}</th>
+		<th>{{ t("Previous reading") }}</th><th>{{ t("Present reading") }}</th>
+		<th class="right">{{ t("Multiplier") }}</th><th class="right">{{ t("Units") }}</th><th>{{ t("Reading") }}</th>
 	</tr>
 	<tr>
 		<td>{{ qty(reading.previous_reading) }} <span class="note">{{ date(reading.previous_reading_date) }}</span></td>
@@ -124,30 +130,30 @@
 <table><tr>
 	<td style="width: 58%;">
 		<table class="grid box">
-			<tr><th>{{ _("Charges") }}</th><th class="right">{{ _("Units") }}</th><th class="right">{{ _("Rate") }}</th><th class="right">{{ _("Amount (Rs)") }}</th></tr>
+			<tr><th>{{ t("Charges") }}</th><th class="right">{{ t("Units") }}</th><th class="right">{{ t("Rate") }}</th><th class="right">{{ t("Amount (Rs)") }}</th></tr>
 			{%- for l in lines %}
 			<tr>
 				<td>{{ l.label | e }}{% if l.note %}<div class="note">{{ l.note | e }}</div>{% endif %}</td>
 				<td class="right">{{ l.quantity }}</td><td class="right">{{ l.rate }}</td><td class="right">{{ l.amount }}</td>
 			</tr>
 			{%- endfor %}
-			<tr class="tot"><td colspan="3" class="strong">{{ _("Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>
+			<tr class="tot"><td colspan="3" class="strong">{{ t("Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>
 			{%- if bill.installment_due %}
 			<tr><td colspan="3">{{ _("Arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
 			<tr><td colspan="3">{{ _("Installment due with this bill") }} ({{ _("No") }} {{ bill.installment_no }})</td><td class="right">{{ money(bill.installment_due) }}</td></tr>
 			{%- else %}
-			<tr><td colspan="3">{{ _("Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
+			<tr><td colspan="3">{{ t("Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
 			{%- endif %}
 		</table>
 		<table class="pay" style="margin-top: 1.5mm;">
-			<tr class="within"><td>{{ _("Payable within due date") }} <span style="font-weight: 400; font-size: 8pt;">({{ due_date }})</span></td><td class="right">Rs {{ money(bill.payable_within_due) }}</td></tr>
-			<tr class="after"><td>{{ _("Payable after due date") }} <span style="font-weight: 400; font-size: 8pt;">({{ _("incl. surcharge") }} {{ money(bill.surcharge_amount) }})</span></td><td class="right">Rs {{ money(bill.payable_after_due) }}</td></tr>
+			<tr class="within"><td>{{ t("Payable within due date") }} <span style="font-weight: 400; font-size: 8pt;">({{ due_date }})</span></td><td class="right">Rs {{ money(bill.payable_within_due) }}</td></tr>
+			<tr class="after"><td>{{ t("Payable after due date") }} <span style="font-weight: 400; font-size: 8pt;">({{ _("incl. surcharge") }} {{ money(bill.surcharge_amount) }})</span></td><td class="right">Rs {{ money(bill.payable_after_due) }}</td></tr>
 		</table>
 	</td>
 	<td class="gap"></td>
 	<td>
 		<table class="grid box">
-			<tr><th>{{ _("Month") }}</th><th class="right">{{ _("Units") }}</th><th class="right">{{ _("Bill") }}</th><th>{{ _("Paid on") }}</th><th class="right">{{ _("Paid") }}</th></tr>
+			<tr><th>{{ t("Month") }}</th><th class="right">{{ t("Units") }}</th><th class="right">{{ t("Bill") }}</th><th>{{ t("Paid on") }}</th><th class="right">{{ t("Paid") }}</th></tr>
 			{%- for h in history %}
 			<tr><td>{{ month_name(h.month, True) }}</td><td class="right">{{ qty(h.units) }}</td><td class="right">{{ money(h.billed) }}</td>
 				<td>{{ date(h.paid_on) if h.paid_on else "—" }}</td><td class="right">{{ money(h.paid) if h.paid is not none else "—" }}</td></tr>
@@ -161,21 +167,28 @@
 
 <table><tr>
 	<td style="width: 58%;">
-		{%- if soc.notices %}
+		{%- if soc.notices or notices_second %}
 		<div class="box">
-			<div class="box-h">{{ _("Notices") }}</div>
+			<div class="box-h">{{ t("Notices") }}</div>
 			<ul class="notices small" style="margin: 1.5mm 0; padding-left: 5mm;">
 				{%- for n in soc.notices %}<li>{{ n | e }}</li>{% endfor %}
 			</ul>
+			{%- if notices_second %}
+			<ul class="notices small rtl" lang="{{ lang2 }}" style="margin: 1.5mm 0; padding-right: 5mm; padding-left: 0; list-style: none;">
+				{%- for n in notices_second %}<li>{{ rtl(n) }}</li>{% endfor %}
+			</ul>
+			{%- endif %}
 		</div>
 		{%- endif %}
 	</td>
 	<td class="gap"></td>
 	<td>
 		<div class="box">
-			<div class="box-h">{{ _("How to pay") }}</div>
+			<div class="box-h">{{ t("How to pay") }}</div>
 			<div class="small" style="padding: 1.5mm 2mm;">
 				{%- if soc.payment_instructions %}<div>{% for l in soc.payment_instructions.split("\n") %}{{ l | e }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div>{% endif %}
+				{#- a table cell: wkhtmltopdf overruns a right-aligned block that mixes digits and Urdu (found in the PDF check) #}
+				{%- if payment_instructions_second %}<table style="margin-top: 1mm; table-layout: fixed;"><tr><td class="rtl" dir="rtl" lang="{{ lang2 }}">{% for l in payment_instructions_second.split("\n") %}{{ rtl(l) }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr></table>{% endif %}
 				{%- for b in soc.banks %}
 				<div style="margin-top: 1mm;"><span class="strong">{{ b.bank | e }}</span> {{ (b.title or "") | e }} · {{ _("A/c") }} {{ (b.account or "") | e }}
 					{%- if b.iban %}<br><span class="muted">IBAN</span> {{ b.iban | e }}{% endif %}
@@ -187,6 +200,13 @@
 	</td>
 </tr></table>
 
+{#- the society's signatory for bills on the issue date (FS-CLT-07) #}
+{%- if signatory %}
+<table style="margin-top: 1.5mm;"><tr><td></td><td class="right small" style="width: 60mm;">
+	{%- if signature %}<img src="{{ signature }}" style="height: 10mm; display: inline-block;"><br>{% endif %}
+	<span class="strong">{{ signatory.name | e }}</span><br><span class="muted">{{ signatory.designation | e }}</span>
+</td></tr></table>
+{%- endif %}
 <div class="small muted center" style="margin-top: 2mm;">
 	{%- if soc.footer %}<div>{{ soc.footer | e }}</div>{% endif %}
 	{%- set contact = [soc.phone, soc.email, soc.website, soc.office_hours] | select | list %}
@@ -201,23 +221,23 @@
 		<td>
 			<table>
 				<tr>
-					<td><span class="strong" style="color: {{ c }};">{{ soc.name | e }}</span> &nbsp;<span class="muted small">{{ title | e }} — {{ _("Office copy") }}</span></td>
+					<td><span class="strong" style="color: {{ c }};">{{ soc.name | e }}</span> &nbsp;<span class="muted small">{{ title | e }} — {{ t("Office copy") }}</span></td>
 					<td class="right">{%- if watermark %}<span class="tag" style="font-size: 7.5pt;">{{ watermark | e }}{% if duplicate %} {{ duplicate }}{% endif %}</span>{% endif %}</td>
 				</tr>
 			</table>
 			<table class="kv kv4" style="margin-top: 1mm;">
-				<tr><td class="k">{{ _("Reference No") }}</td><td class="strong" style="font-size: 11pt;">{{ (con.reference_no or "") | e }}</td>
-					<td class="k">{{ _("Bill No") }}</td><td>{{ bill.name | e }}</td></tr>
-				<tr><td class="k">{{ _("Consumer") }}</td><td>{{ (consumer.name or bill.consumer_name or "") | e }}</td>
-					<td class="k">{{ _("Property") }}</td><td>{{ (con.property_no or "") | e }}{% if con.block %}, {{ con.block | e }}{% endif %}</td></tr>
-				<tr><td class="k">{{ _("Bill month") }}</td><td>{{ month | e }}</td>
-					<td class="k">{{ _("Due date") }}</td><td class="strong">{{ due_date }}</td></tr>
-				<tr><td class="k">{{ _("Within due date") }}</td><td class="strong">Rs {{ money(bill.payable_within_due) }}</td>
-					<td class="k">{{ _("After due date") }}</td><td class="strong">Rs {{ money(bill.payable_after_due) }}</td></tr>
+				<tr><td class="k">{{ t("Reference No") }}</td><td class="strong" style="font-size: 11pt;">{{ (con.reference_no or "") | e }}</td>
+					<td class="k">{{ t("Bill No") }}</td><td>{{ bill.name | e }}</td></tr>
+				<tr><td class="k">{{ t("Consumer") }}</td><td>{{ (consumer.name or bill.consumer_name or "") | e }}</td>
+					<td class="k">{{ t("Property") }}</td><td>{{ (con.property_no or "") | e }}{% if con.block %}, {{ con.block | e }}{% endif %}</td></tr>
+				<tr><td class="k">{{ t("Bill month") }}</td><td>{{ month | e }}</td>
+					<td class="k">{{ t("Due date") }}</td><td class="strong">{{ due_date }}</td></tr>
+				<tr><td class="k">{{ t("Within due date") }}</td><td class="strong">Rs {{ money(bill.payable_within_due) }}</td>
+					<td class="k">{{ t("After due date") }}</td><td class="strong">Rs {{ money(bill.payable_after_due) }}</td></tr>
 			</table>
 		</td>
 		<td class="gap"></td>
-		<td style="width: 42mm;"><div class="stamp">{{ _("Bank / cashier stamp") }}</div></td>
+		<td style="width: 42mm;">{%- if barcode %}<img class="barcode" src="{{ barcode }}" style="width: 42mm; margin: 0 0 1mm;">{% endif %}<div class="stamp">{{ t("Bank / cashier stamp") }}</div></td>
 		{%- if qr %}<td style="width: 24mm; padding-left: 2mm;"><img src="{{ qr }}" style="width: 22mm; height: 22mm;"></td>{% endif %}
 	</tr>
 </table>

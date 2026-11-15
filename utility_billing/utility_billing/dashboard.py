@@ -170,6 +170,13 @@ def attention_of(society, month, as_of):
 	if estimated:
 		add("amber", _("{0} consumers billed on estimates 2+ months running").format(len(estimated)), _("They need a real reading"),
 		    ["query-report", "Estimated Bills"], {"society": society, "month": str(month), "repeat_only": 1})
+	from utility_billing.utility_billing import revenue_assurance  # noqa: PLC0415
+
+	ra_open, ra_risk = revenue_assurance.open_findings(society)
+	if ra_open:
+		add("red" if ra_risk else "amber", _("{0} revenue assurance findings are open").format(ra_open),
+		    _("{0} of revenue at risk").format(rs(ra_risk)) if ra_risk else _("Assign and investigate them"), ["List", "RA Finding"],
+		    {"society": society, "status": ["!=", "Closed"]})
 	closed = frappe.db.count("Cashier Day", {"society": society, "status": "Closed"})
 	if closed:
 		add("blue", _("{0} cashier days are waiting for approval").format(closed), _("Closed with a cash count"), ["List", "Cashier Day"],

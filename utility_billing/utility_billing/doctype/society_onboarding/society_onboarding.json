@@ -1,0 +1,168 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 01:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "society",
+  "percent_complete",
+  "cb1",
+  "target_go_live",
+  "live_since",
+  "checks_section",
+  "checklist_html",
+  "checks_done",
+  "checks_total",
+  "tasks_section",
+  "tasks"
+ ],
+ "fields": [
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "percent_complete",
+   "fieldtype": "Percent",
+   "label": "Complete",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "target_go_live",
+   "fieldtype": "Date",
+   "label": "Planned Go-Live",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "live_since",
+   "fieldtype": "Date",
+   "label": "Live Since",
+   "read_only": 1,
+   "fetch_from": "society.go_live_date"
+  },
+  {
+   "fieldname": "checks_section",
+   "fieldtype": "Section Break",
+   "label": "What the system checks",
+   "description": "Ticked automatically from the society's setup; refreshed each time the form opens."
+  },
+  {
+   "fieldname": "checklist_html",
+   "fieldtype": "HTML",
+   "label": "Checklist"
+  },
+  {
+   "fieldname": "checks_done",
+   "fieldtype": "Int",
+   "label": "Checks Done",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "checks_total",
+   "fieldtype": "Int",
+   "label": "Checks",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "tasks_section",
+   "fieldtype": "Section Break",
+   "label": "Tasks done by people",
+   "description": "Tick each when it's done; who and when are recorded."
+  },
+  {
+   "fieldname": "tasks",
+   "fieldtype": "Table",
+   "label": "Tasks",
+   "options": "Onboarding Task"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 01:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Society Onboarding",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "field:society",
+ "title_field": "society",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

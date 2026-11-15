@@ -329,6 +329,89 @@ class IntegrationTestArrangements(BillingCase):
 		self.assertEqual(approval.required_roles(self.writeoff(1_500)), ["Billing Manager", "General Manager"])
 		self.assertEqual(approval.required_roles(frappe._dict(doctype="Installment Plan", society=SOC, amount_to_split=50_000)), ["Billing Manager"])
 
+	# ---- approvals in sequence (ACC-04, gap 10)
+	def in_turn(self):
+		self.set_levels()
+		frappe.db.set_value("Society", SOC, "approval_order", approval.IN_TURN)
+		frappe.clear_document_cache("Society", SOC)
+
+	def approve_as(self, doc, user):
+		frappe.set_user(user)
+		try:
+			doc.reload()
+			return approval.approve(doc)
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_in_turn_each_level_approves_before_the_next(self):
+		self.in_turn()
+		doc = self.waiver(20_000, bucket="Current bill")
+		self.assertEqual(approval.level_chain(doc), ["Billing Manager", "General Manager", "Management"])
+		act(doc, "Submit for Approval", BILLING_OFFICER)
+		with self.assertRaises(frappe.PermissionError) as cm:
+			act(doc, "Approve", MANAGEMENT)  # the top level can't jump the queue
+		self.assertIn("level 1 (Billing Manager) is next", str(cm.exception))
+		self.assertRaises(frappe.PermissionError, self.approve_as, doc, GENERAL_MANAGER)  # nor can level 2
+		self.assertEqual(self.approve_as(doc, BILLING_MANAGER), {"level": 1, "next_role": "General Manager"})
+		doc.reload()
+		self.assertEqual((doc.workflow_state, doc.docstatus), ("Pending Approval", 0))
+		self.assertEqual(self.approve_as(doc, GENERAL_MANAGER), {"level": 2, "next_role": "Management"})
+		self.approve_as(doc, MANAGEMENT)  # the covering level: the workflow's Approve
+		doc.reload()
+		self.assertEqual((doc.workflow_state, doc.docstatus, doc.approved_by), ("Approved", 1, MANAGEMENT))
+		self.assertEqual([(r.action, r.remarks, r.user) for r in doc.approval_log if r.action == approval.LEVEL_ACTION],
+		                 [(approval.LEVEL_ACTION, "Billing Manager", BILLING_MANAGER), (approval.LEVEL_ACTION, "General Manager", GENERAL_MANAGER)])
+
+	def test_in_turn_one_person_approves_one_level_and_small_amounts_take_one_step(self):
+		from utility_billing.utility_billing.testing import BM_AND_GM
+
+		self.in_turn()
+		doc = self.waiver(8_000)
+		self.assertEqual(approval.level_chain(doc), ["Billing Manager", "General Manager"])
+		act(doc, "Submit for Approval", BILLING_OFFICER)
+		self.approve_as(doc, BM_AND_GM)
+		with self.assertRaises(frappe.PermissionError) as cm:
+			act(doc, "Approve", BM_AND_GM)
+		self.assertIn("earlier level", str(cm.exception))
+		self.approve_as(doc, GENERAL_MANAGER)
+		small = self.waiver(3_000, bucket="Current bill")  # the first waiver used up most of the surcharge
+		self.assertIsNone(approval.level_chain(small))  # within level 1: one approval, as before
+		act(small, "Submit for Approval", BILLING_OFFICER)
+		act(small, "Approve", BILLING_MANAGER)
+		small.reload()
+		self.assertEqual(small.docstatus, 1)
+
+	def test_in_turn_a_resubmission_starts_the_round_again_and_the_inbox_follows_the_turn(self):
+		from utility_billing.utility_billing import access
+
+		self.in_turn()
+		doc = self.waiver(8_000)
+		act(doc, "Submit for Approval", BILLING_OFFICER)
+
+		def inbox(user):
+			frappe.set_user(user)
+			try:
+				return [x["name"] for x in access.inbox()]
+			finally:
+				frappe.set_user("Administrator")
+
+		self.assertIn(doc.name, inbox(BILLING_MANAGER))
+		self.assertNotIn(doc.name, inbox(GENERAL_MANAGER))  # not their turn yet
+		self.approve_as(doc, BILLING_MANAGER)
+		self.assertNotIn(doc.name, inbox(BILLING_MANAGER))
+		self.assertIn(doc.name, inbox(GENERAL_MANAGER))
+		frappe.set_user(GENERAL_MANAGER)
+		approval.set_rejection_reason(doc.doctype, doc.name, "Attach the board's letter")
+		frappe.set_user("Administrator")
+		act(doc, "Reject", GENERAL_MANAGER)
+		act(doc, "Submit for Approval", BILLING_OFFICER)
+		doc.reload()
+		self.assertEqual(approval.level_state(doc)["next_role"], "Billing Manager")  # level 1 again
+		frappe.set_user(GENERAL_MANAGER)
+		out = access.bulk(frappe.as_json([{"doctype": doc.doctype, "name": doc.name}]), "Approve")
+		frappe.set_user("Administrator")
+		self.assertEqual(len(out["failed"]), 1)  # the inbox's bulk approve keeps the order too
+
 	def test_the_level_table_is_checked(self):
 		s = frappe.get_doc("Society", SOC)
 		s.set("approval_levels", [{"transaction": "Refund", "up_to_amount": 1_000, "approver_role": "Billing Manager"}])

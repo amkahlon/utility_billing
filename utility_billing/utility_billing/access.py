@@ -115,6 +115,11 @@ def inbox():
 			actions = sorted({t.action for t in get_transitions(doc)} & {"Approve", "Reject"})
 			if "Approve" not in actions or (r.get("requested_by") or r.owner) == frappe.session.user:
 				continue
+			from utility_billing.utility_billing import approval  # noqa: PLC0415
+
+			turn = approval.level_state(doc)
+			if turn["in_turn"] and (turn["next_role"] not in frappe.get_roles() or frappe.session.user in {d["user"] for d in turn["done"]}):
+				continue  # approvals in turn: not this user's level yet (or already approved by them)
 			since = r.get("requested_on") or r.modified
 			out.append({"doctype": doctype, "name": r.name, "title": r.get(title) if title else r.name, "society": r.get("society"),
 			            "requested_by": r.get("requested_by") or r.owner, "since": str(since), "days": date_diff(nowdate(), getdate(since)), "actions": actions})
@@ -140,7 +145,10 @@ def bulk(items: str, action: str, reason: str | None = None):
 			if action == "Reject":
 				approval.set_rejection_reason(doc.doctype, doc.name, reason)
 				doc.reload()
-			apply_workflow(doc, action)
+			if action == "Approve":
+				approval.approve(doc)  # at the next level when the society approves in turn
+			else:
+				apply_workflow(doc, action)
 			done.append(it["name"])
 		except Exception as e:  # each document stands alone
 			frappe.db.rollback(save_point="bulk_item")

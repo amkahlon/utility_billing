@@ -1,0 +1,32 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 20:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "society"
+ ],
+ "fields": [
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "API Client Society",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "grid_page_length": 50,
+ "permissions": []
+}

@@ -1,0 +1,355 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "import_title",
+  "workflow_state",
+  "society",
+  "as_of_date",
+  "cb1",
+  "import_file",
+  "row_count",
+  "error_count",
+  "totals_section",
+  "total_current",
+  "total_arrears",
+  "total_surcharge",
+  "cb2",
+  "total_fees",
+  "total_credit",
+  "total_receivable",
+  "cb3",
+  "total_deposits",
+  "total_plans",
+  "rows_section",
+  "rows",
+  "posted_section",
+  "posted_on",
+  "gl_journal",
+  "deposit_journal",
+  "approval_section",
+  "requested_by",
+  "requested_on",
+  "approved_by",
+  "approved_on",
+  "cb4",
+  "changes_since_last_submission",
+  "rejection_reason",
+  "approval_log",
+  "submitted_snapshot",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "import_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1
+  },
+  {
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "label": "Approval Status",
+   "options": "Workflow State",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "as_of_date",
+   "fieldtype": "Date",
+   "label": "Balances As At (end of day)",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Usually the last day before going live. When posted, nothing can be dated on or before this day."
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "import_file",
+   "fieldtype": "Attach",
+   "label": "File (CSV or Excel)",
+   "description": "One row per account. Columns: reference_no, current_bill, arrears, surcharge, fees, credit, security_deposit, plan_remaining, plan_installments. Use Load File, then fix the errors and load again."
+  },
+  {
+   "fieldname": "row_count",
+   "fieldtype": "Int",
+   "label": "Accounts",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "error_count",
+   "fieldtype": "Int",
+   "label": "Rows with Problems",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break",
+   "label": "Totals"
+  },
+  {
+   "fieldname": "total_current",
+   "fieldtype": "Currency",
+   "label": "Current Bills",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_arrears",
+   "fieldtype": "Currency",
+   "label": "Arrears",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_surcharge",
+   "fieldtype": "Currency",
+   "label": "Surcharge",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_fees",
+   "fieldtype": "Currency",
+   "label": "Fees",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_credit",
+   "fieldtype": "Currency",
+   "label": "Credit Balances",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_receivable",
+   "fieldtype": "Currency",
+   "label": "Net Receivable",
+   "read_only": 1,
+   "description": "What the accounts owe in all, less credit balances."
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_deposits",
+   "fieldtype": "Currency",
+   "label": "Security Deposits Held",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_plans",
+   "fieldtype": "Currency",
+   "label": "Under Installment Plans",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rows_section",
+   "fieldtype": "Section Break",
+   "label": "Accounts"
+  },
+  {
+   "fieldname": "rows",
+   "fieldtype": "Table",
+   "label": "Balances",
+   "options": "Opening Balance Row"
+  },
+  {
+   "fieldname": "posted_section",
+   "fieldtype": "Section Break",
+   "label": "Posted",
+   "collapsible": 1,
+   "depends_on": "eval:doc.docstatus==1"
+  },
+  {
+   "fieldname": "posted_on",
+   "fieldtype": "Datetime",
+   "label": "Posted On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gl_journal",
+   "fieldtype": "Link",
+   "label": "Opening Journal",
+   "options": "GL Journal",
+   "read_only": 1
+  },
+  {
+   "fieldname": "deposit_journal",
+   "fieldtype": "Link",
+   "label": "Deposits Journal",
+   "options": "GL Journal",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "Approval",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Submitted By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requested_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "cb4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "changes_since_last_submission",
+   "fieldtype": "Small Text",
+   "label": "Changes Since Last Submission",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rejection_reason",
+   "fieldtype": "Small Text",
+   "label": "Rejection Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_log",
+   "fieldtype": "Table",
+   "label": "Approval History",
+   "options": "Approval Log",
+   "read_only": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "submitted_snapshot",
+   "fieldtype": "JSON",
+   "label": "Submitted Snapshot",
+   "hidden": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "Opening Balance Import",
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Opening Balance Import",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "format:OB-{society}-{####}",
+ "title_field": "import_title",
+ "is_submittable": 1,
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1,
+   "submit": 1,
+   "cancel": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "write": 1,
+   "submit": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin"
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

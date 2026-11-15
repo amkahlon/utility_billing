@@ -26,6 +26,10 @@
   "cb_brand",
   "letterhead_text",
   "footer_text",
+  "signatories_section",
+  "signatories",
+  "branding_history_section",
+  "branding_versions",
   "supply_section",
   "disco_name",
   "disco_account_no",
@@ -80,6 +84,12 @@
   "bill_history_months",
   "print_office_copy",
   "show_qr_code",
+  "show_barcode",
+  "qr_content",
+  "qr_link_template",
+  "second_language",
+  "bill_notices_second",
+  "payment_instructions_second",
   "cb_bill_layout",
   "bill_notices",
   "payment_instructions",
@@ -128,6 +138,7 @@
   "cb_arr",
   "write_off_account",
   "deposit_liability_account",
+  "approval_order",
   "approval_levels",
   "approvals_section",
   "remind_after_days",
@@ -137,7 +148,20 @@
   "disconnection_notice_days",
   "reconnection_fee_type",
   "channel_fees_section",
-  "channel_fees"
+  "channel_fees",
+  "ra_section",
+  "ra_drop_own_percent",
+  "ra_drop_peer_percent",
+  "ra_history_months",
+  "ra_max_estimates",
+  "cb_ra",
+  "ra_residential_max_kw",
+  "ra_adjustment_limit",
+  "ra_outlier_z",
+  "golive_section",
+  "opening_balance_account",
+  "cb_golive",
+  "go_live_date"
  ],
  "fields": [
   {
@@ -236,6 +260,32 @@
    "fieldname": "footer_text",
    "fieldtype": "Small Text",
    "label": "Footer Text"
+  },
+  {
+   "fieldname": "signatories_section",
+   "fieldtype": "Section Break",
+   "label": "Signatories",
+   "collapsible": 1,
+   "description": "Who signs bills, receipts, recovery notices and no-dues certificates, and from when (FS-CLT-07). A document prints the signatory in force on its date."
+  },
+  {
+   "fieldname": "signatories",
+   "fieldtype": "Table",
+   "label": "Signatories",
+   "options": "Society Signatory"
+  },
+  {
+   "fieldname": "branding_history_section",
+   "fieldtype": "Section Break",
+   "label": "Branding history",
+   "collapsible": 1,
+   "description": "Logo, colour, letterhead and footer that take over from a date (FS-CLT-09). A document prints the branding in force on its date; without a version the fields under Logo and Branding apply."
+  },
+  {
+   "fieldname": "branding_versions",
+   "fieldtype": "Table",
+   "label": "Branding Versions",
+   "options": "Branding Version"
   },
   {
    "fieldname": "supply_section",
@@ -518,6 +568,48 @@
    "fieldname": "show_qr_code",
    "fieldtype": "Check",
    "label": "Show QR Code"
+  },
+  {
+   "fieldname": "show_barcode",
+   "fieldtype": "Check",
+   "label": "Show Barcode",
+   "description": "Code 128 barcode of the reference number, for bank counters' scanners. Independent of the QR code: print either, both or neither."
+  },
+  {
+   "fieldname": "qr_content",
+   "fieldtype": "Select",
+   "label": "QR Code Holds",
+   "options": "Reference number\nPayment link",
+   "default": "Reference number",
+   "depends_on": "eval:doc.show_qr_code"
+  },
+  {
+   "fieldname": "qr_link_template",
+   "fieldtype": "Data",
+   "label": "Payment Link",
+   "depends_on": "eval:doc.show_qr_code && doc.qr_content=='Payment link'",
+   "mandatory_depends_on": "eval:doc.show_qr_code && doc.qr_content=='Payment link'",
+   "description": "The address a phone opens, with {reference_no}, {amount}, {due_date} or {bill} filled in from the bill. For example https://pay.example.pk/?ref={reference_no}&amount={amount}"
+  },
+  {
+   "fieldname": "second_language",
+   "fieldtype": "Select",
+   "label": "Second Language on the Bill",
+   "options": "\nUrdu\nArabic",
+   "description": "Labels printed in this language beside the English, right to left."
+  },
+  {
+   "fieldname": "bill_notices_second",
+   "fieldtype": "Small Text",
+   "label": "Notices in the Second Language",
+   "depends_on": "eval:doc.second_language",
+   "description": "One notice per line."
+  },
+  {
+   "fieldname": "payment_instructions_second",
+   "fieldtype": "Small Text",
+   "label": "Payment Instructions in the Second Language",
+   "depends_on": "eval:doc.second_language"
   },
   {
    "fieldname": "cb_bill_layout",
@@ -823,6 +915,14 @@
    "description": "Where written-off receivables are booked (bad debts)."
   },
   {
+   "fieldname": "approval_order",
+   "fieldtype": "Select",
+   "label": "Approval Order",
+   "options": "Any level that covers the amount\nEach level in turn",
+   "default": "Any level that covers the amount",
+   "description": "Each level in turn: a document above level 1's limit is approved by level 1, then level 2 and so on up to the level that covers its amount; one person can't approve at two levels."
+  },
+  {
    "fieldname": "approval_levels",
    "fieldtype": "Table",
    "label": "Approval Levels by Amount",
@@ -900,13 +1000,94 @@
    "fieldtype": "Table",
    "label": "Fees",
    "options": "Channel Fee"
+  },
+  {
+   "fieldname": "ra_section",
+   "fieldtype": "Section Break",
+   "label": "Revenue assurance",
+   "collapsible": 1,
+   "description": "Thresholds for the monthly revenue assurance checks (FS-RA). Each finding becomes a case to investigate."
+  },
+  {
+   "fieldname": "ra_drop_own_percent",
+   "fieldtype": "Percent",
+   "label": "Drop: Below % of Own Average",
+   "default": "50",
+   "description": "Flag a bill whose units are below this share of the account's average over the history months."
+  },
+  {
+   "fieldname": "ra_drop_peer_percent",
+   "fieldtype": "Percent",
+   "label": "Drop: Below % of Similar Accounts",
+   "default": "50",
+   "description": "\u2026and below this share of the median of similar accounts (same category and plot size)."
+  },
+  {
+   "fieldname": "ra_history_months",
+   "fieldtype": "Int",
+   "label": "History Months",
+   "default": "6"
+  },
+  {
+   "fieldname": "ra_max_estimates",
+   "fieldtype": "Int",
+   "label": "Estimated Bills Allowed in a Row",
+   "default": "2"
+  },
+  {
+   "fieldname": "cb_ra",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ra_residential_max_kw",
+   "fieldtype": "Float",
+   "label": "Residential Load Limit (kW)",
+   "default": "7",
+   "description": "A residential account whose sanctioned load or maximum demand (MDI) is above this is flagged."
+  },
+  {
+   "fieldname": "ra_adjustment_limit",
+   "fieldtype": "Currency",
+   "label": "Adjustments by One User in a Month Above",
+   "description": "Flag a user whose reversals and adjustments in a month add up to more than this (0 = only the statistical check)."
+  },
+  {
+   "fieldname": "ra_outlier_z",
+   "fieldtype": "Float",
+   "label": "Outlier Threshold (standard deviations)",
+   "default": "3"
+  },
+  {
+   "fieldname": "golive_section",
+   "fieldtype": "Section Break",
+   "label": "Go-live",
+   "collapsible": 1,
+   "description": "Opening balances brought over from the previous system (Opening Balance Import)."
+  },
+  {
+   "fieldname": "opening_balance_account",
+   "fieldtype": "Link",
+   "label": "Opening Balances Account",
+   "options": "Ledger Account",
+   "description": "The account the opening receivables and deposits are set against (for example an opening balance equity or suspense account)."
+  },
+  {
+   "fieldname": "cb_golive",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "go_live_date",
+   "fieldtype": "Date",
+   "label": "Live Since",
+   "read_only": 1,
+   "description": "Set when opening balances are posted: nothing can be dated before this day."
   }
  ],
  "grid_page_length": 50,
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 15:00:00.000000",
+ "modified": "2026-11-16 01:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

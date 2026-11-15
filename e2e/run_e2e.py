@@ -18,6 +18,7 @@ import json
 import os
 import random
 import sys
+import time
 import traceback
 from pathlib import Path
 
@@ -331,7 +332,7 @@ def t_network(d: Desk):
 	t = d.save_doc({"doctype": "Transformer", "society": S["society"], "transformer_code": "T1", "feeder": f["name"],
 	                "kva_rating": "200"})
 	S["transformer"] = t["name"]
-	other = d.save_doc({"doctype": "Society", "society_name": "Other", "short_name": f"qo{RUN}", "enable_electricity": 1,
+	other = d.save_doc({"doctype": "Society", "society_name": f"Other {RUN}", "short_name": f"qo{RUN}", "enable_electricity": 1,
 	                    "days_to_due_date": "14", "surcharge_basis": "Percentage of current bill", "surcharge_rate": "10"})
 	expect_error(lambda: d.save_doc({"doctype": "Transformer", "society": other["name"], "transformer_code": "T9",
 	                                 "feeder": f["name"]}), "belongs to society")
@@ -1500,8 +1501,9 @@ def t_taxes_and_previews(d: Desk):
 	P = "utility_billing.utility_billing.preview."
 	bm, ao, cashier = USERS["bm"], USERS["ao"], USERS["cashier"]
 	tax = {"doctype": "Tax", "society": S["society"], "tax_name": "Society Duty", "tax_code": f"SD{RUN}", "rate": "10", "applies_to": "Charge groups",
-	       "charge_rows": [{"charge_group": "Society"}], "enabled": "1", "calculation_order": "10"}
+	       "charge_rows": [{"charge_group": "Society"}], "enabled": "1", "calculation_order": "10", "utilities": [{"utility": "Electricity"}]}
 	expect_error(lambda: bm.save_doc(dict(tax, rate="101", tax_code=f"BAD{RUN}")), "between 0 and 100")
+	expect_error(lambda: bm.save_doc(dict(tax, utilities=[], tax_code=f"NU{RUN}")), "utilities")  # each tax names the utilities it is charged on
 	expect_error(lambda: cashier.save_doc(dict(tax)))
 	saved = bm.save_doc(dict(tax, enabled="0"))  # saved switched off: the preview shows what it would add
 	eq((saved["tax_title"], float(saved["rate"])), ("Society Duty 10%", 10.0), "tax saved from the form")
@@ -1811,6 +1813,159 @@ def t_reports_more(d: Desk):
 	budget = rows_of(run_report(ao, "Revenue against Target", society=soc, year="2026"))
 	eq(any(float(r.get("budget_billed") or 0) == 25000 for r in budget), True, "target month shown")
 	expect_error(lambda: run_report(USERS["reader"], "Channel Fees and Commissions", **wide))
+
+
+# ---------------------------------------------------------------- increment 21
+@case("QA-77", "FS-RA-08/09, FS-MST: duplicate numbers refused at entry; revenue assurance checks run by a manager; a finding closed from the form")
+def t_revenue_assurance(d: Desk):
+	RA = "utility_billing.utility_billing.revenue_assurance.run_now"
+	bm, rec, soc = USERS["bm"], USERS["rec"], S["society"]
+	expect_error(lambda: USERS["cashier"].call(RA, society=soc, month="2026-11-01"), "Only a Billing Manager")
+	# user, 2026-11-15: a duplicate meter number is refused when it is typed, however it is spelt; the same for other numbers and codes
+	d.save_doc({"doctype": "Meter", "serial_no": f"QA{RUN}-DUP", "society": soc, "utility": "Electricity"})
+	expect_error(lambda: d.save_doc({"doctype": "Meter", "serial_no": f"qa{RUN} dup", "society": soc, "utility": "Electricity"}), "already used")
+	expect_error(lambda: d.save_doc({"doctype": "Meter", "serial_no": f"00QA{RUN}DUP", "society": soc, "utility": "Electricity"}), "already used")
+	expect_error(lambda: d.save_doc({"doctype": "Feeder", "society": soc, "feeder_code": "f-1", "feeder_name": "Feeder one again"}), "already used")
+	s = d.get("Society", soc)
+	d.save_doc(dict(s, ra_adjustment_limit="1"))  # any reversal or adjustment in the month stands out
+	out = bm.call(RA, society=soc, month="2026-11-01")
+	eq(out["month"], "2026-11-01", "checks ran for November")
+	found = d.s.get(f"{URL}/api/resource/RA Finding", params={"filters": json.dumps({"society": soc, "check_type": "RA-08 Unusual reversals or adjustments"}),
+	                                                          "fields": json.dumps(["name", "check_type", "status", "subject"])}).json()["data"]
+	if not found:
+		raise AssertionError(f"no RA-08 finding: {out}")
+	eq(found[0]["status"], "Open", "unusual reversals and adjustments are a finding")
+	f = rec.get("RA Finding", found[0]["name"])
+	expect_error(lambda: rec.save_doc(dict(f, status="Closed")), "result")
+	closed = rec.save_doc(dict(f, status="Closed", result="No issue", notes="Reversals were for dishonoured cheques, each with a reason"))
+	eq((closed["status"], closed["closed_by"]), ("Closed", EMAIL["rec"]), "closed by the recovery officer")
+	again = bm.call(RA, society=soc, month="2026-11-01")
+	eq(rec.get("RA Finding", f["name"])["status"], "Closed", "running again doesn't reopen it")
+	rows = rows_of(run_report(bm, "Revenue Assurance Findings", society=soc))
+	meter_row = next((r for r in rows if r.get("item") == "RA-08 Unusual reversals or adjustments"), None)
+	if not meter_row or int(meter_row["closed"]) < 1:
+		raise AssertionError(f"findings report: {rows} (second run {again})")
+	expect_error(lambda: run_report(USERS["cashier"], "Revenue Assurance Findings", society=soc))
+
+
+@case("QA-78", "FS-API-01/03/06/07/08/10: a 1Link client signs in with its API key; inquiry, payment once, idempotent v1 payment; docs served")
+def t_billing_api(d: Desk):
+	soc, conn = S["society"], S["conn"]["name"]
+	email = f"qa{RUN}.1link@example.com"
+	d.save_doc({"doctype": "User", "email": email, "first_name": f"QA{RUN} 1Link", "send_welcome_email": 0, "user_type": "System User",
+	            "roles": [{"role": "API Integration"}]})
+	api_secret = d.call("frappe.core.doctype.user.user.generate_keys", user=email)["api_secret"]
+	api_key = d.get("User", email)["api_key"]
+	d.save_doc({"doctype": "API Client", "client_name": f"QA{RUN} 1Link", "channel": "1Link", "user": email, "enabled": 1, "rate_limit": "100",
+	            "scope_account_read": 1, "scope_bill_read": 1, "scope_payment_write": 1, "scope_payment_reverse": 1,
+	            "societies": [{"society": soc}], "payment_mode": "1Link"})
+	api = Desk()
+	api.s.headers["Authorization"] = f"token {api_key}:{api_secret}"
+	CH, V1 = f"{URL}/api/method/utility_billing.api.channels", f"{URL}/api/method/utility_billing.api.v1"
+
+	inq = api.s.get(f"{CH}.bill_inquiry", params={"consumer_number": conn, "bank_mnemonic": "MCB"}).json()["message"]
+	eq(inq["response_Code"], "00", "inquiry answered")
+	eq(api.s.get(f"{CH}.bill_inquiry", params={"consumer_number": "9999999999"}).json()["message"]["response_Code"], "01", "unknown consumer")
+	due = int(inq["amount_within_dueDate"][1:]) / 100
+	today = time.strftime("%Y%m%d")
+	if due > 0:
+		pay = {"consumer_number": conn, "tran_auth_id": f"QA{RUN}A1", "transaction_amount": inq["amount_within_dueDate"], "tran_date": today, "tran_time": "101500"}
+		eq(api.s.post(f"{CH}.bill_payment", data=pay).json()["message"]["response_Code"], "00", "1Link payment posted")
+		eq(api.s.post(f"{CH}.bill_payment", data=pay).json()["message"]["response_Code"], "03", "the same authorisation ID posts once")
+		eq(api.s.post(f"{CH}.bill_reversal", data={"consumer_number": conn, "tran_auth_id": f"QA{RUN}A1"}).json()["message"]["response_Code"], "00",
+		   "reversed the same day")
+	short = {"consumer_number": conn, "tran_auth_id": f"QA{RUN}A2", "transaction_amount": "+0000000000100", "tran_date": today}
+	eq(api.s.post(f"{CH}.bill_payment", data=short).json()["message"]["response_Code"], "04", "a part payment is refused for this channel")
+
+	body = {"reference_no": conn, "amount": "1", "paid_on": time.strftime("%Y-%m-%d"), "transaction_id": f"QA{RUN}V1"}
+	r = api.s.post(f"{V1}.post_payment", data=body)
+	eq(r.status_code, 417, "a write without an Idempotency-Key is refused")
+	d.save_doc(dict(d.get("API Client", f"QA{RUN} 1Link"), partial_payments=1))
+	first = api.s.post(f"{V1}.post_payment", data=body, headers={"Idempotency-Key": f"QA{RUN}-K1"}).json()["message"]
+	again = api.s.post(f"{V1}.post_payment", data=body, headers={"Idempotency-Key": f"QA{RUN}-K1"}).json()["message"]
+	eq(first["receipt"], again["receipt"], "a retry with the same key returns the same receipt")
+	eq(api.s.post(f"{V1}.post_payment", data=dict(body, amount="2"), headers={"Idempotency-Key": f"QA{RUN}-K1"}).status_code, 409, "key reused for another request")
+	eq(api.s.get(f"{V1}.bills", params={"reference_no": conn}).status_code, 200, "bills readable with the bill scope")
+	eq(api.s.get(f"{URL}/api/resource/Connection/{conn}").status_code in (403, 404), True, "the integration user can't browse the desk")
+	logs = d.s.get(f"{URL}/api/resource/API Call Log", params={"filters": json.dumps({"client": f"QA{RUN} 1Link"}), "limit_page_length": 50}).json()["data"]
+	eq(len(logs) >= 8, True, "every call is logged")
+
+	guest = requests.get(f"{V1}.openapi", headers={"Host": SITE})
+	eq((guest.status_code, guest.json()["message"]["openapi"]), (200, "3.0.3"), "OpenAPI document is public")
+	page = requests.get(f"{URL}/ums-api", headers={"Host": SITE})
+	eq((page.status_code, "bill_inquiry" in page.text and "Idempotency-Key" in page.text), (200, True), "documentation page")
+
+
+@case("QA-79", "Gap 9: opening balances file uploaded, loaded and checked from the form; problems downloadable; can't be submitted with problems")
+def t_opening_balances(d: Desk):
+	OB = f"{URL}/api/method/utility_billing.utility_billing.opening"
+	ao, soc, conn = USERS["ao"], S["society"], S["conn"]["name"]
+	t = ao.s.get(f"{OB}.template")
+	header = t.text.lstrip("﻿").splitlines()[0].replace('"', "")
+	eq((t.status_code, header.startswith("reference_no,current_bill")), (200, True), f"template download ({header[:60]})")
+	csv = f"reference_no,current_bill,arrears\n{conn},1000,500\n9999999999,10,0\n"
+	up = ao.s.post(f"{URL}/api/method/upload_file", files={"file": ("opening.csv", csv.encode(), "text/csv")}, data={"is_private": "1"})
+	if up.status_code != 200:
+		raise ServerError(up.status_code, up.text[:300])
+	yesterday = time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400))
+	doc = ao.save_doc({"doctype": "Opening Balance Import", "society": soc, "as_of_date": yesterday, "import_file": up.json()["message"]["file_url"]})
+	out = ao.call("utility_billing.utility_billing.opening.load_file", name=doc["name"])
+	eq(out, {"rows": 2, "errors": 2}, "both rows have problems")
+	doc = ao.get("Opening Balance Import", doc["name"])
+	eq(["already has entries" in (doc["rows"][0]["error"] or ""), "no account" in (doc["rows"][1]["error"] or "")], [True, True], "problems per row")
+	rep = ao.s.get(f"{OB}.error_report", params={"name": doc["name"]})
+	eq((rep.status_code, len(rep.text.strip().splitlines())), (200, 3), "problems report: header and two rows")
+	expect_error(lambda: ao.workflow(doc, "Submit for Approval"), "problems")
+	expect_error(lambda: USERS["cashier"].save_doc({"doctype": "Opening Balance Import", "society": soc, "as_of_date": yesterday}))
+
+
+@case("QA-80", "FS-ACC-04, gap 10: approvals in sequence set on the Society; level 1 approves from the form, then the covering level")
+def t_approvals_in_turn(d: Desk):
+	AP = "utility_billing.utility_billing.approval"
+	soc = S["society"]
+	s = d.get("Society", soc)
+	keep = {"approval_order": s.get("approval_order"), "approval_levels": s.get("approval_levels")}
+	d.save_doc(dict(s, approval_order="Each level in turn", approval_levels=[
+		{"transaction": "Account Adjustment", "up_to_amount": "50", "approver_role": "Billing Manager"},
+		{"transaction": "Account Adjustment", "up_to_amount": "0", "approver_role": "General Manager"}]))
+	try:
+		note = USERS["bo"].save_doc({"doctype": "Account Adjustment", "note_type": "Debit Note", "connection": S["conn"]["name"], "bucket": "Current bill",
+		                             "amount": "60", "reason_code": "BILL-ERROR", "remarks": "Meter charge missed on the bill"})
+		note = USERS["bo"].workflow(note, "Submit for Approval")
+		st = USERS["gm"].call(f"{AP}.level_status", doctype="Account Adjustment", name=note["name"])
+		eq((st["in_turn"], st["chain"], st["next_role"]), (True, ["Billing Manager", "General Manager"], "Billing Manager"), "two levels in turn")
+		expect_error(lambda: USERS["gm"].workflow(note, "Approve"), "level 1")
+		inbox = [x["name"] for x in USERS["gm"].call("utility_billing.utility_billing.access.inbox")]
+		eq(note["name"] in inbox, False, "not in the General Manager's inbox before level 1")
+		eq(USERS["bm"].call(f"{AP}.approve_level", doctype="Account Adjustment", name=note["name"])["next_role"], "General Manager", "level 1 approved")
+		eq(USERS["bm"].get("Account Adjustment", note["name"])["workflow_state"], "Pending Approval", "still pending after level 1")
+		note = USERS["gm"].workflow(note, "Approve")
+		eq((note["workflow_state"], note["docstatus"]), ("Approved", 1), "approved by the covering level")
+	finally:
+		d.save_doc(dict(d.get("Society", soc), **keep))
+
+
+@case("QA-81", "FS-CLT-07/09/10: signatories and branding history saved from the Society form; onboarding checklist and tasks")
+def t_client_setup(d: Desk):
+	OB = "utility_billing.utility_billing.onboarding"
+	soc = S["society"]
+	s = d.get("Society", soc)
+	overlap = [{"signatory_name": "A", "designation": "GM", "for_bill": 1, "valid_from": "2026-01-01"},
+	           {"signatory_name": "B", "designation": "BM", "for_bill": 1, "valid_from": "2026-06-01"}]
+	expect_error(lambda: d.save_doc(dict(s, signatories=overlap)), "overlapping")
+	saved = d.save_doc(dict(s, signatories=[{"signatory_name": f"QA Signatory {RUN}", "designation": "General Manager", "for_bill": 1, "for_receipt": 1,
+	                                         "for_notice": 1, "valid_from": "2026-01-01"}],
+	                        branding_versions=[{"effective_from": "2026-01-01", "brand_colour": "#7A1F5F", "footer_text": f"QA footer {RUN}"}]))
+	eq((len(saved["signatories"]), len(saved["branding_versions"])), (1, 1), "signatory and branding version saved")
+	name = USERS["gm"].call(f"{OB}.open_for", society=soc)
+	check = USERS["gm"].call(f"{OB}.checklist", society=soc)
+	names = {c["check"]: c["done"] for c in check["checks"]}
+	eq((names.get("Signatory for bills"), names.get("Tariffs approved"), check["total"] >= 14), (True, True, True), "checklist from the setup")
+	ob = USERS["bm"].get("Society Onboarding", name)
+	ob["tasks"][0]["done"] = 1
+	ob = USERS["bm"].save_doc(ob)
+	eq((ob["tasks"][0]["done_by"], float(ob["percent_complete"]) > 0), (EMAIL["bm"], True), "task ticked with who and when")
+	expect_error(lambda: USERS["cashier"].call(f"{OB}.open_for", society=soc))
 
 
 def _notice_pdf(desk, run):

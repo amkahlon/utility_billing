@@ -337,6 +337,11 @@ def enquiry(reference_no: str):
 	if not connection:
 		frappe.throw(_("No account with reference number {0}.").format(reference_no))
 	frappe.get_doc("Connection", connection).check_permission("read")
+	return enquiry_of(connection)
+
+
+def enquiry_of(connection):
+	"""The enquiry without the desk permission check: the billing API checks its client's scopes and societies instead."""
 	conn = frappe.db.get_value("Connection", connection, ["consumer_name", "society", "status"], as_dict=True)
 	bill = frappe.db.get_value(
 		"Utility Bill", {"connection": connection, "docstatus": 1},

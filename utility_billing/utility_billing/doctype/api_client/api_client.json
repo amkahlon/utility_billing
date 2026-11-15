@@ -1,0 +1,205 @@
+{
+ "actions": [],
+ "creation": "2026-11-15 20:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "client_name",
+  "channel",
+  "enabled",
+  "cb1",
+  "user",
+  "rate_limit",
+  "ip_allow_list",
+  "scope_section",
+  "scope_account_read",
+  "scope_bill_read",
+  "cb2",
+  "scope_payment_write",
+  "scope_payment_reverse",
+  "scope_events",
+  "societies_section",
+  "all_societies",
+  "societies",
+  "payment_section",
+  "payment_mode",
+  "partial_payments",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "client_name",
+   "fieldtype": "Data",
+   "label": "System",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "description": "The integrating system, for example 1Link, Kuickpay, Customer Portal."
+  },
+  {
+   "fieldname": "channel",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "API\n1Link\nKuickpay",
+   "default": "API",
+   "in_list_view": 1,
+   "description": "1Link and Kuickpay use the bill inquiry and payment services in their own message format; API uses the documented v1 methods."
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "Integration User",
+   "options": "User",
+   "reqd": 1,
+   "unique": 1,
+   "description": "The system signs in as this user with its API key and secret (User \u2192 API Access). The user needs only the API Integration role."
+  },
+  {
+   "fieldname": "rate_limit",
+   "fieldtype": "Int",
+   "label": "Calls per Minute",
+   "default": "60"
+  },
+  {
+   "fieldname": "ip_allow_list",
+   "fieldtype": "Small Text",
+   "label": "Allowed IP Addresses",
+   "description": "One per line. Empty = any address."
+  },
+  {
+   "fieldname": "scope_section",
+   "fieldtype": "Section Break",
+   "label": "What it may do",
+   "description": "FS-API-07: each system gets only the scopes it needs."
+  },
+  {
+   "fieldname": "scope_account_read",
+   "fieldtype": "Check",
+   "label": "Read accounts and enquiries",
+   "default": "1"
+  },
+  {
+   "fieldname": "scope_bill_read",
+   "fieldtype": "Check",
+   "label": "Read bills and statements"
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "scope_payment_write",
+   "fieldtype": "Check",
+   "label": "Post payments"
+  },
+  {
+   "fieldname": "scope_payment_reverse",
+   "fieldtype": "Check",
+   "label": "Reverse its own payments"
+  },
+  {
+   "fieldname": "scope_events",
+   "fieldtype": "Check",
+   "label": "Receive events"
+  },
+  {
+   "fieldname": "societies_section",
+   "fieldtype": "Section Break",
+   "label": "Societies"
+  },
+  {
+   "fieldname": "all_societies",
+   "fieldtype": "Check",
+   "label": "All Societies"
+  },
+  {
+   "fieldname": "societies",
+   "fieldtype": "Table MultiSelect",
+   "label": "Societies",
+   "options": "API Client Society",
+   "depends_on": "eval:!doc.all_societies"
+  },
+  {
+   "fieldname": "payment_section",
+   "fieldtype": "Section Break",
+   "label": "Payments it posts"
+  },
+  {
+   "fieldname": "payment_mode",
+   "fieldtype": "Select",
+   "label": "Paid By",
+   "options": "Bank Transfer\n1Link\nKuickpay\nCard",
+   "default": "Bank Transfer"
+  },
+  {
+   "fieldname": "partial_payments",
+   "fieldtype": "Check",
+   "label": "Accept Part Payments",
+   "description": "Off: a payment must be the full amount payable on its date."
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-15 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "API Client",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "field:client_name",
+ "track_changes": 1,
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Billing Auditor"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Officer"
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC"
+}

@@ -121,6 +121,36 @@ class IntegrationTestBillPrint(BillingCase):
 		self.assertNotIn("data:image/png;base64,", html)
 		self.assertNotIn("Notices", html)
 
+	def test_barcode_and_qr_are_chosen_separately_and_a_second_language_is_printed(self):
+		"""Gap 12 and FS-LOC (increment 21): a society may print the barcode, the QR code, both or neither; the QR may hold a payment
+		link; labels, notices and payment instructions can also be printed in Urdu or Arabic."""
+		from utility_billing.utility_billing import barcode
+
+		soc = frappe.get_doc("Society", SOC)
+		soc.update({"show_qr_code": 0, "show_barcode": 1, "second_language": "Urdu", "bill_notices_second": "بل وقت پر ادا کریں",
+		            "payment_instructions_second": "کسی بھی ایم بی ایل برانچ میں ادائیگی کریں"})
+		soc.save()
+		run, bill = self.october_posted()
+		ref = frappe.db.get_value("Connection", self.conn, "reference_no")
+		html = bill_print.bill_html(bill.name)
+		self.assertEqual(html.count(barcode.png_data_uri(ref)), 2)  # consumer copy and the bank's office copy
+		self.assertNotIn(bill_print.qr_data_uri(ref), html)
+		for text in ("آخری تاریخ", "صارف کی کاپی", 'dir="rtl" lang="ur"', "بل وقت پر ادا کریں", "کسی بھی ایم بی ایل برانچ میں ادائیگی کریں",
+		             "Due date", "Consumer copy"):
+			self.assertIn(text, html, text)
+		self.assertTrue(bill_print.pdf_of([bill.name]).startswith(b"%PDF"))
+		# the posted bill keeps its look (FS-RUN-09): later settings change new bills only
+		soc.reload()
+		soc.update({"show_barcode": 0, "second_language": "", "show_qr_code": 1, "qr_content": "Payment link",
+		            "qr_link_template": "https://pay.example.pk/?ref={reference_no}&amount={amount}"})
+		soc.save()
+		self.assertEqual(bill_print.bill_html(bill.name), html)
+		fresh = frappe._dict(bill.as_dict(), print_snapshot=None)
+		ctx = bill_print.bill_context(frappe.get_doc(dict(fresh, doctype="Utility Bill")))
+		self.assertIsNone(ctx["barcode"])
+		snap = bill_print.build_snapshot(bill)
+		self.assertEqual(bill_print.qr_text(snap["society"], bill, ref), f"https://pay.example.pk/?ref={ref}&amount=23364")
+
 	def test_history_months_must_be_1_to_24(self):
 		soc = frappe.get_doc("Society", SOC)
 		for bad in (0, 25):

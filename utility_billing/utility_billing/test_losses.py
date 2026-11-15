@@ -78,7 +78,7 @@ class IntegrationTestLosses(BillingCase):
 
 	def test_disco_bill_rules(self):
 		self.october_posted()
-		other_feeder = ensure("Feeder", "OTHER-F9", {"society": ensure("Society", "OTHER", {"society_name": "Other", "short_name": "OTHER"}),
+		other_feeder = ensure("Feeder", "OTHER-F9", {"society": ensure("Society", "OTHER", {"society_name": "Losses Test Other Society", "short_name": "OTHER"}),
 		                                            "feeder_code": "F9", "feeder_name": "Elsewhere"})
 		self.disco("2026-10-01", 300)
 		for bad in (

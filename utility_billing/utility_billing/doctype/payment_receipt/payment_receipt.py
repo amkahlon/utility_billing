@@ -48,7 +48,7 @@ class PaymentReceipt(Document):
 		self.connection = account.connection_of(self.reference_no)
 		if not self.connection:
 			frappe.throw(_("No account with reference number {0}.").format(self.reference_no))
-		info = account.enquiry(self.connection)
+		info = account.enquiry_of(self.connection) if self.flags.api_client else account.enquiry(self.connection)
 		self.consumer_name, self.society = info["consumer_name"], info["society"]
 		self.latest_bill, self.bill_due_date = info["bill"], info["due_date"]
 		self.payable_within_due, self.payable_after_due = info["payable_within_due"], info["payable_after_due"]
@@ -63,7 +63,7 @@ class PaymentReceipt(Document):
 				frappe.throw(_("Account {0} belongs to society {1}; counter {2} doesn't.").format(
 					self.connection, self.society, self.cash_counter))
 		else:
-			if not set(frappe.get_roles()) & CHANNEL_ROLES:
+			if not set(frappe.get_roles()) & CHANNEL_ROLES and not self.flags.api_client:  # the billing API checks its client's scopes
 				raise frappe.PermissionError(_("Only an Accounts Officer records bank and channel payments."))
 			if self.mode == "Cash":
 				frappe.throw(_("Choose how the bank or channel payment was made."))

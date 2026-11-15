@@ -37,6 +37,7 @@ REASON_CODES = [
 	("WRONG-ACC", "Payment entered on the wrong account", "Payment Reversal"),
 	("WRONG-AMT", "Payment entered with the wrong amount", "Payment Reversal"),
 	("DUP-PAY", "Payment entered twice", "Payment Reversal"),
+	("CHANNEL-REV", "Reversed by the payment channel (bank, 1Link, Kuickpay) the same day", "Payment Reversal"),
 	("FEE-ERROR", "Fee charged in error", "Fee Reversal"),
 	("NON-PAY", "Disconnected for non-payment", "Disconnection"),
 	("CONS-REQ", "Disconnected at the consumer's request", "Disconnection"),

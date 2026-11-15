@@ -369,7 +369,7 @@ def notice_context(n):
 	prop = frappe.db.get_value("Property", conn.get("property"), ["property_no", "block"], as_dict=True) if conn.get("property") else {}
 	titles = {"Reminder": _("Payment Reminder"), "Notice": _("Notice of Arrears"), "Final Notice": _("Final Notice"),
 	          "Disconnection Order": _("Disconnection Order")}
-	return {"n": n, "soc": society_header(n.society), "money": money, "date": date, "title": titles.get(n.stage, n.stage),
+	return {"n": n, "soc": society_header(n.society, n.issue_date or n.creation, "Notice"), "money": money, "date": date, "title": titles.get(n.stage, n.stage),
 	        "reference": conn.get("reference_no") or n.connection, "property": prop or {},
 	        "watermark": _("CANCELLED") if n.status == "Cancelled" else (_("AWAITING APPROVAL") if n.status == "Awaiting Approval" else None)}
 

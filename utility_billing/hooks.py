@@ -110,11 +110,31 @@ jinja = {"methods": [
 	"utility_billing.utility_billing.account_print.payment_receipt_html",
 ]}
 
+# Events for other systems (FS-API-02): written with the change, delivered by the scheduler
+doc_events = {
+	"Utility Bill": {"on_submit": "utility_billing.utility_billing.events.bill_issued"},
+	"Payment Receipt": {"on_submit": "utility_billing.utility_billing.events.payment_posted",
+	                    "on_cancel": "utility_billing.utility_billing.events.payment_reversed"},
+	"Connection": {"on_update": "utility_billing.utility_billing.events.connection_changed"},
+	"Service Request": {"on_update": "utility_billing.utility_billing.events.service_request_changed"},
+}
+
+# Numbers and codes that identify something are refused when already used, ignoring case, spaces and dashes (user, 2026-11-15).
+# Keep this list the same as uniqueness.DOCTYPES (a test checks it).
+UNIQUE_CHECKED = ("API Client", "Cash Counter", "Charge Type", "Common Area Facility", "Connection Flag Type", "Consumer", "Consumer Category",
+                  "DISCO Bill", "Fee Type", "Feeder", "Grid Station", "Journal Export Layout", "KPI Definition", "Ledger Account", "Line Section",
+                  "Meter", "Network Asset", "Property", "Reading Exception Code", "Reading Route", "Reason Code", "Service Request Type",
+                  "Society", "Tax", "Transformer")
+for _dt in UNIQUE_CHECKED:
+	doc_events.setdefault(_dt, {})["validate"] = "utility_billing.utility_billing.uniqueness.validate"
+
 # Late payment surcharge the day after the due date + grace days (FS-REC-03)
 scheduler_events = {
 	"all": [
 		# Send the messages that are due: retries, and those held by quiet hours (FS-NTF-01, 02, 04)
 		"utility_billing.utility_billing.notify.process_queue",
+		# Deliver events to subscribed systems, with retries (FS-API-02)
+		"utility_billing.utility_billing.events.deliver",
 	],
 	"daily": [
 		"utility_billing.utility_billing.account.apply_surcharges",
@@ -126,6 +146,8 @@ scheduler_events = {
 		"utility_billing.utility_billing.plans.daily",
 		# Reminders and escalation of waiting approvals; delegations start and end (FS-ACC-07)
 		"utility_billing.utility_billing.access.daily",
+		# On the 1st: revenue assurance checks for last month (FS-RA)
+		"utility_billing.utility_billing.revenue_assurance.monthly",
 	],
 }
 
@@ -316,12 +338,12 @@ fixtures = [
 		"dt": "Role",
 		"filters": [["role_name", "in", [
 			"Society Admin", "Billing Manager", "General Manager", "Billing Officer", "Meter Reader",
-			"Cashier", "Recovery Officer", "Accounts Officer", "Management", "Billing Auditor",
+			"Cashier", "Recovery Officer", "Accounts Officer", "Management", "Billing Auditor", "API Integration",
 		]]],
 	},
 	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},
 	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit for Approval", "Approve", "Reject", "Withdraw", "Cancel"]]]},
-	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval", "Account Adjustment Approval", "Refund Approval", "Bill Revision Approval", "Bulk Adjustment Approval", "Installment Plan Approval", "Write Off Approval", "Security Deposit Approval"]]]},
+	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval", "Account Adjustment Approval", "Refund Approval", "Bill Revision Approval", "Bulk Adjustment Approval", "Installment Plan Approval", "Write Off Approval", "Security Deposit Approval", "Opening Balance Approval"]]]},
 	{"dt": "Property Setter", "filters": [["name", "in", ["Utility Bill-main-default_print_format", "Payment Receipt-main-default_print_format"]]]},
 ]
 
