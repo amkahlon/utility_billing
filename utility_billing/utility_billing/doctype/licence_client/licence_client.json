@@ -1,0 +1,187 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "client_name",
+  "site_url",
+  "status",
+  "start_date",
+  "cb1",
+  "contact_name",
+  "email",
+  "phone",
+  "address",
+  "terms_section",
+  "rate_per_account",
+  "monthly_minimum",
+  "currency",
+  "cb2",
+  "tax_percent",
+  "payment_days",
+  "key_section",
+  "key_hint",
+  "key_hash",
+  "key_made_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "client_name",
+   "fieldtype": "Data",
+   "label": "Client",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "site_url",
+   "fieldtype": "Data",
+   "label": "Site Address",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Active\nSuspended\nEnded",
+   "default": "Active",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Billing Starts",
+   "reqd": 1,
+   "default": "Today"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "contact_name",
+   "fieldtype": "Data",
+   "label": "Contact"
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Phone"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Small Text",
+   "label": "Billing Address"
+  },
+  {
+   "fieldname": "terms_section",
+   "fieldtype": "Section Break",
+   "label": "Price and terms"
+  },
+  {
+   "fieldname": "rate_per_account",
+   "fieldtype": "Currency",
+   "label": "Rate per Active Account per Month",
+   "reqd": 1,
+   "options": "currency"
+  },
+  {
+   "fieldname": "monthly_minimum",
+   "fieldtype": "Currency",
+   "label": "Monthly Minimum",
+   "options": "currency"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "options": "Currency",
+   "default": "PKR",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tax_percent",
+   "fieldtype": "Percent",
+   "label": "Tax on the Invoice (%)"
+  },
+  {
+   "fieldname": "payment_days",
+   "fieldtype": "Int",
+   "label": "Payment Days",
+   "default": "15"
+  },
+  {
+   "fieldname": "key_section",
+   "fieldtype": "Section Break",
+   "label": "Licence key"
+  },
+  {
+   "fieldname": "key_hint",
+   "fieldtype": "Data",
+   "label": "Key Ends With",
+   "read_only": 1
+  },
+  {
+   "fieldname": "key_hash",
+   "fieldtype": "Data",
+   "label": "Key Hash",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "key_made_on",
+   "fieldtype": "Datetime",
+   "label": "Key Made On",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Licence Client",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "field:client_name",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Licence Manager",
+   "create": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

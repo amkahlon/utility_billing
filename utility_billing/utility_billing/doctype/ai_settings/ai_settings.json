@@ -1,0 +1,155 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "society",
+  "features_section",
+  "enable_insights",
+  "enable_ask",
+  "enable_anomaly",
+  "cb1",
+  "send_names",
+  "monthly_call_limit",
+  "model_section",
+  "model",
+  "api_key",
+  "cb2",
+  "calls_this_month",
+  "cost_this_month"
+ ],
+ "fields": [
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "features_section",
+   "fieldtype": "Section Break",
+   "label": "Features",
+   "description": "Each is off until switched on here. Every use is written to the AI Log."
+  },
+  {
+   "fieldname": "enable_insights",
+   "fieldtype": "Check",
+   "label": "Insights Summary on the Dashboard",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "enable_ask",
+   "fieldtype": "Check",
+   "label": "Ask Your Data",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "enable_anomaly",
+   "fieldtype": "Check",
+   "label": "Explanations for Theft Suspicion",
+   "description": "The suspicion scores themselves are worked out by rules without AI; this adds a written explanation per account."
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "send_names",
+   "fieldtype": "Check",
+   "label": "Send Consumer Names",
+   "description": "Off: account numbers only are sent to the model, never names, phone numbers or ID numbers."
+  },
+  {
+   "fieldname": "monthly_call_limit",
+   "fieldtype": "Int",
+   "label": "Monthly Call Limit",
+   "default": "500",
+   "description": "Calls beyond it are refused until next month."
+  },
+  {
+   "fieldname": "model_section",
+   "fieldtype": "Section Break",
+   "label": "Model (Claude API)"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model",
+   "default": "claude-opus-5-5",
+   "reqd": 1,
+   "description": "An Anthropic model ID, for example claude-opus-5-5 or claude-sonnet-5-5."
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "Anthropic API Key",
+   "description": "The society's own key from console.anthropic.com; stored encrypted."
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "calls_this_month",
+   "fieldtype": "Int",
+   "label": "Calls This Month",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cost_this_month",
+   "fieldtype": "Currency",
+   "label": "Estimated Cost This Month (USD)",
+   "read_only": 1,
+   "options": "USD"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "AI Settings",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "field:society",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "create": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Society Admin",
+   "create": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

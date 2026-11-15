@@ -323,7 +323,7 @@ class IntegrationTestMIS(BillingCase):
 	# ----- registration, rights, empty data -----
 	def test_every_report_is_registered_with_roles_and_files(self):
 		root = Path(frappe.get_app_path("utility_billing", "utility_billing", "report"))
-		self.assertEqual(len(mis.REPORTS), 57)  # 20 added eight (mis_more.py), 21 revenue assurance, 22 defective meters and former occupants, 23 meter stock and store movements
+		self.assertEqual(len(mis.REPORTS), 60)  # 20 added eight (mis_more.py), 21 revenue assurance, 22 defective meters and former occupants, 23 meter stock and store movements, 24 licence receivables and revenue, theft suspicion
 		for key, spec in mis.REPORTS.items():
 			doc = frappe.get_doc("Report", spec["name"])
 			self.assertEqual((doc.report_type, doc.is_standard, doc.module), ("Script Report", "Yes", "Utility Billing"), spec["name"])
@@ -368,8 +368,8 @@ class IntegrationTestMIS(BillingCase):
 					continue
 				columns, data, *_rest = mis.run(key, {"society": "TST-EMPTY", **WIDE, "month": "2026-10-01", "as_of": "2026-12-20"})
 				self.assertTrue(columns)
-				# these always list their months; the audit log and the users' rights aren't per society
-				if key not in ("dashboard", "audit_log", "atc_losses", "recovery_vs_target", "users_rights"):
+				# these always list their months; the audit log, the users' rights and SoftVerx's licence billing aren't per society
+				if key not in ("dashboard", "audit_log", "atc_losses", "recovery_vs_target", "users_rights", "licence_receivables", "licence_revenue"):
 					self.assertEqual(data, [], spec["name"])
 
 	def test_report_rights(self):

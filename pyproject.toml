@@ -9,6 +9,7 @@ readme = "README.md"
 dynamic = ["version"]
 dependencies = [
     # "frappe~=16.0.0" # Installed and managed by bench.
+    "anthropic>=2.8,<3",  # AI analytics through the Claude API (increment 24; off unless a society switches it on)
 ]
 
 [build-system]

@@ -1,0 +1,131 @@
+{
+ "actions": [],
+ "creation": "2026-11-16 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "mode",
+  "site_section",
+  "control_url",
+  "licence_key",
+  "cb1",
+  "last_sent_month",
+  "last_error",
+  "control_section",
+  "seller_name",
+  "seller_address",
+  "seller_tax_no",
+  "cb2",
+  "invoice_day",
+  "payment_instructions"
+ ],
+ "fields": [
+  {
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "This Site Is",
+   "options": "A society's site\nThe SoftVerx control site",
+   "default": "A society's site",
+   "reqd": 1,
+   "description": "A society's site counts its active accounts each month and reports them. The control site receives the reports and raises SoftVerx's invoices."
+  },
+  {
+   "fieldname": "site_section",
+   "fieldtype": "Section Break",
+   "label": "Reporting usage",
+   "depends_on": "eval:doc.mode==\"A society's site\""
+  },
+  {
+   "fieldname": "control_url",
+   "fieldtype": "Data",
+   "label": "Control Site Address",
+   "description": "For example https://licence.softverx.com. Empty: usage is counted but not sent."
+  },
+  {
+   "fieldname": "licence_key",
+   "fieldtype": "Password",
+   "label": "Licence Key",
+   "description": "Given by SoftVerx for this site."
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_sent_month",
+   "fieldtype": "Date",
+   "label": "Last Month Accepted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "control_section",
+   "fieldtype": "Section Break",
+   "label": "Invoicing",
+   "depends_on": "eval:doc.mode==\"The SoftVerx control site\""
+  },
+  {
+   "fieldname": "seller_name",
+   "fieldtype": "Data",
+   "label": "Invoices Issued By",
+   "default": "SoftVerx"
+  },
+  {
+   "fieldname": "seller_address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "seller_tax_no",
+   "fieldtype": "Data",
+   "label": "Tax Number"
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "invoice_day",
+   "fieldtype": "Int",
+   "label": "Invoice on Day of Month",
+   "default": "5"
+  },
+  {
+   "fieldname": "payment_instructions",
+   "fieldtype": "Small Text",
+   "label": "Payment Instructions"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Licence Settings",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "issingle": 1,
+ "permissions": [
+  {
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "role": "System Manager"
+  },
+  {
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "role": "Licence Manager"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

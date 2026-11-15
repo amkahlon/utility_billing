@@ -1,0 +1,39 @@
+<style>
+	.li { font-family: "Noto Sans", Arial, sans-serif; font-size: 12px; color: #0f172a; }
+	.li h1 { font-size: 22px; margin: 0; color: #1e3a8a; }
+	.li .muted { color: #64748b; font-size: 11px; }
+	.li table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+	.li th { text-align: left; background: #f1f5f9; font-size: 11px; padding: 6px 8px; border-bottom: 1px solid #cbd5e1; }
+	.li td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+	.li .num { text-align: right; }
+	.li .total td { font-weight: 700; font-size: 14px; border-top: 2px solid #1e3a8a; }
+	.li .box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; }
+</style>
+<div class="li">
+	<table style="margin-top:0"><tr>
+		<td style="border:0;padding:0"><h1>{{ seller.seller_name or "SoftVerx" }}</h1>
+			<div class="muted">{{ (seller.seller_address or "") | replace("\n", "<br>") }}{% if seller.seller_tax_no %}<br>Tax number {{ seller.seller_tax_no }}{% endif %}</div></td>
+		<td style="border:0;padding:0;text-align:right"><div style="font-size:18px;font-weight:700">Invoice</div>
+			<div>{{ inv.name }}</div><div class="muted">Date {{ date(inv.invoice_date) }} · Due {{ date(inv.due_date) }}</div></td>
+	</tr></table>
+	<table><tr>
+		<td style="border:0;padding:0;width:55%"><div class="box"><div class="muted">Bill to</div><b>{{ client.client_name }}</b>
+			<div>{{ (client.address or "") | replace("\n", "<br>") }}</div>{% if client.contact_name %}<div class="muted">Attn: {{ client.contact_name }}</div>{% endif %}</div></td>
+		<td style="border:0;padding:0 0 0 12px"><div class="box"><div class="muted">For</div>Utility Management System licence<br><b>{{ month }}</b></div></td>
+	</tr></table>
+	<table>
+		<thead><tr><th>Description</th><th class="num">Accounts</th><th class="num">Rate ({{ inv.currency }})</th><th class="num">Amount ({{ inv.currency }})</th></tr></thead>
+		<tbody>
+			<tr><td>Active accounts in {{ month }}</td><td class="num">{{ "{:,}".format(inv.accounts) }}</td><td class="num">{{ money(inv.rate) }}</td><td class="num">{{ money(inv.amount) }}</td></tr>
+			{% if inv.minimum_applied %}<tr><td colspan="3">Monthly minimum applies</td><td class="num">{{ money(inv.net_amount) }}</td></tr>{% endif %}
+			{% if inv.tax_amount %}<tr><td colspan="3">Tax {{ inv.tax_percent }}%</td><td class="num">{{ money(inv.tax_amount) }}</td></tr>{% endif %}
+			<tr class="total"><td colspan="3">Total due by {{ date(inv.due_date) }}</td><td class="num">{{ inv.currency }} {{ money(inv.total) }}</td></tr>
+		</tbody>
+	</table>
+	{% if usage and usage.lines %}
+	<table><thead><tr><th>Society</th><th>Utility</th><th class="num">Active accounts</th></tr></thead><tbody>
+		{% for l in usage.lines %}<tr><td>{{ l.society }}</td><td>{{ l.utility }}</td><td class="num">{{ "{:,}".format(l.accounts) }}</td></tr>{% endfor %}
+	</tbody></table>
+	{% endif %}
+	{% if seller.payment_instructions %}<p class="muted" style="margin-top:14px">{{ seller.payment_instructions | replace("\n", "<br>") }}</p>{% endif %}
+</div>

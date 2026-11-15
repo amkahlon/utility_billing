@@ -159,6 +159,8 @@ scheduler_events = {
 		"utility_billing.utility_billing.revenue_assurance.monthly",
 		# Service agreements renewed or ended (FS-MST-19, increment 22)
 		"utility_billing.utility_billing.doctype.service_agreement.service_agreement.daily",
+		# SoftVerx licence: a society site reports last month's usage; the control site invoices and marks overdue (increment 24)
+		"utility_billing.utility_billing.licensing.daily",
 	],
 }
 
@@ -350,6 +352,7 @@ fixtures = [
 		"filters": [["role_name", "in", [
 			"Society Admin", "Billing Manager", "General Manager", "Billing Officer", "Meter Reader",
 			"Cashier", "Recovery Officer", "Accounts Officer", "Management", "Billing Auditor", "API Integration",
+			"Licence Manager",  # SoftVerx's own staff on the control site (increment 24)
 		]]],
 	},
 	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},
