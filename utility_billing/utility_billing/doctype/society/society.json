@@ -84,6 +84,7 @@
   "print_office_copy",
   "show_qr_code",
   "show_barcode",
+  "show_meter_photo",
   "qr_content",
   "qr_link_template",
   "bill_presentation",
@@ -585,6 +586,13 @@
    "fieldtype": "Check",
    "label": "Show Barcode",
    "description": "Code 128 barcode of the reference number, for bank counters' scanners. Independent of the QR code: print either, both or neither."
+  },
+  {
+   "default": "1",
+   "fieldname": "show_meter_photo",
+   "fieldtype": "Check",
+   "label": "Print the Meter Photo",
+   "description": "The photo taken with the reading is printed beside the readings, so the consumer sees the meter as read."
   },
   {
    "fieldname": "qr_content",
@@ -1158,7 +1166,7 @@
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 14:00:00.000000",
+ "modified": "2026-11-16 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

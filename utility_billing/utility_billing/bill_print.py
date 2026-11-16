@@ -75,7 +75,7 @@ def build_snapshot(bill) -> dict:
 	# the bill's own consumer: on a final bill the outgoing holder, not the account's holder now (increment 22)
 	consumer = frappe.db.get_value("Consumer", g("consumer") or conn.consumer, ["consumer_name", "mobile_no", "address"], as_dict=True) or {}
 	reading_fields = ["meter", "previous_reading", "previous_reading_date", "present_reading", "reading_date", "multiplier",
-	                  "consumption_type", "status"]
+	                  "consumption_type", "status", "photo"]
 	cycle = runcache.tariff(("cycle", g("bill_run")), lambda: frappe.db.get_value("Bill Run", g("bill_run"), "reading_cycle")) \
 		if g("bill_run") and runcache.active() else None
 	run_readings = runcache.bulk(("snapshot readings", cycle), lambda: {
@@ -107,6 +107,7 @@ def build_snapshot(bill) -> dict:
 			"show_qr": bool(cint(society.show_qr_code)),
 			# increment 21 (gap 12, FS-LOC): barcode and QR each on or off, what the QR holds, a second language
 			"show_barcode": bool(cint(society.get("show_barcode"))),
+			"show_meter_photo": bool(cint(society.get("show_meter_photo"))),  # user's request 2026-11-16
 			"qr_content": society.get("qr_content") or "Reference number",
 			"qr_link_template": society.get("qr_link_template"),
 			"second_language": society.get("second_language") or None,
@@ -188,6 +189,35 @@ def logo_data_uri(file_url):
 	return f"data:{mime};base64,{base64.b64encode(content).decode()}"
 
 
+def meter_photo_of(bill, snap):
+	"""The reading's photo, scaled down and embedded (a phone photo of several MB would swell every bill PDF). Bills issued before
+	the photo was kept in the snapshot take it from their reading."""
+	url = (snap.get("reading") or {}).get("photo")
+	if not url and bill.get("meter_reading"):
+		url = frappe.db.get_value("Meter Reading", bill.meter_reading, "photo")
+	return image_data_uri(url, max_px=480) if url else None
+
+
+def image_data_uri(file_url, max_px=480):
+	"""An attached image as a small JPEG data URI, or None if it can't be read."""
+	import io  # noqa: PLC0415
+
+	name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+	if not name:
+		return None
+	try:
+		content = frappe.get_doc("File", name).get_content()
+		from PIL import Image, ImageOps  # noqa: PLC0415
+
+		img = ImageOps.exif_transpose(Image.open(io.BytesIO(content if isinstance(content, bytes) else content.encode())))
+		img.thumbnail((max_px, max_px))
+		out = io.BytesIO()
+		img.convert("RGB").save(out, "JPEG", quality=72, optimize=True)
+	except Exception:  # noqa: BLE001 - a missing or broken photo leaves the bill without it
+		return None
+	return f"data:image/jpeg;base64,{base64.b64encode(out.getvalue()).decode()}"
+
+
 def watermark_of(bill, duplicate):
 	if bill.docstatus == 2:
 		return _("CANCELLED")
@@ -264,6 +294,7 @@ def bill_context(bill, duplicate=0) -> dict:
 		"signatory": soc.get("signatory"), "signature": logo_data_uri((soc.get("signatory") or {}).get("signature")),
 		"qr": qr_data_uri(qr_text(soc, bill, ref)) if soc.get("show_qr") and ref else None,
 		"barcode": barcode.png_data_uri(ref) if soc.get("show_barcode") and ref else None,
+		"meter_photo": meter_photo_of(bill, snap) if soc.get("show_meter_photo", True) else None,
 		"t": labeller(language), "lang2": bill_labels.LANG_CODE.get(language or ""), "rtl": rtl_text,
 		"notices_second": soc.get("notices_second") or [], "payment_instructions_second": soc.get("payment_instructions_second"),
 		"watermark": watermark_of(bill, duplicate),

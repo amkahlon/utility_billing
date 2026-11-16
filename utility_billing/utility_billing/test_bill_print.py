@@ -151,6 +151,31 @@ class IntegrationTestBillPrint(BillingCase):
 		snap = bill_print.build_snapshot(bill)
 		self.assertEqual(bill_print.qr_text(snap["society"], bill, ref), f"https://pay.example.pk/?ref={ref}&amount=23364")
 
+	def test_the_meter_photo_is_printed_beside_the_readings(self):
+		import base64
+
+		from PIL import Image
+
+		buf = io.BytesIO()
+		Image.new("RGB", (1600, 1200), (40, 90, 160)).save(buf, "JPEG")
+		f = frappe.get_doc({"doctype": "File", "file_name": "meter.jpg", "content": buf.getvalue(), "is_private": 1}).insert()
+		self.september_posted_with_arrears()
+		cycle = self.month_reading("2026-10-01", 3905, close=False)
+		frappe.db.set_value("Meter Reading", {"reading_cycle": cycle, "connection": self.conn}, "photo", f.file_url)
+		readings.close_cycle(cycle)
+		self.fpa("2026-10-01", 1.30)
+		bill = self.bill(self.post(self.make_run("2026-10-01", "2026-11-01")))
+		html = bill_print.bill_html(bill.name)
+		self.assertIn('class="meter-photo"', html)
+		uri = html.split('class="meter-photo" src="')[1].split('"')[0]
+		self.assertTrue(uri.startswith("data:image/jpeg;base64,"))
+		small = Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1])))
+		self.assertLessEqual(max(small.size), 480)  # scaled down, not the phone's full photo
+		frappe.db.set_value("Society", SOC, "show_meter_photo", 0)
+		bill2 = frappe.get_doc("Utility Bill", bill.name)
+		bill2.db_set("print_snapshot", None)  # the society setting is taken into the snapshot
+		self.assertNotIn('class="meter-photo"', bill_print.bill_html(bill.name))
+
 	def test_history_months_must_be_1_to_24(self):
 		soc = frappe.get_doc("Society", SOC)
 		for bad in (0, 25):
