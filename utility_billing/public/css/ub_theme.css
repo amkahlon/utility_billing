@@ -98,8 +98,11 @@ body { background: var(--ub-page); color: var(--ub-ink); font-feature-settings: 
 .dt-header .dt-cell__content, .datatable .dt-header .dt-cell { background: var(--ub-soft); color: var(--ub-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .report-summary { gap: 12px; border: 0; }
 .report-summary .summary-item { background: var(--ub-card); border: 1px solid var(--ub-line); border-radius: 12px; padding: 14px 18px; box-shadow: var(--ub-shadow); }
-.report-summary .summary-label { color: var(--ub-muted); font-size: 13px; }
-.report-summary .summary-value { font-size: 22px; font-weight: 700; }
+/* Frappe fixes the card at 62px with a 16px line for the value; with this padding and size the label and amount were cut off
+   (user's screenshot of the Management Dashboard report, 2026-11-16), so the cards grow to fit, on every report */
+.report-summary .summary-item { height: auto; min-height: 62px; justify-content: center; gap: 4px; }
+.report-summary .summary-label { color: var(--ub-muted); font-size: 13px; line-height: 1.4; }
+.report-summary .summary-value { font-size: 22px; font-weight: 700; line-height: 1.25; padding: 2px 0 0; }
 .timeline-item .timeline-content, .comment-box { border-radius: 10px; }
 .modal-content { border-radius: 14px; border: 1px solid var(--ub-line); box-shadow: 0 20px 50px rgba(15, 23, 42, .25); }
 .page-form, .standard-filter-section { background: transparent; }
