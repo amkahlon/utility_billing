@@ -40,6 +40,9 @@ class IntegrationTestRights(BillingCase):
 		doc.save()
 		install.ensure_roles_and_workflows()  # an update must not put Cashier back
 		self.assertEqual(rights.roles_for("cash.counter"), {"Accounts Officer"})
+		frappe.get_doc({"doctype": "Action Right", "action": "old.action", "label": "Gone", "roles": [{"role": "Cashier"}]}).insert()
+		rights.ensure_defaults()  # an action the app no longer has is removed
+		self.assertFalse(frappe.db.exists("Action Right", "old.action"))
 
 	def test_what_the_society_ticks_decides_who_may_act(self):
 		frappe.set_user(CASHIER)

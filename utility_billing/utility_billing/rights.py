@@ -163,6 +163,8 @@ def ensure_defaults():
 	if not frappe.db.table_exists("Action Right"):
 		return 0
 	existing = set(frappe.get_all("Action Right", pluck="name"))
+	for gone in existing - set(ACTIONS):  # an action the app no longer has: its ticks would do nothing
+		frappe.delete_doc("Action Right", gone, ignore_permissions=True, force=True)
 	roles = set(frappe.get_all("Role", pluck="name"))
 	made = 0
 	for code, (area, label, description, starting) in ACTIONS.items():
