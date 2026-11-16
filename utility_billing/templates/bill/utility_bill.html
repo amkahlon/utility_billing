@@ -28,6 +28,9 @@
 	.ub .grid th.right, .ub .grid td.right { text-align: right; }
 	.ub .tot td { padding: 1.1mm 1.5mm; border-top: 1px solid #c9d1d8; }
 	.ub .pay td { padding: 1.6mm 2mm; font-size: 10.5pt; font-weight: 700; }
+	.ub .pay td.right { white-space: nowrap; width: 30mm; }
+	.ub .pay .sub2 { display: block; font-weight: 400; font-size: 7.5pt; }
+	.ub .meter-photo { width: 30mm; height: 20mm; object-fit: cover; border: 1px solid #d9dee3; border-radius: 1.5mm; display: block; }
 	.ub .pay .within { background: {{ c }}; color: #fff; }
 	.ub .pay .after { background: #fdf0ef; color: #8f1d12; }
 	.ub .note { font-size: 7pt; color: #6b7680; }
@@ -111,6 +114,7 @@
 <div class="sp"></div>
 
 {%- if reading %}
+<table><tr><td style="vertical-align: top; padding: 0;">
 <table class="grid box">
 	<tr>
 		<th>{{ t("Previous reading") }}</th><th>{{ t("Present reading") }}</th>
@@ -124,6 +128,12 @@
 		<td>{{ (bill.consumption_type or reading.consumption_type or "") | e }}</td>
 	</tr>
 </table>
+</td>
+{%- if meter_photo %}
+<td style="width: 32mm; vertical-align: top; padding: 0 0 0 2mm;"><img class="meter-photo" src="{{ meter_photo }}" alt="">
+	<div class="note" style="text-align: center;">{{ t("Meter photo") }}</div></td>
+{%- endif %}
+</tr></table>
 <div class="sp"></div>
 {%- endif %}
 
@@ -148,7 +158,7 @@
 		<table class="pay" style="margin-top: 1.5mm;">
 			<tr class="within"><td>{{ t("Payable within due date") }} <span style="font-weight: 400; font-size: 8pt;">({{ due_date }})</span></td><td class="right">Rs {{ money(bill.payable_within_due) }}</td></tr>
 			{#- the surcharge on its own line (user's request, 2026-11-16) #}
-			<tr class="surcharge"><td style="padding: 1mm 2mm;">{{ t("Late payment surcharge") }} <span style="font-size: 8pt;">({{ _("added if paid after the due date") }})</span></td><td class="right" style="padding: 1mm 2mm;">Rs {{ money(bill.surcharge_amount) }}</td></tr>
+			<tr class="surcharge"><td style="padding: 1mm 2mm;">{{ t("Late payment surcharge") }}<span class="sub2">{{ _("added if paid after the due date") }}</span></td><td class="right" style="padding: 1mm 2mm;">Rs {{ money(bill.surcharge_amount) }}</td></tr>
 			<tr class="after"><td>{{ t("Payable after due date") }}</td><td class="right">Rs {{ money(bill.payable_after_due) }}</td></tr>
 		</table>
 	</td>
