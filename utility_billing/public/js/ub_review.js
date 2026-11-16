@@ -11,7 +11,11 @@ window.UtilityBillingReadingReview = class UtilityBillingReadingReview {
 		this.q = { cycle: null, route: "", code: "" };
 		const root = this.$root;
 		root.on("change", ".ub-rv-f", (e) => {
-			this.q[$(e.target).attr("data-f")] = e.target.value;
+			const f = $(e.target).attr("data-f");
+			this.q[f] = e.target.value;
+			// each filter narrows the next: a new cycle or route offers only its own exception types (and routes)
+			if (f === "cycle") Object.assign(this.q, { route: "", code: "" });
+			if (f === "route") this.q.code = "";
 			this.load();
 		});
 		root.on("click", ".ub-rv-row", (e) => {

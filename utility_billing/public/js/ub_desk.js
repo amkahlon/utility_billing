@@ -150,13 +150,116 @@ utility_billing.can = (action) => frappe.user.has_role("System Manager") || (fra
 		Object.keys(CHOICES).forEach((doctype) => frappe.ui.form.on(doctype, { society: fill_choices }));
 	}
 
+	// ---------------------------------------------------------------- 5. filters that follow the one chosen before them
+	// User's request (2026-11-16): "if a value is selected in a filter, the next filters should offer only what belongs to it ...
+	// application wide". A picker for records carrying a society, utility or feeder (frappe.boot.ub_link_parents) offers only those
+	// matching the value already chosen on the same list, report, page or form; changing that value clears a choice that no longer
+	// fits; block and sector boxes offer the chosen society's values. A picker a screen already narrows itself is left alone.
+	const PARENTS = ["society", "utility", "feeder"];
+	const KINDS = { block: "block", sector: "sector" };
+	const parents_of = (doctype) => (frappe.boot.ub_link_parents || {})[doctype] || [];
+	utility_billing.link_filters = (doctype, get) => {
+		const filters = {};
+		parents_of(doctype).forEach((p) => {
+			const v = get(p);
+			if (v) filters[p] = v;
+		});
+		return filters;
+	};
+
+	// a dependent Link whose record no longer matches its new parent value is cleared
+	function clear_unfit(fields, parent, value, set) {
+		fields.forEach(({ fieldname, doctype, current }) => {
+			if (!current || !parents_of(doctype).includes(parent)) return;
+			if (!value) return;
+			frappe.db.get_value(doctype, current, parent).then((r) => {
+				if (r && r.message && r.message[parent] && r.message[parent] !== value) set(fieldname, "");
+			});
+		});
+	}
+
+	function patch_page_fields() {
+		const P = frappe.ui.Page && frappe.ui.Page.prototype;
+		if (!P || P.__ub_cascade) return;
+		P.__ub_cascade = true;
+		const add_field = P.add_field;
+		P.add_field = function (df, wrapper) {
+			const page = this;
+			const kind = KINDS[df.fieldname];
+			if (kind && df.fieldtype === "Data") Object.assign(df, { fieldtype: "Autocomplete", options: [] });
+			const f = add_field.call(this, df, wrapper);
+			const get = (p) => page.fields_dict[p] && page.fields_dict[p].get_value();
+			if (df.fieldtype === "Link" && !df.get_query && !f.get_query && parents_of(df.options).length) {
+				f.get_query = () => ({ filters: utility_billing.link_filters(df.options, get) });
+			}
+			if (kind && f.$input) {
+				// the society's blocks or sectors, looked up each time the box is opened (the society may have changed)
+				f.$input.on("focus", () =>
+					frappe.xcall("utility_billing.utility_billing.choices.values", { kind, society: get("society") || null }).then((opts) => f.set_data && f.set_data(opts))
+				);
+			}
+			if (PARENTS.includes(df.fieldname) && f.$wrapper) {
+				f.$wrapper.on("change", "input, select", () =>
+					setTimeout(() => {
+						const fields = Object.values(page.fields_dict || {})
+							.filter((x) => x.df && x.df.fieldtype === "Link" && x !== f)
+							.map((x) => ({ fieldname: x.df.fieldname, doctype: x.df.options, current: x.get_value() }));
+						clear_unfit(fields, df.fieldname, f.get_value(), (fn, v) => page.fields_dict[fn].set_value(v));
+					}, 0)
+				);
+			}
+			return f;
+		};
+	}
+
+	const bound_parents = new Set();
+	function cascade_form(frm) {
+		if (!frm || !frm.meta || frm.meta.istable) return;
+		const own = (fieldname) => frm.fields_dict[fieldname];
+		frm.meta.fields.forEach((df) => {
+			if (df.fieldtype === "Link" && parents_of(df.options).length) {
+				const field = own(df.fieldname);
+				if (field && !field.get_query && !df.get_query) {
+					frm.set_query(df.fieldname, () => ({ filters: utility_billing.link_filters(df.options, (p) => frm.doc[p]) }));
+				}
+			}
+			if (df.fieldtype === "Table" && own(df.fieldname) && own(df.fieldname).grid) {
+				const grid = own(df.fieldname).grid;
+				(frappe.get_meta(df.options) || { fields: [] }).fields.forEach((cdf) => {
+					if (cdf.fieldtype !== "Link" || !parents_of(cdf.options).length) return;
+					const gf = grid.get_field && grid.get_field(cdf.fieldname);
+					if (gf && gf.get_query) return;
+					frm.set_query(cdf.fieldname, df.fieldname, (doc, cdt, cdn) => {
+						const row = (locals[cdt] || {})[cdn] || {};
+						return { filters: utility_billing.link_filters(cdf.options, (p) => row[p] || frm.doc[p]) };
+					});
+				});
+			}
+		});
+		// changing a parent clears the form's links that no longer belong to it
+		PARENTS.filter((p) => frm.meta.fields.some((df) => df.fieldname === p)).forEach((p) => {
+			const key = `${frm.doctype}:${p}`;
+			if (bound_parents.has(key)) return;
+			bound_parents.add(key);
+			frappe.ui.form.on(frm.doctype, p, (f) => {
+				const fields = f.meta.fields
+					.filter((df) => df.fieldtype === "Link" && df.fieldname !== p && !df.read_only)
+					.map((df) => ({ fieldname: df.fieldname, doctype: df.options, current: f.doc[df.fieldname] }));
+				clear_unfit(fields, p, f.doc[p], (fn, v) => f.set_value(fn, v));
+			});
+		});
+	}
+
 	// the form code is loaded with the first form, after this file: patch it then, and place the button for that first form
 	$(document).on("form-refresh", (e, frm) => {
 		patch_toolbar();
 		bind_choices();
 		cancel_button(frm);
 		if (CHOICES[frm.doctype]) fill_choices(frm);
+		cascade_form(frm);
 	});
+	$(patch_page_fields);
+	$(document).on("startup", patch_page_fields);
 	$(patch_toolbar);
 	$(document).on("startup", patch_list);
 	$(patch_list);

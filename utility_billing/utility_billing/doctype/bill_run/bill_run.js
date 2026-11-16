@@ -80,7 +80,8 @@ function record_delivery(frm) {
 					options: ["Handed to Distributor", "Delivered", "Returned", "Not Delivered", "Printed"],
 					default: "Handed to Distributor",
 				},
-				{ fieldname: "block", fieldtype: "Select", label: __("Block"), options: [{ value: "", label: __("All blocks") }, ...options(g.blocks)] },
+				{ fieldname: "block", fieldtype: "Select", label: __("Block"), options: [{ value: "", label: __("All blocks") }, ...options(g.blocks)],
+					onchange: () => routes_for_block(d, g, options) },
 				{ fieldname: "route", fieldtype: "Select", label: __("Route"), options: [{ value: "", label: __("All routes") }, ...options(g.routes)] },
 				{ fieldname: "distributor", fieldtype: "Data", label: __("Distributor"), description: __("Required when handing bills over.") },
 				{ fieldname: "remarks", fieldtype: "Small Text", label: __("Remarks") },
@@ -115,7 +116,8 @@ function print_run_bills(frm) {
 						[g.total, g.limit]
 					)}</p>`,
 				},
-				{ fieldname: "block", fieldtype: "Select", label: __("Block"), options: [{ value: "", label: __("All blocks") }, ...options(g.blocks)] },
+				{ fieldname: "block", fieldtype: "Select", label: __("Block"), options: [{ value: "", label: __("All blocks") }, ...options(g.blocks)],
+					onchange: () => routes_for_block(d, g, options) },
 				{ fieldname: "route", fieldtype: "Select", label: __("Route"), options: [{ value: "", label: __("All routes") }, ...options(g.routes)] },
 			],
 			primary_action_label: __("Open PDF"),
@@ -134,4 +136,12 @@ function print_run_bills(frm) {
 		});
 		d.show();
 	});
+}
+
+// Choosing a block offers only that block's routes, with their bill counts; a route outside the block is cleared (user's request 2026-11-16).
+function routes_for_block(d, g, options) {
+	const block = d.get_value("block");
+	const counts = block && g.pairs ? g.pairs[block] || {} : g.routes;
+	d.set_df_property("route", "options", [{ value: "", label: __("All routes") }, ...options(counts)]);
+	if (d.get_value("route") && !(d.get_value("route") in counts)) d.set_value("route", "");
 }

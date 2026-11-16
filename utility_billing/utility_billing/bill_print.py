@@ -417,11 +417,14 @@ def readable_run(run):
 def run_print_groups(run: str):
 	"""Blocks and routes in a run, with bill counts, for the bulk print dialog."""
 	readable_run(run)
-	blocks, routes = {}, {}
+	blocks, routes, pairs = {}, {}, {}
 	for b in run_bills(run):
-		blocks[b.block or "(none)"] = blocks.get(b.block or "(none)", 0) + 1
-		routes[b.route or "(none)"] = routes.get(b.route or "(none)", 0) + 1
-	return {"total": sum(blocks.values()), "blocks": blocks, "routes": routes, "limit": MAX_BILLS_PER_PDF}
+		block, route = b.block or "(none)", b.route or "(none)"
+		blocks[block] = blocks.get(block, 0) + 1
+		routes[route] = routes.get(route, 0) + 1
+		pairs.setdefault(block, {})[route] = pairs.get(block, {}).get(route, 0) + 1
+	# pairs: the routes of each block, so choosing a block offers only its routes (user's request 2026-11-16)
+	return {"total": sum(blocks.values()), "blocks": blocks, "routes": routes, "pairs": pairs, "limit": MAX_BILLS_PER_PDF}
 
 
 @frappe.whitelist()

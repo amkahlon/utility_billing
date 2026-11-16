@@ -67,7 +67,10 @@ def queue(cycle: str | None = None, society: str | None = None, route: str | Non
 		                         order_by="billing_month desc", limit=12),
 		"counts": {"total": cint(counts.total), "done": cint(counts.done), "waiting": cint(counts.waiting)},
 		"routes": sorted({r for r in frappe.get_all("Meter Reading", filters={"reading_cycle": cycle, "route": ["is", "set"]}, pluck="route", distinct=True)}),
-		"codes": frappe.get_all("Reading Exception Code", filters={"enabled": 1}, pluck="name", order_by="name"),
+		# only the exception types the chosen cycle (and route) has, as every filter narrows by the one before it
+		"codes": sorted({x for x in frappe.get_all("Meter Reading", filters={"reading_cycle": cycle, "exception_code": ["is", "set"],
+		                                                                       **({"route": route} if route else {})},
+		                                             pluck="exception_code", distinct=True) if x}),
 		"rows": rows, "route": route or "", "code": code or "",
 		"can_decide": rights.can("readings.review"),
 	}

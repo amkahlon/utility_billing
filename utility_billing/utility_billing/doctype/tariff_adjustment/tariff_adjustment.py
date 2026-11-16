@@ -31,8 +31,21 @@ class TariffAdjustment(Document):
 			f"{self.adjustment_type} {getdate(self.billing_month).strftime('%b %Y')} "
 			f"(on {getdate(self.reference_month).strftime('%b %Y')} units)"
 		)
+		self.check_charge_type()
 		self.check_duplicate()
 		approval.validate_transition(self)
+
+	def check_charge_type(self):
+		"""An FPA or QTA is billed as its own charge, never as the energy charge (user's bill, 2026-11-16: an FPA saved with Charge
+		Type Energy printed as a second 'Energy Charges' line). A charge type named after the adjustment is the default."""
+		energy = frappe.db.get_value("Society", self.society, "energy_charge_type") if self.society else None
+		if not self.charge_type and frappe.db.exists("Charge Type", self.adjustment_type):
+			self.charge_type = self.adjustment_type
+		if self.charge_type and self.charge_type == energy:
+			frappe.throw(_("An {0} is billed as its own charge, not as the energy charge {1}. Choose the {0} charge type.").format(
+				self.adjustment_type, energy))
+		if self.charge_type and frappe.db.get_value("Charge Type", self.charge_type, "calculation_basis") != "Per Unit":
+			frappe.throw(_("Charge type {0} isn't charged per unit, as an {1} is.").format(self.charge_type, self.adjustment_type))
 
 	def check_duplicate(self):
 		other = frappe.db.get_value(

@@ -169,3 +169,36 @@ class IntegrationTestBugReport(BillingCase):
 		bill = self.bill(self.make_run("2026-08-01", "2026-09-01"))
 		self.assertEqual((bill.lines[-1].label, round(bill.lines[-1].amount)), ("Minimum bill adjustment", 9130))
 		self.assertEqual(round(bill.current_amount), 70000)
+
+	# ---- bug report 2 (2026-11-16): filters that follow the one before; FPA billed as its own charge
+	def test_pickers_know_which_records_carry_a_society_utility_or_feeder(self):
+		frappe.cache.delete_value("ub-link-parents")
+		parents = boot.link_parents()
+		self.assertEqual(set(parents["Transformer"]) >= {"society", "feeder"}, True)
+		self.assertIn("society", parents["Bill Run"])
+		self.assertIn("utility", parents["Consumer Category"])
+		self.assertNotIn("Society", parents)
+
+	def test_the_print_dialog_offers_each_blocks_own_routes(self):
+		from utility_billing.utility_billing import bill_print
+
+		frappe.db.set_value("Property", self.prop, "block", "A")
+		frappe.get_doc({"doctype": "Reading Route", "society": SOC, "utility": "Electricity", "route_code": "A-1"}).insert()
+		conn = frappe.get_doc("Connection", self.conn)
+		conn.route = "A-1"
+		conn.save()
+		self.month_reading("2026-08-01", 2830)
+		self.fpa("2026-08-01", 0)
+		run = self.make_run("2026-08-01", "2026-09-01")
+		g = bill_print.run_print_groups(run.name)
+		self.assertEqual(g["pairs"], {"A": {"A-1": 1}})
+
+	def test_an_fpa_is_never_billed_as_the_energy_charge(self):
+		energy = frappe.db.get_value("Society", SOC, "energy_charge_type")
+		adj = frappe.get_doc({"doctype": "Tariff Adjustment", "adjustment_type": "FPA", "society": SOC, "utility": "Electricity",
+		                      "billing_month": "2026-12-01", "rate_per_unit": 2, "charge_type": energy})
+		self.assertRaises(frappe.ValidationError, adj.insert)
+		adj.charge_type = "TST Service"  # a fixed charge can't carry a per-unit FPA
+		self.assertRaises(frappe.ValidationError, adj.insert)
+		adj.charge_type = "TST FPA"
+		adj.insert()
