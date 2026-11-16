@@ -2125,8 +2125,8 @@ def t_rights_and_users(d: Desk):
 	eq((row["roles"], row["societies"]), (["Cashier"], [S["society"]]), "user created with role and society")
 	expect_error(lambda: d.call(f"{users}.save_user", data=json.dumps({"email": email, "roles": ["System Manager"], "societies": [S["society"]]})))
 	# Print > PDF of any record (Frappe's own print path, with the PDF fallbacks)
-	_reader, text = get_pdf_at(d, "frappe.utils.print_format.download_pdf", doctype="Connection", name=S["conn"])
-	eq(S["conn"] in text, True, "the connection's PDF")
+	_reader, text = get_pdf_at(d, "frappe.utils.print_format.download_pdf", doctype="Connection", name=S["conn"]["name"])
+	eq(S["conn"]["name"] in text, True, "the connection's PDF")
 
 
 def _notice_pdf(desk, run):

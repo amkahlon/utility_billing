@@ -60,8 +60,6 @@ ACTIONS = {
 	"settlement.handle": ("Payments", "Match settlement exceptions", "Match unmatched settlement lines and suspense payments.",
 	                      ["Accounts Officer", "Billing Manager"]),
 	# corrections
-	"corrections.handle": ("Corrections", "Prepare corrections", "Bill revisions, due date extensions, disputes and similar.",
-	                       ["Billing Manager", "General Manager", "Billing Officer", "Society Admin"]),
 	"disputes.decide": ("Corrections", "Decide a bill dispute", "Accept or reject what the consumer disputes.", ["Billing Manager", "General Manager"]),
 	"corrections.senior": ("Corrections", "Corrections that need the General Manager", "Changes reserved for the most senior manager.",
 	                       ["General Manager"]),
@@ -82,14 +80,12 @@ ACTIONS = {
 	"period.close": ("Period control", "Close a month or year", "Close a billing month, or the year end.",
 	                 ["Billing Manager", "General Manager", "Accounts Officer"]),
 	"period.reopen": ("Period control", "Reopen a closed month", "Reopen a month someone closed.", ["General Manager"]),
-	"opening.import": ("Period control", "Import opening balances", "Bring in balances at go-live.", ["Billing Manager", "Accounts Officer"]),
 	"gl.export": ("Accounting", "Export journals", "Export GL journals for the accounting system.", ["Accounts Officer", "Billing Manager", "General Manager"]),
 	"gl.view": ("Accounting", "See journals and reconciliation", "GL journals and the receivables reconciliation.",
 	            ["Accounts Officer", "Billing Manager", "General Manager", "Billing Auditor", "Management"]),
 	# access and setup
 	"approvals.delegate_others": ("Access", "Delegate approvals for others", "Set up an approval delegation for another user.",
 	                              ["General Manager", "Society Admin"]),
-	"access.manage": ("Access", "Limit users to societies, counters and blocks", "Edit Society and Block Access.", ["Society Admin", "Access Manager"]),
 	"users.manage": ("Access", "Manage the society's users", "Create, edit and disable users of one's own societies and give them roles.",
 	                 ["Society Admin", "Access Manager"]),
 	"rights.manage": ("Access", "Manage action rights", "Tick which roles may do each action on the Role Rights screen.",
