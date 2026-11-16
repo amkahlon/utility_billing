@@ -16,6 +16,9 @@ from utility_billing.utility_billing import readings, runcache
 from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff as _applicable_tariff
 
 
+WHOLE_BILL = "Whole current bill"  # Tariff.minimum_applies_to (user decision, 2026-11-16)
+
+
 def get_applicable_tariff(society, utility, category, on_date):
 	"""The tariff in force (tariff.get_applicable_tariff), looked up once per category and date during a run."""
 	return runcache.tariff(("applicable", society, utility, category, str(on_date)),
@@ -158,7 +161,8 @@ def tariff_segments(run, category, reading, units, fraction, fraction_note, plot
 		t = frappe.get_cached_doc("Tariff", name)
 		segments.append({
 			"units": share, "fraction": whole * engine.D(days) / engine.D(total),
-			"tariff": {"method": t.pricing_method, "flat_rate": t.flat_rate, "slabs": t.slabs, "minimum_charge": t.minimum_charge},
+			"tariff": {"method": t.pricing_method, "flat_rate": t.flat_rate, "slabs": t.slabs, "minimum_charge": t.minimum_charge,
+			           "minimum_applies_to": t.get("minimum_applies_to")},
 			"charges": tariff_charges(t, plot_class), "tariff_name": name,
 			"note": _("{0} of {1} days at {2}").format(days, total, t.tariff_title) + (f"; {fraction_note}" if fraction_note else ""),
 		})
@@ -187,7 +191,8 @@ def category_segments(run, conn, reading, units, fraction, fraction_note, method
 			else _("{0} of {1} days").format(days, total)
 		segments.append({
 			"units": share, "fraction": whole * engine.D(days) / engine.D(total) if total else whole,
-			"tariff": {"method": t.pricing_method, "flat_rate": t.flat_rate, "slabs": t.slabs, "minimum_charge": t.minimum_charge},
+			"tariff": {"method": t.pricing_method, "flat_rate": t.flat_rate, "slabs": t.slabs, "minimum_charge": t.minimum_charge,
+			           "minimum_applies_to": t.get("minimum_applies_to")},
 			"charges": tariff_charges(t, plot_class), "tariff_name": tariff_name,
 			"note": _("{0}: {1}").format(frappe.db.get_value("Consumer Category", category, "category_name") or category, how)
 			        + (f"; {fraction_note}" if fraction_note else ""),
@@ -318,7 +323,9 @@ def build_bill(run, connection, override=None) -> dict:
 	result = engine.calculate(
 		units,
 		{"method": tariff.pricing_method, "flat_rate": tariff.flat_rate, "slabs": tariff.slabs,
-		 "minimum_charge": 0 if fixed_only or not metered else tariff.minimum_charge},
+		 "minimum_applies_to": tariff.get("minimum_applies_to"),
+		 # a whole-bill minimum also applies where there is no meter; an energy minimum needs energy; neither while only fixed charges run
+		 "minimum_charge": 0 if fixed_only or (not metered and tariff.get("minimum_applies_to") != WHOLE_BILL) else tariff.minimum_charge},
 		energy, charges=charges, adjustments=adjustments, area=area,
 		arrears=override["arrears"] if override.get("arrears") is not None else arrears_of(connection, month),
 		surcharge={"basis": society.surcharge_basis, "rate": society.surcharge_rate,

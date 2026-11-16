@@ -159,3 +159,13 @@ class IntegrationTestBugReport(BillingCase):
 	def test_a_minimum_is_the_tariffs_only(self):
 		self.assertIsNone(frappe.get_meta("Society").get_field("minimum_bill"))
 		self.assertIsNotNone(frappe.get_meta("Tariff").get_field("minimum_charge"))
+
+	def test_a_whole_bill_minimum_set_on_the_tariff_tops_up_the_bill(self):
+		tariff = frappe.db.get_value("Tariff", {"society": SOC, "consumer_category": self.cat, "docstatus": 1})
+		frappe.db.set_value("Tariff", tariff, {"minimum_charge": 70000, "minimum_applies_to": "Whole current bill"})
+		frappe.clear_document_cache("Tariff", tariff)
+		self.month_reading("2026-08-01", 2830)  # 831 units: 58,170 energy + 2,700 fixed = 60,870
+		self.fpa("2026-08-01", 0)
+		bill = self.bill(self.make_run("2026-08-01", "2026-09-01"))
+		self.assertEqual((bill.lines[-1].label, round(bill.lines[-1].amount)), ("Minimum bill adjustment", 9130))
+		self.assertEqual(round(bill.current_amount), 70000)
