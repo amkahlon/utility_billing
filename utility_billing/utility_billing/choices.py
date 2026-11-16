@@ -6,6 +6,8 @@ Offices, Counters and Blocks list and from what its properties already use; a ne
 import frappe
 from frappe import _
 
+from utility_billing.utility_billing import access
+
 KINDS = {"block": ("Block", "block"), "sector": ("Sector", "sector"), "office": ("Office", None)}
 
 
@@ -15,14 +17,20 @@ def values(kind: str, society: str | None = None) -> list[str]:
 		frappe.throw(_("Unknown list {0}.").format(kind))
 	office_type, property_field = KINDS[kind]
 	types = ["Office", "Collection Counter"] if kind == "office" else [office_type]
+	access.check_society(society)
+	mine = access.societies_of()
 	filters = {"parenttype": "Society", "office_type": ["in", types]}
 	if society:
 		filters["parent"] = society
+	elif mine is not None:
+		filters["parent"] = ["in", mine]
 	out = set(frappe.get_all("Society Office", filters=filters, pluck="office_name"))
 	if property_field:
 		pf = {property_field: ["is", "set"]}
 		if society:
 			pf["society"] = society
+		elif mine is not None:
+			pf["society"] = ["in", mine]
 		out |= set(frappe.get_all("Property", filters=pf, pluck=property_field, distinct=True))
 	return sorted(x for x in out if x)
 

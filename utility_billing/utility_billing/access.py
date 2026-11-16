@@ -45,6 +45,31 @@ def societies_of(user=None) -> list[str] | None:
 	return rows or None
 
 
+def check_society(society, user=None):
+	"""A user limited to some societies (User Access) can't read or act on another society's data, whatever a screen or a
+	request sends (review 2026-11-16: reports and pages trusted the society in the request)."""
+	if not society:
+		return
+	mine = societies_of(user)
+	wanted = list(society) if isinstance(society, (list, tuple, set)) else [society]
+	refused = [s for s in wanted if s and mine is not None and s not in mine]
+	if refused:
+		raise frappe.PermissionError(_("You don't have access to society {0}.").format(", ".join(refused)))
+
+
+def visible_societies(fields=("name", "society_name"), order_by="society_name", limit=200):
+	"""The societies this user may see, for a page's society picker."""
+	mine = societies_of()
+	filters = {"name": ["in", mine]} if mine is not None else {}
+	return frappe.get_all("Society", filters=filters, fields=list(fields), order_by=order_by, limit=limit)
+
+
+def check_record_society(doctype, name):
+	"""The society of a record looked up by name, checked as above."""
+	if name and frappe.get_meta(doctype).has_field("society"):
+		check_society(frappe.db.get_value(doctype, name, "society"))
+
+
 def blocks_of(user=None, society=None) -> list[str] | None:
 	user = user or frappe.session.user
 	if not frappe.db.exists("User Access", user):

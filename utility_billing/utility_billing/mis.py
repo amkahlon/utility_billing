@@ -71,9 +71,12 @@ def col(label, fieldname, fieldtype="Data", width=120, options=None):
 
 
 def society_of(f):
+	from utility_billing.utility_billing import access  # noqa: PLC0415
+
 	if f.get("society"):
+		access.check_society(f.society)  # also checked per request (scope.py); here for reports run in the background
 		return f.society
-	names = frappe.get_all("Society", pluck="name", limit=2)
+	names = [s.name for s in access.visible_societies(fields=("name",), order_by="name", limit=2)]
 	if len(names) == 1:
 		return names[0]
 	frappe.throw(_("Choose a society."))

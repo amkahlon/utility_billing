@@ -26,7 +26,7 @@ def state():
 	require()
 	day = open_day_of()
 	if not day:
-		return {"open": False, "counters": frappe.get_all("Cash Counter", filters={"enabled": 1}, fields=["name", "counter_name", "society"])}
+		return {"open": False, "counters": frappe.get_list("Cash Counter", filters={"enabled": 1}, fields=["name", "counter_name", "society"])}
 	d = frappe.get_doc("Cashier Day", day.name)
 	counter = frappe.db.get_value("Cash Counter", d.cash_counter, ["counter_name", "office", "counter_code"], as_dict=True) or {}
 	recent = frappe.get_all("Payment Receipt", filters={"cashier_day": d.name, "docstatus": 1},

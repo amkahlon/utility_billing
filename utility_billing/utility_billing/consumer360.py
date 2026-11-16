@@ -28,6 +28,7 @@ def search(text: str, limit: int = 20):
 	if len(text) < 2:
 		return []
 	like = f"%{text}%"
+	mine = access.societies_of()  # a user limited to some societies finds only their accounts (review 2026-11-16)
 	rows = frappe.db.sql(
 		"""select c.name, c.consumer_name, c.mobile_no, c.id_number, k.name account, k.reference_no, k.current_meter, k.utility,
 		          k.status account_status, p.property_no house,
@@ -35,10 +36,11 @@ def search(text: str, limit: int = 20):
 		               when p.property_no like %(l)s then 'house' when c.id_number like %(l)s then 'cnic'
 		               when c.mobile_no like %(l)s or c.phone like %(l)s then 'phone' else 'name' end matched
 		from `tabConsumer` c left join `tabConnection` k on k.consumer = c.name left join `tabProperty` p on p.name = k.property
-		where c.consumer_name like %(l)s or c.id_number like %(l)s or c.mobile_no like %(l)s or c.phone like %(l)s
-		   or k.reference_no like %(l)s or k.current_meter like %(l)s or p.property_no like %(l)s
+		where (c.consumer_name like %(l)s or c.id_number like %(l)s or c.mobile_no like %(l)s or c.phone like %(l)s
+		   or k.reference_no like %(l)s or k.current_meter like %(l)s or p.property_no like %(l)s)
+		   and (%(all)s or k.society in %(mine)s)
 		order by (k.reference_no = %(t)s or k.current_meter = %(t)s or p.property_no = %(t)s) desc, c.consumer_name, k.name
-		limit %(n)s""", {"l": like, "t": text, "n": int(limit)}, as_dict=True)
+		limit %(n)s""", {"l": like, "t": text, "n": int(limit), "all": mine is None, "mine": mine or [""]}, as_dict=True)
 	for r in rows:
 		r["balance"] = acct.balance(r.account) if r.account else None
 	return access.mask_rows(rows)
@@ -166,6 +168,11 @@ def view(consumer: str, account: str | None = None):
 	_require()
 	c = frappe.get_doc("Consumer", consumer)
 	conns = _connections(consumer)
+	mine = access.societies_of()
+	if mine is not None:
+		conns = [k for k in conns if k.society in mine]
+		if not conns:
+			raise frappe.PermissionError(_("This consumer has no account in your societies."))
 	names = [k.name for k in conns] or [""]
 	today = getdate(nowdate())
 	accounts = []
