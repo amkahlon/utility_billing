@@ -570,3 +570,29 @@ def set_cancellation_reason(doctype: str, name: str, reason: str):
 	if len(reason) < 5:
 		frappe.throw(_("Write a reason of at least 5 characters."))
 	doc.db_set("cancellation_reason", reason, update_modified=False)
+
+
+@frappe.whitelist(methods=["POST"])
+def bulk_action(doctype: str, docnames, action: str) -> dict:
+	"""A workflow action on the records ticked in a list, one at a time, each in its own transaction, with what happened to each.
+	Frappe's own bulk action gave no message and left the list as it was (bug report 2026-11-16); the list now says what was done."""
+	from frappe.model.workflow import apply_workflow  # noqa: PLC0415
+
+	names = frappe.parse_json(docnames) if isinstance(docnames, str) else list(docnames or [])
+	if len(names) > 200:
+		frappe.throw(_("Choose at most 200 records at a time."))
+	done, failed = [], []
+	for i, name in enumerate(names):
+		# a savepoint per record: one that fails is undone alone; the request commits the rest when it ends
+		savepoint = f"ub_bulk_{i}"
+		frappe.db.savepoint(savepoint)
+		try:
+			apply_workflow(frappe.get_doc(doctype, name), action)
+			done.append(name)
+		except Exception as e:  # noqa: BLE001 - every record is tried; the reason is shown to the user
+			frappe.db.rollback(save_point=savepoint)
+			messages = [frappe.utils.strip_html(frappe.parse_json(m).get("message", "")) for m in (frappe.local.message_log or [])
+			            if isinstance(m, (str, dict))] if getattr(frappe.local, "message_log", None) else []
+			frappe.clear_messages()
+			failed.append({"name": name, "reason": "; ".join(x for x in messages if x) or frappe.utils.strip_html(str(e)) or e.__class__.__name__})
+	return {"action": action, "done": done, "failed": failed}

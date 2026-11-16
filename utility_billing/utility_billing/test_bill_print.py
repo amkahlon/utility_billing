@@ -164,6 +164,8 @@ class IntegrationTestBillPrint(BillingCase):
 		consumer = frappe.get_doc({"doctype": "Consumer", "consumer_name": "A Block Owner"}).insert().name
 		prop = frappe.get_doc({"doctype": "Property", "society": SOC, "property_no": "A 5", "block": "A Block"}).insert().name
 		meter = frappe.get_doc({"doctype": "Meter", "serial_no": "TST-BIL-M2", "society": SOC, "utility": "Electricity"}).insert().name
+		# a connection's route is one of the society's reading routes (bug report 2026-11-16)
+		frappe.get_doc({"doctype": "Reading Route", "society": SOC, "utility": "Electricity", "route_code": "R1"}).insert()
 		conn2 = frappe.get_doc({
 			"doctype": "Connection", "society": SOC, "property": prop, "consumer": consumer, "utility": "Electricity",
 			"consumer_category": self.cat, "status": "Active", "route": "R1",

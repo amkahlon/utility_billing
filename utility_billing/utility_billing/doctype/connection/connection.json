@@ -166,8 +166,9 @@
   },
   {
    "fieldname": "route",
-   "fieldtype": "Data",
-   "label": "Reading Route"
+   "fieldtype": "Autocomplete",
+   "label": "Reading Route",
+   "description": "Choose one of the society's reading routes for this utility; the account is added to the end of that route (and taken off any other)."
   },
   {
    "fieldname": "security_deposit",
@@ -265,7 +266,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 18:00:00.000000",
+ "modified": "2026-11-16 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection",

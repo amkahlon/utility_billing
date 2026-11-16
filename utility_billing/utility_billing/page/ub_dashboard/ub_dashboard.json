@@ -4,7 +4,7 @@
  "docstatus": 0,
  "doctype": "Page",
  "idx": 0,
- "modified": "2026-11-14 09:36:16.173869",
+ "modified": "2026-11-16 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "ub-dashboard",
@@ -34,6 +34,12 @@
   },
   {
    "role": "Society Admin"
+  },
+  {
+   "role": "Meter Reader"
+  },
+  {
+   "role": "Cashier"
   }
  ],
  "script": null,

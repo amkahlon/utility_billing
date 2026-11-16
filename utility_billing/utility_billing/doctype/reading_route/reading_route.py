@@ -52,3 +52,24 @@ class ReadingRoute(Document):
 		for conn in previous - now:
 			if frappe.db.get_value("Connection", conn, "route") == self.route_code:
 				frappe.db.set_value("Connection", conn, "route", "", update_modified=False)
+
+
+def move_account(conn, route_code):
+	"""Put an account at the end of the enabled route with this code (or on no route), taking it off the others of its utility
+	first (a route refuses an account that is on another route)."""
+	routes = [frappe.get_doc("Reading Route", n) for n in
+	          frappe.get_all("Reading Route", filters={"society": conn.society, "utility": conn.utility}, pluck="name")]
+	target = None
+	for r in routes:
+		if r.enabled and route_code and r.route_code == route_code:
+			target = r
+			continue
+		if any(s.connection == conn.name for s in r.stops):
+			r.set("stops", [s for s in r.stops if s.connection != conn.name])
+			r.flags.ignore_permissions = True
+			r.save()
+	if target and not any(s.connection == conn.name for s in target.stops):
+		last = max([s.sequence or 0 for s in target.stops] or [0])
+		target.append("stops", {"stop_type": "Connection", "connection": conn.name, "sequence": last + 10})
+		target.flags.ignore_permissions = True
+		target.save()

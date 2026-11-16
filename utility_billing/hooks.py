@@ -40,7 +40,7 @@ from utility_billing.ui_version import ui_version  # noqa: E402
 _V = ui_version()
 app_include_css = f"/assets/utility_billing/css/ub_theme.css?v={_V}"
 web_include_css = f"/assets/utility_billing/css/ub_theme.css?v={_V}"
-app_include_js = [f"/assets/utility_billing/js/approval.js?v={_V}", f"/assets/utility_billing/js/ub_map.js?v={_V}"]
+app_include_js = [f"/assets/utility_billing/js/approval.js?v={_V}", f"/assets/utility_billing/js/ub_map.js?v={_V}", f"/assets/utility_billing/js/ub_desk.js?v={_V}"]
 boot_session = "utility_billing.boot.boot_session"
 
 # include js, css files in header of web template
@@ -270,6 +270,10 @@ scheduler_events = {
 # Overriding Methods
 # ------------------------------
 #
+override_whitelisted_methods = {
+	# report PDFs without the footer wkhtmltopdf can't print when its Qt is unpatched (bug report 2026-11-16)
+	"frappe.utils.print_format.report_to_pdf": "utility_billing.pdf.report_to_pdf",
+}
 # override_whitelisted_methods = {
 # 	"frappe.desk.doctype.event.event.get_events": "utility_billing.event.get_events"
 # }

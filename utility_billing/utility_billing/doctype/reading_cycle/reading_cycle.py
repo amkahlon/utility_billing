@@ -16,6 +16,12 @@ class ReadingCycle(Document):
 		self.billing_month = month_start(self.billing_month)
 		self.cycle_name = f"{self.society}-{self.utility}-{getdate(self.billing_month).strftime('%Y-%m')}"
 
+	def before_validate(self):
+		# a route's usual reader is the reader unless one is chosen for this cycle (bug report 2026-11-16)
+		for a in self.route_assignments:
+			if a.route and not a.reader:
+				a.reader = frappe.db.get_value("Reading Route", a.route, "reader")
+
 	def validate(self):
 		self.billing_month = month_start(self.billing_month)
 		if self.reading_from and self.reading_to and getdate(self.reading_to) < getdate(self.reading_from):
