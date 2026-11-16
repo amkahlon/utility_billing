@@ -2129,6 +2129,41 @@ def t_rights_and_users(d: Desk):
 	eq(S["conn"]["name"] in text, True, "the connection's PDF")
 
 
+@case("QA-87", "Review 2026-11-16: a user limited to one society can't reach another society's data (FS-ACC-01)")
+def t_society_isolation(d: Desk):
+	other = "QA-ISO"
+	if d.s.get(f"{URL}/api/resource/Society/{other}").status_code != 200:
+		d.save_doc({"doctype": "Society", "society_name": "QA Isolation Society", "short_name": other})
+	user = "qa.iso@example.com"
+	name = d.call("frappe.client.get_value", doctype="User Access", filters=json.dumps({"user": user}), fieldname="name")
+	ua = d.get("User Access", name["name"]) if name else {"doctype": "User Access", "user": user}
+	ua.update({"all_societies": 0, "societies": [{"society": S["society"]}]})
+	d.save_doc(ua)
+	iso = USERS["iso"]
+	dash = "utility_billing.utility_billing.dashboard.get_dashboard"
+	eq({x["name"] for x in iso.call(dash)["societies"]}, {S["society"]}, "the dashboard lists only the user's society")
+	expect_error(lambda: iso.call(dash, society=other), "access")
+	report = "frappe.desk.query_report.run"
+	iso.call(report, report_name="Billing Summary by Cycle", filters=json.dumps({"society": S["society"]}))
+	expect_error(lambda: iso.call(report, report_name="Billing Summary by Cycle", filters=json.dumps({"society": other})), "access")
+	expect_error(lambda: iso.call("utility_billing.utility_billing.reading_review.queue", society=other), "access")
+	expect_error(lambda: iso.call("utility_billing.utility_billing.choices.values", kind="block", society=other), "access")
+	d.call(dash, society=other)  # an unlimited user still opens any society
+
+
+@case("QA-88", "Review 2026-11-16: PDFs carry their page header and footer on every page (report and record PDFs)")
+def t_pdf_header_footer(d: Desk):
+	from pypdf import PdfReader
+
+	html = ('<div id="header-html"><b>QA88 HEADER</b></div><div id="footer-html"><span>QA88 FOOTER</span></div>'
+	        + "<h1>QA-88</h1>" + "<p>line</p>" * 200)
+	r = d.s.post(f"{URL}/api/method/frappe.utils.print_format.report_to_pdf", data={"html": html, "orientation": "Portrait"})
+	if r.status_code != 200 or not r.content.startswith(b"%PDF"):
+		raise ServerError(r.status_code, r.text[:300])
+	pages = [p.extract_text() for p in PdfReader(io.BytesIO(r.content)).pages]
+	eq((len(pages) > 1, all("QA88 HEADER" in p and "QA88 FOOTER" in p for p in pages)), (True, True), "header and footer on every page")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 
@@ -2153,6 +2188,7 @@ def main():
 	make_user(d, "mgmt", ["Management"])
 	make_user(d, "auditor", ["Billing Auditor"])
 	make_user(d, "rec", ["Recovery Officer"])
+	make_user(d, "iso", ["Billing Manager"])
 	results = []
 	for qa_id, req, fn in CASES:
 		try:

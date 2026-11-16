@@ -284,9 +284,10 @@ def get_recovery(society: str | None = None, as_of: str | None = None, block: st
                  show: str = "defaulters"):
 	"""Everything the Defaulters and Recovery page shows, in one call."""
 	require("recovery.view", _("see recovery"))
-	societies = frappe.get_all("Society", fields=["name", "society_name"], order_by="society_name")
+	societies = access.visible_societies()
 	if not societies:
 		return {"societies": [], "empty": True}
+	access.check_society(society)
 	society = society or dashboard.default_society(societies)
 	as_of = getdate(as_of or nowdate())
 	rules = rules_of(society)

@@ -176,7 +176,9 @@ def checks(society, start, end) -> list[dict]:
 
 # ---------------------------------------------------------------- close and reopen
 def _doc(name):
-	return frappe.get_doc("Billing Period", name)
+	doc = frappe.get_doc("Billing Period", name)
+	doc.check_permission("read")
+	return doc
 
 
 @frappe.whitelist()

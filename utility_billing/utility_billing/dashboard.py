@@ -9,7 +9,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, add_months, cint, flt, formatdate, get_last_day, getdate, nowdate
 
-from utility_billing.utility_billing import losses, mis
+from utility_billing.utility_billing import access, losses, mis
 from utility_billing.utility_billing import rights
 
 ALLOWED = set(mis.FINANCE + mis.BILLING + mis.RECOVERY + ["Society Admin"])
@@ -286,9 +286,10 @@ def cards_of(society, month, series, as_of):
 def get_dashboard(society: str | None = None, month: str | None = None):
 	if not rights.can("dashboard.view"):
 		raise frappe.PermissionError(_("You don't have access to the dashboard."))
-	societies = frappe.get_all("Society", fields=["name", "society_name"], order_by="creation desc", limit=200)
+	societies = access.visible_societies(order_by="creation desc")
 	if not societies:
 		return {"empty": True, "message": _("Create a society first.")}
+	access.check_society(society)
 	society = society or default_society(societies)
 	if not frappe.db.exists("Society", society):
 		frappe.throw(_("Society {0} not found.").format(society))

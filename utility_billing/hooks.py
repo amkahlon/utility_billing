@@ -356,5 +356,6 @@ fixtures = [
 ]
 
 # PDFs on servers without Chromium's libraries or with unpatched wkhtmltopdf (bug report 2026-11-16): see utility_billing/pdf.py
-before_request = ["utility_billing.pdf.apply"]
+# Society isolation: a request naming another society is refused (utility_billing/scope.py)
+before_request = ["utility_billing.pdf.apply", "utility_billing.scope.guard"]
 before_job = ["utility_billing.pdf.apply"]

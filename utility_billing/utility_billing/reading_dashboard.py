@@ -8,7 +8,7 @@ import frappe
 from frappe import _
 from frappe.utils import getdate
 
-from utility_billing.utility_billing import dashboard, mis
+from utility_billing.utility_billing import access, dashboard, mis
 from utility_billing.utility_billing import rights
 
 READ, ESTIMATED, WAITING, FLAGGED = ("Valid", "Approved"), ("Estimated",), ("Pending", "Re-read Requested"), ("Flagged",)
@@ -41,9 +41,10 @@ def grouped(rows, key, label_of=lambda k: k) -> list[dict]:
 def get_reading_dashboard(society: str | None = None, cycle: str | None = None):
 	"""Everything the reading dashboard shows, in one call."""
 	require()
-	societies = frappe.get_all("Society", fields=["name", "society_name"], order_by="society_name")
+	societies = access.visible_societies()
 	if not societies:
 		return {"societies": [], "empty": True}
+	access.check_society(society)
 	society = society or dashboard.default_society(societies)
 	cycles = frappe.get_all("Reading Cycle", filters={"society": society}, fields=["name", "utility", "billing_month", "status"],
 	                        order_by="billing_month desc, utility", limit=24)

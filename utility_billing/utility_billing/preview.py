@@ -91,6 +91,7 @@ def tax_impact(name: str) -> dict:
 	"""What this tax would have added to (or, if already on, changed on) last cycle's bills."""
 	require()
 	t = frappe.get_doc("Tax", name)
+	t.check_permission("read")
 	month, bills = last_cycle(t.society)
 	rows = []
 	for b in bills:
@@ -111,6 +112,7 @@ def adjustment_impact(name: str) -> dict:
 	"""What this FPA or QTA would have charged on last cycle's bills, against what they carried for the same charge."""
 	require()
 	a = frappe.get_doc("Tariff Adjustment", name)
+	a.check_permission("read")
 	month, bills = last_cycle(a.society)
 	exempt_cats = {e.consumer_category for e in a.exempt_categories}
 	rows, unavailable = [], 0

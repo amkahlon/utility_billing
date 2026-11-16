@@ -8,7 +8,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from utility_billing.utility_billing import mis
+from utility_billing.utility_billing import access, mis
 from utility_billing.utility_billing import rights
 
 WAITING = ("Flagged", "Re-read Requested")
@@ -32,8 +32,12 @@ def consequence(r, treatment) -> str:
 @frappe.whitelist()
 def queue(cycle: str | None = None, society: str | None = None, route: str | None = None, code: str | None = None):
 	require()
+	access.check_society(society)
+	if cycle:
+		access.check_record_society("Reading Cycle", cycle)
 	if not cycle:
-		filters = {"society": society} if society else {}
+		mine = access.societies_of()
+		filters = {"society": society} if society else ({"society": ["in", mine]} if mine is not None else {})
 		cycle = frappe.db.get_value("Reading Cycle", {**filters, "status": ["!=", "Closed"]}, "name", order_by="billing_month desc") or \
 			frappe.db.get_value("Reading Cycle", filters, "name", order_by="billing_month desc")
 	if not cycle:
