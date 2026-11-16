@@ -84,11 +84,6 @@ class TestBillEngine(UnitTestCase):
 		self.assertEqual(amounts["Society Charges"], D(2000))
 		self.assertEqual(r.current, D(47600))
 
-	def test_minimum_bill(self):
-		r = calculate(0, FLAT70, ENERGY, minimum_bill=500)
-		self.assertEqual((r.current, r.lines[-1].label), (D(500), "Minimum bill adjustment"))
-		self.assertEqual(r.surcharge, D(50))
-
 	def test_slab_energy_note(self):
 		slabs = [{"from_units": 0, "to_units": 100, "rate": 10}, {"from_units": 100, "to_units": 0, "rate": 20}]
 		r = calculate(150, {"method": "Progressive slabs", "slabs": slabs}, ENERGY)

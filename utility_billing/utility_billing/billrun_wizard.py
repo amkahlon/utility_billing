@@ -111,7 +111,7 @@ def load(name: str):
 		"cycle": cycle, "defective": defective, "bill_count": cint(run.bill_count), "total_current": flt(run.total_current),
 		"total_payable": flt(run.total_payable), "groups": [{"group": g.grp, "amount": flt(g.amount)} for g in groups],
 		"exceptions": ex, "left": left, "steps": steps, "actions": actions,
-		"can_review": run.docstatus == 0 and bool(set(frappe.get_roles()) & {"Billing Officer", "Billing Manager", "System Manager"}),
+		"can_review": run.docstatus == 0 and bool(frappe.has_permission("Bill Run", "write", run)),
 		"can_calculate": run.docstatus == 0 and run.workflow_state in (None, "", "Draft", "Rejected") and frappe.has_permission("Bill Run", "write", run),
 	}
 

@@ -321,7 +321,6 @@ def build_bill(run, connection, override=None) -> dict:
 		 "minimum_charge": 0 if fixed_only or not metered else tariff.minimum_charge},
 		energy, charges=charges, adjustments=adjustments, area=area,
 		arrears=override["arrears"] if override.get("arrears") is not None else arrears_of(connection, month),
-		minimum_bill=0 if fixed_only else society.minimum_bill,
 		surcharge={"basis": society.surcharge_basis, "rate": society.surcharge_rate,
 		           "fixed_amount": society.surcharge_fixed_amount, "cap": society.surcharge_cap},
 		bill_rounding=society.rounding_rule or engine.NEAREST,

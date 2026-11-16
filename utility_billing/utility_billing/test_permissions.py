@@ -21,7 +21,7 @@ EDITORS = {
 	# Meter readers enter readings; reviewing them is limited to officers and managers in readings.py.
 	"Meter Reading": {"System Manager", "Meter Reader", "Billing Officer", "Billing Manager"},
 	"Tariff Adjustment": {"System Manager", "Billing Manager", "General Manager"},
-	"Bill Run": {"System Manager", "Billing Officer", "Billing Manager"},
+	"Bill Run": {"System Manager", "Billing Officer", "Billing Manager", "General Manager"},  # GM approves too (2026-11-16)
 	# Bills are created and posted only by bill runs (ignore_permissions there); nobody edits them.
 	"Utility Bill": {"System Manager"},
 	# Increment 7: customer accounts and payments
@@ -49,7 +49,7 @@ EDITORS = {
 SUBMITTERS = {
 	"Tariff": {"System Manager", "General Manager"},
 	"Tariff Adjustment": {"System Manager", "General Manager"},
-	"Bill Run": {"System Manager", "Billing Manager"},
+	"Bill Run": {"System Manager", "Billing Manager", "General Manager"},
 	"Utility Bill": set(),  # posted and cancelled only by its bill run, never by a user
 	"Payment Receipt": {"System Manager", "Cashier", "Accounts Officer"},  # reversals: account.reverse_document
 	"Fee Charge": {"System Manager", "Cashier", "Billing Officer", "Billing Manager"},

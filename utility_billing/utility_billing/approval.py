@@ -35,6 +35,16 @@ def workflow_active(doctype: str) -> bool:
 	return bool(frappe.db.get_value("Workflow", {"document_type": doctype, "is_active": 1}, "name"))
 
 
+def workflow_approver_roles(doctype: str) -> list[str]:
+	"""The roles the active workflow lets approve a waiting document, as configured on the Workflow screen (not fixed in code)."""
+	name = frappe.db.get_value("Workflow", {"document_type": doctype, "is_active": 1}, "name")
+	if not name:
+		return []
+	rows = frappe.get_all("Workflow Transition", filters={"parent": name, "state": PENDING, "action": "Approve"}, pluck="allowed",
+	                      order_by="idx")
+	return list(dict.fromkeys(rows))
+
+
 def assert_not_maker(doc, user: str):
 	"""FS-ACC-05: whoever submitted (or created) a document can't approve or reject it, at any level."""
 	if user in {doc.get("requested_by"), doc.owner}:
@@ -503,8 +513,10 @@ def notify(doc, approver_role: str):
 	if new == PENDING:
 		enabled = set(frappe.get_all("User", filters={"enabled": 1}, pluck="name"))
 		chain = level_chain(doc)
-		role = chain[0] if chain else (required_roles(doc) or [approver_role])[0]  # the first level in turn, or the level the amount needs
-		users = [u for u in users_with_role(role) if u in enabled and u != actor]
+		levels = required_roles(doc)
+		# the first level in turn, or the level the amount needs; otherwise everyone the workflow lets approve
+		roles = [chain[0]] if chain else [levels[0]] if levels else (workflow_approver_roles(doc.doctype) or [approver_role])
+		users = list(dict.fromkeys(u for role in roles for u in users_with_role(role) if u in enabled and u != actor))
 		subject = _("{0} {1} is waiting for your approval").format(label, frappe.bold(title))
 		if doc.get("changes_since_last_submission"):  # set only when there was a previous submission
 			changes = doc.changes_since_last_submission.splitlines()

@@ -104,7 +104,6 @@ def calculate(
 	adjustments: Iterable[Adjustment] = (),
 	area=0,
 	arrears=0,
-	minimum_bill=0,
 	surcharge: dict | None = None,
 	bill_rounding: str = NEAREST,
 	taxes: Iterable = (),
@@ -178,12 +177,7 @@ def calculate(
 		                  rnd(D(a.units) * D(a.rate), c.rounding), f"{a.reference} units {fmt(a.units)} × {fmt(a.rate)}"))
 
 	current = sum((l.amount for l in lines), Decimal(0))
-	# 6. Minimum bill
-	if D(minimum_bill) > 0 and current < D(minimum_bill):
-		diff = rnd(D(minimum_bill) - current, bill_rounding)
-		lines.append(Line("", "Minimum bill adjustment", "Other", 999, FIXED, D(1), diff, diff,
-		                  f"Minimum bill {fmt(minimum_bill)}"))
-		current += diff
+	# 6. (The society-wide minimum bill was removed by the user on 2026-11-16: a minimum is the tariff's Minimum Charge only.)
 	# 6b. Taxes, in their configured order, on the charges they apply to (FS-CFG-14)
 	tax_lines = []
 	taxes = list(taxes)

@@ -138,3 +138,24 @@ class IntegrationTestBugReport(BillingCase):
 		labels = [i.label for i in items]
 		self.assertIn("Users and Access", labels)
 		self.assertTrue({"user", "role", "permission-manager"} <= {(i.link_to or "").lower() for i in items})
+
+	def test_the_general_manager_approves_bill_runs_too(self):
+		from utility_billing.utility_billing.testing import GENERAL_MANAGER, act
+
+		self.month_reading("2026-08-01", 2830)
+		self.fpa("2026-08-01", 0)
+		run = self.make_run("2026-08-01", "2026-09-01")
+		self.assertEqual(run.bill_count, 1)
+		act(run, "Submit for Approval", BILLING_OFFICER)
+		frappe.set_user(GENERAL_MANAGER)
+		from frappe.model.workflow import get_transitions
+
+		self.assertEqual(sorted(t.action for t in get_transitions(frappe.get_doc("Bill Run", run.name))), ["Approve", "Reject"])
+		frappe.set_user("Administrator")
+		act(run, "Approve", GENERAL_MANAGER)
+		run.reload()
+		self.assertEqual((run.docstatus, run.workflow_state), (1, "Approved"))
+
+	def test_a_minimum_is_the_tariffs_only(self):
+		self.assertIsNone(frappe.get_meta("Society").get_field("minimum_bill"))
+		self.assertIsNotNone(frappe.get_meta("Tariff").get_field("minimum_charge"))

@@ -189,7 +189,7 @@ def t_society(d: Desk):
 	saved = d.save_doc({
 		"doctype": "Society", "society_name": f"QA Society {RUN}", "short_name": short,
 		"enable_electricity": 1, "enable_fixed_charges": 1, "billing_cycle": "Monthly",
-		"reading_window_days": "5", "days_to_due_date": "14", "grace_days": "0", "minimum_bill": "0",
+		"reading_window_days": "5", "days_to_due_date": "14", "grace_days": "0",
 		"rounding_rule": "Nearest rupee", "payment_posting_order": "Current bill, Arrears, Surcharge",
 		"surcharge_basis": "Percentage of current bill", "surcharge_rate": "10",
 		"website": "www.qa-society.example", "logo": "/files/qa-logo.png",
