@@ -40,7 +40,7 @@ from utility_billing.ui_version import ui_version  # noqa: E402
 _V = ui_version()
 app_include_css = f"/assets/utility_billing/css/ub_theme.css?v={_V}"
 web_include_css = f"/assets/utility_billing/css/ub_theme.css?v={_V}"
-app_include_js = [f"/assets/utility_billing/js/approval.js?v={_V}", f"/assets/utility_billing/js/ub_map.js?v={_V}"]
+app_include_js = [f"/assets/utility_billing/js/approval.js?v={_V}", f"/assets/utility_billing/js/ub_map.js?v={_V}", f"/assets/utility_billing/js/ub_desk.js?v={_V}"]
 boot_session = "utility_billing.boot.boot_session"
 
 # include js, css files in header of web template
@@ -361,3 +361,6 @@ fixtures = [
 	{"dt": "Property Setter", "filters": [["name", "in", ["Utility Bill-main-default_print_format", "Payment Receipt-main-default_print_format"]]]},
 ]
 
+# PDFs on servers without Chromium's libraries or with unpatched wkhtmltopdf (bug report 2026-11-16): see utility_billing/pdf.py
+before_request = ["utility_billing.pdf.apply"]
+before_job = ["utility_billing.pdf.apply"]

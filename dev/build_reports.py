@@ -105,7 +105,11 @@ def build_reports():
 
 
 GROUPS = [
-	("Approvals", [("Page", "ub-approvals", "Approval Inbox"), ("DocType", "Approval Delegation"), ("DocType", "User Access")]),
+	("Approvals", [("Page", "ub-approvals", "Approval Inbox"), ("DocType", "Approval Delegation")]),
+	# Users and access in one place for the administrator (bug report 2026-11-16): who signs in, their roles and what each role may do
+	("Users and Access", [("DocType", "User", "Users"), ("DocType", "Role", "Roles"), ("Page", "permission-manager", "Role Permissions"),
+	                      ("DocType", "User Permission", "User Permissions"), ("DocType", "User Access", "Society and Block Access"),
+	                      ("Report", "Users, Roles and Rights"), ("Report", "Audit Log and User Activity")]),
 	("Consumers", [("Page", "ub-consumer-360", "Consumer 360"), ("DocType", "Consumer"), ("DocType", "Property"), ("DocType", "Connection"),
 	               ("DocType", "Security Deposit")]),
 	("Meter Readings", [("Page", "ub-readings", "Reading Dashboard"), ("Page", "ub-review", "Reading Review"), ("DocType", "Reading Cycle"), ("DocType", "Check Meter Reading"), ("DocType", "Meter Reading"), ("DocType", "Reading Route")]),

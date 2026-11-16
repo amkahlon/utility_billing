@@ -30,11 +30,23 @@ class Connection(Document):
 		self.validate_reference_unchanged()
 		self.validate_request_only()
 		self.validate_links()
+		self.validate_route()
 		self.validate_meter_history()
 		self.set_title()
 
 	def on_update(self):
 		self.sync_meters()
+		self.sync_route()
+
+	def sync_route(self):
+		"""Choosing a route on the account puts it at the end of that Reading Route (and off the others of this utility), since the
+		route's stops are what the reading sheet follows (bug report 2026-11-16: the route was typed, not chosen)."""
+		before = self.get_doc_before_save()
+		if (before.route if before else None) == self.route or self.flags.from_route:
+			return
+		from utility_billing.utility_billing.doctype.reading_route.reading_route import move_account  # noqa: PLC0415
+
+		move_account(self, self.route)
 
 	# ----- validation -----
 	def validate_reference_unchanged(self):
@@ -69,6 +81,11 @@ class Connection(Document):
 			frappe.throw(_("The {0} of an active account change only through a service request (category change, load change, ownership or "
 			               "tenant, meter change, disconnection …). Raise one from the account.").format(", ".join(changed)),
 			             title=_("Use a service request"))
+
+	def validate_route(self):
+		if self.route and not frappe.db.exists("Reading Route", {"society": self.society, "utility": self.utility, "route_code": self.route}):
+			frappe.throw(_("There is no reading route {0} for {1} {2}. Choose one from the list, or create the route first.").format(
+				self.route, self.society, self.utility))
 
 	def validate_links(self):
 		cat_utility = frappe.db.get_value("Consumer Category", self.consumer_category, "utility")

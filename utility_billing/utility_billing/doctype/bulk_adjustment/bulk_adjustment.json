@@ -84,7 +84,7 @@
   },
   {
    "fieldname": "block",
-   "fieldtype": "Data",
+   "fieldtype": "Autocomplete",
    "label": "Block",
    "depends_on": "eval:doc.audience=='Block'"
   },
@@ -277,7 +277,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 20:00:00.000000",
+ "modified": "2026-11-16 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Bulk Adjustment",

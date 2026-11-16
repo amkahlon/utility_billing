@@ -9,7 +9,7 @@ frappe.ui.form.on("Bill Run", {
 			frm.dashboard.set_headline_alert(__("Posting the bills in the background. Reload in a few minutes."), "blue");
 		} else if (frm.doc.posting_status === "Posting failed") {
 			frm.dashboard.set_headline_alert(__("Posting stopped before every bill was posted. Fix the cause shown below, then Post Again: it carries on with the rest."), "red");
-			if (frappe.user.has_role("Billing Manager")) {
+			if (frappe.perm.has_perm("Bill Run", 0, "submit")) {
 				frm.add_custom_button(__("Post Again"), () =>
 					frappe.xcall("utility_billing.utility_billing.doctype.bill_run.bill_run.retry_posting", { run: frm.doc.name }).then(() => frm.reload_doc()));
 			}

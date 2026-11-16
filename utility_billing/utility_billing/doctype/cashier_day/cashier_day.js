@@ -4,6 +4,12 @@
 const DAY = "utility_billing.utility_billing.doctype.cashier_day.cashier_day";
 
 frappe.ui.form.on("Cashier Day", {
+	onload(frm) {
+		// the cashier's usual counter: the one of their last day, else their only counter in User Access
+		if (frm.is_new() && !frm.doc.cash_counter) {
+			frappe.xcall("utility_billing.utility_billing.choices.my_counter").then((c) => c && frm.set_value("cash_counter", c));
+		}
+	},
 	refresh(frm) {
 		const colors = { Open: "green", Closed: "orange", Approved: "blue" };
 		frm.page.set_indicator(__(frm.doc.status), colors[frm.doc.status] || "gray");

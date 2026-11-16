@@ -15,6 +15,10 @@ CARD_MODES = {"Card"}
 
 class CashierDay(Document):
 	def before_insert(self):
+		if not self.cash_counter:  # the cashier's usual counter (bug report 2026-11-16: fill what the system already knows)
+			from utility_billing.utility_billing.choices import default_counter  # noqa: PLC0415
+
+			self.cash_counter = default_counter()
 		self.cashier = frappe.session.user
 		self.business_date = nowdate()
 		self.status = "Open"

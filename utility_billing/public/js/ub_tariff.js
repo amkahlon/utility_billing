@@ -99,7 +99,7 @@ window.UtilityBillingTariffEditor = class UtilityBillingTariffEditor {
 	payload() {
 		const t = this.t;
 		return {
-			pricing_method: t.pricing_method, flat_rate: t.flat_rate, minimum_charge: t.minimum_charge, effective_from: t.effective_from, notes: t.notes,
+			pricing_method: t.pricing_method, flat_rate: t.flat_rate, minimum_charge: t.minimum_charge, minimum_applies_to: t.minimum_applies_to, effective_from: t.effective_from, notes: t.notes,
 			slabs: t.pricing_method === "Flat rate" ? [] : t.slabs, charges: t.charges.map((c) => ({ charge_type: c.charge_type, rate: c.rate })),
 		};
 	}
@@ -195,7 +195,8 @@ window.UtilityBillingTariffEditor = class UtilityBillingTariffEditor {
 				? `<div class="ub-te-fields">
 					<label>${__("Rate per unit (Rs)")}<input class="ub-select ub-te-f" data-f="flat_rate" type="number" step="0.01" value="${this.esc(t.flat_rate)}" ${ro}></label>
 					<label>${prev ? __("Current (v{0})", [prev.version]) : __("Current")}<div class="ub-te-ro">${this.esc(prevRate)}</div></label>
-					<label>${__("Minimum charge (Rs)")}<input class="ub-select ub-te-f" data-f="minimum_charge" type="number" step="1" value="${this.esc(t.minimum_charge)}" ${ro}></label></div>`
+					<label>${__("Minimum charge (Rs)")}<input class="ub-select ub-te-f" data-f="minimum_charge" type="number" step="1" value="${this.esc(t.minimum_charge)}" ${ro}></label>
+					<label>${__("Minimum applies to")}<select class="ub-select ub-te-f" data-f="minimum_applies_to" ${ro}>${["Energy charge", "Whole current bill"].map((o) => `<option value="${o}" ${(t.minimum_applies_to || "Energy charge") === o ? "selected" : ""}>${__(o)}</option>`).join("")}</select></label></div>`
 				: `<table class="ub-tbl"><thead><tr><th>${__("From units")}</th><th>${__("To units")}</th><th class="num">${__("Rate (Rs)")}</th><th></th></tr></thead><tbody>
 					${(t.slabs || []).map((s, i) => `<tr><td><input class="ub-select ub-te-slab" data-i="${i}" data-k="from_units" type="number" value="${this.esc(s.from_units)}" ${ro}></td>
 						<td><input class="ub-select ub-te-slab" data-i="${i}" data-k="to_units" type="number" placeholder="${__("and above")}" value="${s.to_units == null ? "" : this.esc(s.to_units)}" ${ro}></td>
@@ -203,6 +204,7 @@ window.UtilityBillingTariffEditor = class UtilityBillingTariffEditor {
 						<td>${t.can_edit ? `<button class="ub-btn ub-te-delslab" data-i="${i}">×</button>` : ""}</td></tr>`).join("")}
 					</tbody></table>${t.can_edit ? `<button class="ub-te-add ub-te-addslab">${__("+ Add slab")}</button>` : ""}
 					<div class="ub-te-fields"><label>${__("Minimum charge (Rs)")}<input class="ub-select ub-te-f" data-f="minimum_charge" type="number" value="${this.esc(t.minimum_charge)}" ${ro}></label>
+					<label>${__("Minimum applies to")}<select class="ub-select ub-te-f" data-f="minimum_applies_to" ${ro}>${["Energy charge", "Whole current bill"].map((o) => `<option value="${o}" ${(t.minimum_applies_to || "Energy charge") === o ? "selected" : ""}>${__(o)}</option>`).join("")}</select></label>
 					<label>${__("Effective from")}<input class="ub-select ub-te-f" data-f="effective_from" type="date" value="${this.esc(t.effective_from)}" ${ro}></label></div>`;
 		const eff = t.pricing_method === "Flat rate"
 			? `<div class="ub-te-fields"><label>${__("Effective from")}<input class="ub-select ub-te-f" data-f="effective_from" type="date" value="${this.esc(t.effective_from)}" ${ro}></label></div>`

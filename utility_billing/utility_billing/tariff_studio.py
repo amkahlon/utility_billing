@@ -14,7 +14,7 @@ from frappe.utils import add_months, cint, flt, getdate, nowdate
 
 from utility_billing.utility_billing import preview
 
-EDITABLE = ("pricing_method", "flat_rate", "minimum_charge", "effective_from", "notes")
+EDITABLE = ("pricing_method", "flat_rate", "minimum_charge", "minimum_applies_to", "effective_from", "notes")
 BANDS = ((0, 200), (201, 400), (401, 700), (701, None))
 
 
@@ -69,7 +69,7 @@ def load(name: str):
 		"category_name": frappe.db.get_value("Consumer Category", t.consumer_category, "category_name"),
 		"version": me.version if me else 1, "state": state, "docstatus": t.docstatus, "effective_from": str(t.effective_from),
 		"effective_to": str(t.effective_to) if t.effective_to else None, "pricing_method": t.pricing_method, "flat_rate": flt(t.flat_rate),
-		"minimum_charge": flt(t.minimum_charge), "notes": t.notes, "rejection_reason": t.get("rejection_reason"),
+		"minimum_charge": flt(t.minimum_charge), "minimum_applies_to": t.get("minimum_applies_to") or "Energy charge", "notes": t.notes, "rejection_reason": t.get("rejection_reason"),
 		"slabs": [{"from_units": s.from_units, "to_units": s.to_units, "rate": flt(s.rate)} for s in t.slabs],
 		"charges": [{"charge_type": c.charge_type, "rate": flt(c.rate), "label": (charge_types.get(c.charge_type) or {}).get("bill_label") or c.charge_type,
 		             "basis": (charge_types.get(c.charge_type) or {}).get("calculation_basis"),

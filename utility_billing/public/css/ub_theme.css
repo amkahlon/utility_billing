@@ -71,9 +71,10 @@ body { background: var(--ub-page); color: var(--ub-ink); font-feature-settings: 
 .btn-primary:hover { filter: brightness(.92); }
 :root:not([data-theme="dark"]) .btn-default, :root:not([data-theme="dark"]) .btn-secondary { background: #fff; border: 1px solid var(--ub-line-strong); color: var(--ub-ink); box-shadow: none; }
 :root:not([data-theme="dark"]) .btn-default:hover { background: var(--ub-soft); }
-.form-control, .input-with-feedback, .frappe-control .control-input .form-control, select.form-control { border-radius: 8px; box-shadow: none; }
-:root:not([data-theme="dark"]) .form-control, :root:not([data-theme="dark"]) .input-with-feedback, :root:not([data-theme="dark"]) select.form-control { border: 1px solid var(--ub-line-strong); background: #fff; }
-.form-control:focus, .input-with-feedback:focus { border-color: var(--ub-blue); box-shadow: 0 0 0 3px rgba(59, 130, 246, .2); }
+/* Checkboxes and radio buttons keep Frappe's own look: a background here would hide the tick (bug report 2026-11-16). */
+.form-control:not([type="checkbox"]):not([type="radio"]), .input-with-feedback:not([type="checkbox"]):not([type="radio"]), .frappe-control .control-input .form-control, select.form-control { border-radius: 8px; box-shadow: none; }
+:root:not([data-theme="dark"]) .form-control:not([type="checkbox"]):not([type="radio"]), :root:not([data-theme="dark"]) .input-with-feedback:not([type="checkbox"]):not([type="radio"]), :root:not([data-theme="dark"]) select.form-control { border: 1px solid var(--ub-line-strong); background-color: #fff; }
+.form-control:not([type="checkbox"]):not([type="radio"]):focus, .input-with-feedback:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--ub-blue); box-shadow: 0 0 0 3px rgba(59, 130, 246, .2); }
 .indicator-pill { border-radius: 999px; font-weight: 600; font-size: 12px; padding: 3px 10px; }
 .indicator-pill::before { display: none; }
 :root:not([data-theme="dark"]) .indicator-pill.green { background: #DCFCE7; color: #166534; }

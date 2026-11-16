@@ -200,7 +200,7 @@ class Tariff(Document):
 			self.pricing_method,
 			flat_rate=self.flat_rate,
 			slabs=self.slabs,
-			minimum_charge=self.minimum_charge,
+			minimum_charge=0 if self.get("minimum_applies_to") == "Whole current bill" else self.minimum_charge,
 		)
 
 

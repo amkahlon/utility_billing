@@ -59,6 +59,7 @@
 </table>
 <table class="pay" style="margin-top: 1.5mm;">
 	<tr class="within"><td>{{ _("Payable within due date") }} <span style="font-weight: 400; font-size: 8pt;">({{ date(cb.due_date) }})</span></td><td class="right">Rs {{ money(cb.payable_within_due) }}</td></tr>
+	<tr class="surcharge"><td style="padding: 1mm 2mm;">{{ _("Late payment surcharge") }} <span style="font-size: 8pt;">({{ _("added if paid after the due date") }})</span></td><td class="right" style="padding: 1mm 2mm;">Rs {{ money(cb.surcharge_amount) }}</td></tr>
 	<tr class="after"><td>{{ _("Payable after due date") }}</td><td class="right">Rs {{ money(cb.payable_after_due) }}</td></tr>
 </table>
 <div class="small muted" style="margin-top: 2mm;">{{ _("Pay the total with the billing account number; it is shared over the services, each bill's amount due first.") }}</div>

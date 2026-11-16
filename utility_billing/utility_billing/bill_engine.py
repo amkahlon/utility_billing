@@ -28,6 +28,8 @@ ONE_OFF = "One-off"
 BY_PLOT_SIZE = "By Plot Size"  # resolved to a fixed monthly amount for the property's plot size class before calculating
 SURCHARGE_WITH_ARREARS = "Percentage of current bill and arrears"
 
+WHOLE_BILL = "Whole current bill"
+
 
 def D(v) -> Decimal:
 	return Decimal(str(v or 0))
@@ -104,7 +106,6 @@ def calculate(
 	adjustments: Iterable[Adjustment] = (),
 	area=0,
 	arrears=0,
-	minimum_bill=0,
 	surcharge: dict | None = None,
 	bill_rounding: str = NEAREST,
 	taxes: Iterable = (),
@@ -113,7 +114,8 @@ def calculate(
 	installment: Decimal | None = None,
 	segments: Iterable[dict] | None = None,
 ) -> BillResult:
-	"""`tariff`: {"method", "flat_rate", "slabs", "minimum_charge"}; `surcharge`: {"basis",
+	"""`tariff`: {"method", "flat_rate", "slabs", "minimum_charge", "minimum_applies_to"} (the minimum is on the energy charge,
+	or with "Whole current bill" on the bill before tax); `surcharge`: {"basis",
 	"rate", "fixed_amount", "cap"} with basis "Percentage of current bill" or "Fixed amount".
 	`taxes`: tax_engine.TaxSpec list (none by default). `fraction`: share of a part month to charge for the fixed and
 	per-area charges (FS-BIL-07), with its note.
@@ -132,7 +134,7 @@ def calculate(
 		energy_amount = Decimal(0)
 		if energy is not None:
 			e = calculate_energy(u, trf.get("method"), flat_rate=trf.get("flat_rate"), slabs=trf.get("slabs") or (),
-			                     minimum_charge=trf.get("minimum_charge"))
+			                     minimum_charge=0 if trf.get("minimum_applies_to") == WHOLE_BILL else trf.get("minimum_charge"))
 			energy_note = "; ".join(f"{fmt(x['units'])} × {fmt(x['rate'])}" for x in e.lines)
 			if e.minimum_applied:
 				energy_note += f" (minimum charge {fmt(e.amount)})"
@@ -178,11 +180,13 @@ def calculate(
 		                  rnd(D(a.units) * D(a.rate), c.rounding), f"{a.reference} units {fmt(a.units)} × {fmt(a.rate)}"))
 
 	current = sum((l.amount for l in lines), Decimal(0))
-	# 6. Minimum bill
-	if D(minimum_bill) > 0 and current < D(minimum_bill):
-		diff = rnd(D(minimum_bill) - current, bill_rounding)
-		lines.append(Line("", "Minimum bill adjustment", "Other", 999, FIXED, D(1), diff, diff,
-		                  f"Minimum bill {fmt(minimum_bill)}"))
+	# 6. Minimum on the whole bill, when the tariff says so (user decision 2026-11-16: the minimum is set on the tariff only, applying to the
+	# energy charge or to the whole current bill before tax). With a tariff change in the month, the highest such minimum applies.
+	whole_minimum = max([D(s["tariff"].get("minimum_charge")) for s in segs
+	                     if s["tariff"].get("minimum_applies_to") == WHOLE_BILL] or [Decimal(0)])
+	if whole_minimum > 0 and current < whole_minimum:
+		diff = rnd(whole_minimum - current, bill_rounding)
+		lines.append(Line("", "Minimum bill adjustment", "Other", 999, FIXED, D(1), diff, diff, f"Minimum bill {fmt(whole_minimum)}"))
 		current += diff
 	# 6b. Taxes, in their configured order, on the charges they apply to (FS-CFG-14)
 	tax_lines = []

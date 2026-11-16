@@ -149,7 +149,8 @@ class IntegrationTestDashboard(BillingCase):
 	def test_page_and_menu_are_in_place(self):
 		page = frappe.get_doc("Page", "ub-dashboard")
 		self.assertEqual((page.standard, page.module), ("Yes", "Utility Billing"))
-		self.assertEqual({r.role for r in page.roles}, set(dashboard.ALLOWED))
+		# meter readers and cashiers may open the page only to be sent on to their own screen (bug report 2026-11-16)
+		self.assertEqual({r.role for r in page.roles}, set(dashboard.ALLOWED) | {"Meter Reader", "Cashier"})
 		items = frappe.get_doc("Sidebar", "Utility Management System").items
 		self.assertEqual((items[0].label, items[0].link_type, items[0].link_to), ("Dashboard", "Page", "ub-dashboard"))
 		self.assertEqual([i.idx for i in items], list(range(1, len(items) + 1)))

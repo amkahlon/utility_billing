@@ -23,6 +23,7 @@
   "flat_rate",
   "cb_pricing",
   "minimum_charge",
+  "minimum_applies_to",
   "slabs",
   "charges_section",
   "charges",
@@ -142,6 +143,15 @@
    "fieldname": "minimum_charge",
    "fieldtype": "Currency",
    "label": "Minimum Charge"
+  },
+  {
+   "default": "Energy charge",
+   "depends_on": "eval:doc.minimum_charge > 0",
+   "fieldname": "minimum_applies_to",
+   "fieldtype": "Select",
+   "label": "Minimum Applies To",
+   "options": "Energy charge\nWhole current bill",
+   "description": "Energy charge: the energy is billed at no less than the minimum. Whole current bill: the bill before tax is topped up to the minimum, as its own line."
   },
   {
    "depends_on": "eval:doc.pricing_method!='Flat rate'",
@@ -289,7 +299,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-16 14:00:00.000000",
+ "modified": "2026-11-16 15:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Tariff",

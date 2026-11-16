@@ -84,10 +84,18 @@ class TestBillEngine(UnitTestCase):
 		self.assertEqual(amounts["Society Charges"], D(2000))
 		self.assertEqual(r.current, D(47600))
 
-	def test_minimum_bill(self):
-		r = calculate(0, FLAT70, ENERGY, minimum_bill=500)
-		self.assertEqual((r.current, r.lines[-1].label), (D(500), "Minimum bill adjustment"))
+	def test_minimum_on_the_energy_charge(self):
+		r = calculate(3, {**FLAT70, "minimum_charge": 500}, ENERGY)
+		self.assertEqual((r.lines[0].amount, r.current), (D(500), D(500)))
+		self.assertIn("minimum charge", r.lines[0].note)
+
+	def test_minimum_on_the_whole_current_bill(self):
+		# 3 units at 70 = 210, below the tariff's whole-bill minimum of 500: topped up by its own line before tax and surcharge
+		r = calculate(3, {**FLAT70, "minimum_charge": 500, "minimum_applies_to": "Whole current bill"}, ENERGY)
+		self.assertEqual((r.lines[0].amount, r.lines[-1].label, r.lines[-1].amount, r.current), (D(210), "Minimum bill adjustment", D(290), D(500)))
 		self.assertEqual(r.surcharge, D(50))
+		above = calculate(10, {**FLAT70, "minimum_charge": 500, "minimum_applies_to": "Whole current bill"}, ENERGY)
+		self.assertEqual((above.current, above.lines[-1].label), (D(700), "Energy Charges"))
 
 	def test_slab_energy_note(self):
 		slabs = [{"from_units": 0, "to_units": 100, "rate": 10}, {"from_units": 100, "to_units": 0, "rate": 20}]

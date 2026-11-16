@@ -18,6 +18,7 @@ frappe.ui.form.on("Connection", {
 	},
 
 	refresh(frm) {
+		route_choices(frm);
 		if (frm.is_new()) return;
 		show_account(frm);
 		const group = __("Account");
@@ -36,11 +37,13 @@ frappe.ui.form.on("Connection", {
 	},
 
 	society(frm) {
-		frm.set_value({ property: null, transformer: null });
+		frm.set_value({ property: null, transformer: null, route: null });
+		route_choices(frm);
 	},
 
 	utility(frm) {
-		frm.set_value("consumer_category", null);
+		frm.set_value({ consumer_category: null, route: null });
+		route_choices(frm);
 	},
 
 	property(frm) {
@@ -93,4 +96,12 @@ function statement_dialog(frm) {
 		},
 	});
 	d.show();
+}
+
+// The society's reading routes for this utility, offered in the Reading Route box (bug report 2026-11-16).
+function route_choices(frm) {
+	if (!frm.doc.society || !frm.doc.utility) return frm.set_df_property("route", "options", []);
+	frappe.db
+		.get_list("Reading Route", { filters: { society: frm.doc.society, utility: frm.doc.utility, enabled: 1 }, fields: ["route_code"], limit: 500, order_by: "route_code asc" })
+		.then((rows) => frm.set_df_property("route", "options", rows.map((r) => r.route_code)));
 }

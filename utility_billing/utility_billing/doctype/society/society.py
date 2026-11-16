@@ -38,8 +38,8 @@ class Society(Document):
 			frappe.throw(_("Surcharge Rate must be between 0 and 100%."))
 		if self.surcharge_basis == "Fixed amount" and flt(self.surcharge_fixed_amount) <= 0:
 			frappe.throw(_("Enter the fixed Surcharge Amount."))
-		if flt(self.surcharge_cap) < 0 or flt(self.minimum_bill) < 0:
-			frappe.throw(_("Surcharge cap and minimum bill can't be negative."))
+		if flt(self.surcharge_cap) < 0:
+			frappe.throw(_("Surcharge cap can't be negative."))
 		if not 1 <= cint(self.bill_history_months) <= 24:
 			frappe.throw(_("Months of History on Bill must be from 1 to 24."))
 		watch, high = flt(self.loss_watch_percent), flt(self.loss_high_percent)

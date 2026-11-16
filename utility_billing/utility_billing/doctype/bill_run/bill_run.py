@@ -12,7 +12,7 @@ from frappe.utils import add_days, cint, getdate
 from utility_billing.utility_billing import approval, billing, gl, notify
 from utility_billing.utility_billing.readings import month_start
 
-APPROVER_ROLE = "Billing Manager"
+APPROVER_ROLE = "Billing Manager"  # used only when the run has no active approval workflow
 RECALC_FIELDS = ("issue_date", "exclusions")
 
 
@@ -132,8 +132,8 @@ def post_in_background(run):
 @frappe.whitelist(methods=["POST"])
 def retry_posting(run: str):
 	"""A run whose background posting stopped carries on, once the cause is fixed, with the bills not yet posted."""
-	if not set(frappe.get_roles()) & {"Billing Manager", "System Manager"}:
-		raise frappe.PermissionError(_("Only a Billing Manager posts a run again."))
+	if not frappe.has_permission("Bill Run", "submit"):  # whoever the role permissions let submit (approve) bill runs
+		raise frappe.PermissionError(_("You can't post bill runs."))
 	doc = frappe.get_doc("Bill Run", run)
 	if doc.docstatus != 1 or doc.posting_status != "Posting failed":
 		frappe.throw(_("Run {0} isn't waiting to be posted again.").format(run))

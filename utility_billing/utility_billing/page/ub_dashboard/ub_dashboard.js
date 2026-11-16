@@ -4,6 +4,13 @@
 // an update reaches every browser by itself, without clearing anything.
 
 frappe.pages["ub-dashboard"].on_page_load = function (wrapper) {
+	// The app opens here; users who don't see the dashboard (meter readers, cashiers) go to the screen of their role instead.
+	const home = frappe.boot.ub_home || "ub-dashboard";
+	if (home !== "ub-dashboard") {
+		wrapper.ub_redirect = home;
+		frappe.set_route(...home.split("/"));
+		return;
+	}
 	frappe.ui.make_app_page({ parent: wrapper, title: __("Dashboard"), single_column: true });
 	$(wrapper).addClass("ub-page");
 	$.ajax({ url: `/assets/utility_billing/js/ub_dashboard.js?v=${frappe.boot.ub_ui_version || ""}`, dataType: "script", cache: true }).done(() => {
@@ -13,5 +20,6 @@ frappe.pages["ub-dashboard"].on_page_load = function (wrapper) {
 };
 
 frappe.pages["ub-dashboard"].on_page_show = function (wrapper) {
+	if (wrapper.ub_redirect) return frappe.set_route(...wrapper.ub_redirect.split("/"));
 	wrapper.ub_dashboard && wrapper.ub_dashboard.load();
 };

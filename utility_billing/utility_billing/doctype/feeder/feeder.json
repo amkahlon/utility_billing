@@ -60,7 +60,9 @@
   {
    "fieldname": "check_meter_no",
    "fieldtype": "Data",
-   "label": "Check Meter No"
+   "label": "Check Meter No",
+   "hidden": 1,
+   "description": "Older free-text field, replaced by Check Meter (bug report 2026-11-16); kept hidden so earlier entries are not lost."
   },
   {
    "default": "1",
@@ -89,7 +91,7 @@
    "fieldtype": "Link",
    "label": "Check Meter",
    "options": "Meter",
-   "description": "The feeder's own meter, read like a consumer meter (it can be put on a reading route)."
+   "description": "The meter that measures what goes into this feeder. Read on the routes as a check meter; its units feed the line-loss reports."
   },
   {
    "fieldname": "location_section",
@@ -118,7 +120,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 09:00:00.000000",
+ "modified": "2026-11-16 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Feeder",

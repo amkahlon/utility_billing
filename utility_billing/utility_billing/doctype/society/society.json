@@ -48,7 +48,6 @@
   "days_to_due_date",
   "grace_days",
   "cb_billing",
-  "minimum_bill",
   "rounding_rule",
   "payment_posting_order",
   "charges_section",
@@ -394,12 +393,6 @@
   {
    "fieldname": "cb_billing",
    "fieldtype": "Column Break"
-  },
-  {
-   "default": "0",
-   "fieldname": "minimum_bill",
-   "fieldtype": "Currency",
-   "label": "Minimum Bill"
   },
   {
    "default": "Nearest rupee",
@@ -1045,7 +1038,7 @@
    "fieldtype": "Percent",
    "label": "Drop: Below % of Similar Accounts",
    "default": "50",
-   "description": "\u2026and below this share of the median of similar accounts (same category and plot size)."
+   "description": "…and below this share of the median of similar accounts (same category and plot size)."
   },
   {
    "fieldname": "ra_history_months",
@@ -1119,7 +1112,7 @@
    "fieldtype": "Select",
    "label": "Defective-Meter Billing",
    "default": "Average of last N months",
-   "options": "Average of last N months\nSame month last year\nLoad \u00d7 load factor \u00d7 hours\nMinimum charge only"
+   "options": "Average of last N months\nSame month last year\nLoad × load factor × hours\nMinimum charge only"
   },
   {
    "fieldname": "defective_average_months",
@@ -1143,14 +1136,14 @@
    "fieldtype": "Percent",
    "label": "Load Factor",
    "default": "30",
-   "depends_on": "eval:doc.defective_billing_method=='Load \u00d7 load factor \u00d7 hours'"
+   "depends_on": "eval:doc.defective_billing_method=='Load × load factor × hours'"
   },
   {
    "fieldname": "defective_hours",
    "fieldtype": "Int",
    "label": "Hours in a Month",
    "default": "720",
-   "depends_on": "eval:doc.defective_billing_method=='Load \u00d7 load factor \u00d7 hours'"
+   "depends_on": "eval:doc.defective_billing_method=='Load × load factor × hours'"
   },
   {
    "fieldname": "disconnected_fixed_charges",
@@ -1165,7 +1158,7 @@
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 18:00:00.000000",
+ "modified": "2026-11-16 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",
