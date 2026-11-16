@@ -270,10 +270,6 @@ scheduler_events = {
 # Overriding Methods
 # ------------------------------
 #
-override_whitelisted_methods = {
-	# report PDFs without the footer wkhtmltopdf can't print when its Qt is unpatched (bug report 2026-11-16)
-	"frappe.utils.print_format.report_to_pdf": "utility_billing.pdf.report_to_pdf",
-}
 # override_whitelisted_methods = {
 # 	"frappe.desk.doctype.event.event.get_events": "utility_billing.event.get_events"
 # }
@@ -365,3 +361,6 @@ fixtures = [
 	{"dt": "Property Setter", "filters": [["name", "in", ["Utility Bill-main-default_print_format", "Payment Receipt-main-default_print_format"]]]},
 ]
 
+# PDFs on servers without Chromium's libraries or with unpatched wkhtmltopdf (bug report 2026-11-16): see utility_billing/pdf.py
+before_request = ["utility_billing.pdf.apply"]
+before_job = ["utility_billing.pdf.apply"]

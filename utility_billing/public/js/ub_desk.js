@@ -3,7 +3,8 @@
 //  1. a workflow action on ticked records (Actions › Submit for Approval, Approve, ...) says what it did, clears the ticks and
 //     refreshes the list; each action is offered once;
 //  2. coming back to a list starts with nothing ticked;
-//  3. a new or changed record of this app has a Cancel button that leaves without saving.
+//  3. a new or changed record has a Cancel button beside Save that leaves without saving (every form, the app's and Frappe's);
+//  4. block, sector and office boxes offer the society's saved values (utility_billing.choices) instead of free typing.
 
 (function () {
 	const MODULE = "Utility Billing";
@@ -82,7 +83,7 @@
 	}
 
 	function cancel_button(frm) {
-		if (!frm || !frm.meta || frm.meta.module !== MODULE || frm.meta.istable || frm.meta.issingle) return;
+		if (!frm || !frm.meta || frm.meta.istable || frm.meta.issingle) return;
 		if (!(frm.is_new() || (frm.is_dirty() && frm.doc.docstatus === 0))) return;
 		// beside Save: Frappe hides the custom-button bar until a new record is saved
 		frm.page.set_secondary_action(__("Cancel"), () => {
@@ -115,10 +116,42 @@
 		};
 	}
 
+	// Drop-downs of saved values: {doctype: [[fieldname, kind, child table or null]]}; kinds as in utility_billing.choices.
+	const CHOICES = {
+		Property: [["block", "block"], ["sector", "sector"]],
+		Broadcast: [["block", "block"]],
+		"Bulk Adjustment": [["block", "block"]],
+		"Recovery Run": [["block", "block"]],
+		"Cash Counter": [["office", "office"]],
+		"User Access": [["block", "block", "blocks"]],
+	};
+
+	function fill_choices(frm) {
+		(CHOICES[frm.doctype] || []).forEach(([field, kind, table]) => {
+			const society = table ? null : frm.doc.society;
+			frappe.xcall("utility_billing.utility_billing.choices.values", { kind, society }).then((options) => {
+				if (table) {
+					const grid = frm.fields_dict[table] && frm.fields_dict[table].grid;
+					grid && grid.update_docfield_property(field, "options", options);
+				} else if (frm.fields_dict[field]) {
+					frm.set_df_property(field, "options", options);
+				}
+			});
+		});
+	}
+	let choices_bound = false;
+	function bind_choices() {
+		if (choices_bound || !(frappe.ui.form && frappe.ui.form.on)) return;
+		choices_bound = true;
+		Object.keys(CHOICES).forEach((doctype) => frappe.ui.form.on(doctype, { society: fill_choices }));
+	}
+
 	// the form code is loaded with the first form, after this file: patch it then, and place the button for that first form
 	$(document).on("form-refresh", (e, frm) => {
 		patch_toolbar();
+		bind_choices();
 		cancel_button(frm);
+		if (CHOICES[frm.doctype]) fill_choices(frm);
 	});
 	$(patch_toolbar);
 	$(document).on("startup", patch_list);

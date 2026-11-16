@@ -66,14 +66,66 @@ class IntegrationTestBugReport(BillingCase):
 		                        "route_assignments": [{"route": route.name}]}).insert()
 		self.assertEqual(cycle.route_assignments[0].reader, BILLING_OFFICER)
 
-	def test_report_pdf_leaves_out_the_footer_unpatched_wkhtmltopdf_cannot_print(self):
-		html = '<div id="header-html">h</div><table><tr><td>Rs 1,000</td></tr></table><div id="footer-html" class="visible-pdf">f</div>'
-		out = pdf.without_header_footer(html)
-		self.assertNotIn("footer-html", out)
-		self.assertNotIn("header-html", out)
-		self.assertIn("Rs 1,000", out)
-		self.assertEqual(frappe.get_hooks("override_whitelisted_methods")["frappe.utils.print_format.report_to_pdf"],
-		                 ["utility_billing.pdf.report_to_pdf"])
+	def test_pdfs_work_without_chromium_libraries_or_patched_wkhtmltopdf(self):
+		pdf.apply()
+		from frappe.utils import pdf as fpdf
+		from frappe.utils import print_utils
+
+		self.assertEqual(fpdf.prepare_options.__module__, "utility_billing.pdf")
+		html = '<link href="http://no-such-host.localhost/assets/frappe/dist/css/print.bundle.css" rel="stylesheet">' 		       '<link href="/assets/../../etc/passwd.css" rel="stylesheet"><p>Rs 1,000</p>'
+		import glob, os
+		bundle = glob.glob(os.path.join(frappe.utils.get_bench_path(), "sites", "assets", "frappe", "dist", "css", "print.bundle.*.css"))
+		if bundle:
+			html = html.replace("print.bundle.css", os.path.basename(bundle[0]))
+			out = pdf.inline_stylesheets(html)
+			self.assertNotIn("no-such-host", out)
+			self.assertIn("<style>", out)
+		self.assertIn("etc/passwd.css", pdf.inline_stylesheets(html))  # nothing outside sites/assets is read
+		if not pdf.chrome_works():
+			self.assertNotEqual(print_utils.resolve_pdf_generator(None, "chrome"), "chrome")
+		# a record printed to PDF the way the desk does it
+		from frappe.utils.print_format import download_pdf
+
+		frappe.local.response = frappe._dict()
+		download_pdf("Connection", self.conn)
+		self.assertTrue(frappe.local.response.filecontent.startswith(b"%PDF"))
+		self.assertNotIn("header-html", pdf.without_header_footer('<div id="header-html">h</div><p>x</p>'))
+
+	def test_the_surcharge_has_its_own_line_on_the_bill(self):
+		for template in ("utility_bill.html", "combined_bill.html"):
+			path = frappe.get_app_path("utility_billing", "templates", "bill", template)
+			text = open(path).read()
+			self.assertIn('class="surcharge"', text, template)
+			self.assertNotIn("incl. surcharge", text)
+
+	def test_block_sector_and_office_boxes_offer_saved_values(self):
+		from utility_billing.utility_billing import choices
+
+		frappe.db.set_value("Property", self.prop, {"block": "N Block", "sector": "Sector 2"})
+		soc = frappe.get_doc("Society", SOC)
+		soc.append("offices", {"office_name": "Main Office", "office_type": "Office"})
+		soc.append("offices", {"office_name": "Q Block", "office_type": "Block"})
+		soc.save()
+		self.assertEqual(choices.values("block", SOC), ["N Block", "Q Block"])
+		self.assertEqual(choices.values("sector", SOC), ["Sector 2"])
+		self.assertEqual(choices.values("office", SOC), ["Main Office"])
+		self.assertRaises(frappe.ValidationError, choices.values, "users")
+		for dt, field in (("Property", "block"), ("Property", "sector"), ("Broadcast", "block"), ("Bulk Adjustment", "block"),
+		                  ("Recovery Run", "block"), ("Access Block", "block"), ("Cash Counter", "office")):
+			self.assertEqual(frappe.get_meta(dt).get_field(field).fieldtype, "Autocomplete", f"{dt}.{field}")
+
+	def test_a_cashier_day_opens_at_the_cashiers_usual_counter(self):
+		from utility_billing.utility_billing import choices
+		from utility_billing.utility_billing.testing import CASHIER
+
+		if not frappe.db.exists("Cash Counter", "TB1"):
+			frappe.get_doc({"doctype": "Cash Counter", "counter_code": "TB1", "counter_name": "Test counter", "society": SOC}).insert()
+		self.assertIsNone(choices.default_counter("nobody@example.com"))
+		frappe.set_user(CASHIER)
+		first = frappe.get_doc({"doctype": "Cashier Day", "cash_counter": "TB1", "opening_float": 0}).insert()
+		self.assertEqual(choices.default_counter(CASHIER), "TB1")
+		frappe.set_user("Administrator")
+		self.assertEqual(first.cash_counter, "TB1")
 
 	def test_only_one_check_meter_field_shows_on_feeders_and_transformers(self):
 		for dt in ("Feeder", "Transformer"):
