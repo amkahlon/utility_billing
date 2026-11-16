@@ -19,13 +19,14 @@ from frappe import _
 from frappe.utils import add_months, cint, flt, getdate, nowdate
 
 from utility_billing.utility_billing import mis
+from utility_billing.utility_billing import rights
 
 VIEWERS = set(mis.RECOVERY + ["Billing Officer", "Billing Manager"])
 DONE = ("Valid", "Approved", "Estimated")
 
 
 def require_viewer():
-	if not (set(frappe.get_roles()) & VIEWERS) and frappe.session.user != "Administrator":
+	if not rights.can("anomaly.view"):
 		raise frappe.PermissionError(_("You don't have permission to see theft suspicion scores."))
 
 

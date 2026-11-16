@@ -6,6 +6,10 @@
 //  3. a new or changed record has a Cancel button beside Save that leaves without saving (every form, the app's and Frappe's);
 //  4. block, sector and office boxes offer the society's saved values (utility_billing.choices) instead of free typing.
 
+// Action rights (increment 25): what the user may do, from frappe.boot.ub_rights (utility_billing.rights.mine).
+frappe.provide("utility_billing");
+utility_billing.can = (action) => frappe.user.has_role("System Manager") || (frappe.boot.ub_rights || []).includes(action);
+
 (function () {
 	const MODULE = "Utility Billing";
 	const ours = (doctype) => (frappe.get_meta(doctype) || {}).module === MODULE;

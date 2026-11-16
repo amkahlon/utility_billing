@@ -58,6 +58,7 @@ boot_session = "utility_billing.boot.boot_session"
 
 # include js in doctype views
 # doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {"Role": "public/js/role.js"}  # its action rights (increment 25)
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_kanban_js = {"doctype" : "public/js/doctype_kanban.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -345,19 +346,12 @@ scheduler_events = {
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
-# Fixtures: roles and approval workflows shipped with the app (synced on bench migrate)
+# Fixtures, re-imported on every migrate: only names the app relies on. The app's roles and approval workflows are
+# setup_data, created once where missing (install.ensure_roles_and_workflows), so a society's changes to them stay
+# (increment 25: the society decides who may do what).
 fixtures = [
-	{
-		"dt": "Role",
-		"filters": [["role_name", "in", [
-			"Society Admin", "Billing Manager", "General Manager", "Billing Officer", "Meter Reader",
-			"Cashier", "Recovery Officer", "Accounts Officer", "Management", "Billing Auditor", "API Integration",
-			"Licence Manager",  # SoftVerx's own staff on the control site (increment 24)
-		]]],
-	},
 	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected", "Cancelled"]]]},
 	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit for Approval", "Approve", "Reject", "Withdraw", "Cancel"]]]},
-	{"dt": "Workflow", "filters": [["name", "in", ["Tariff Approval", "Tariff Adjustment Approval", "Bill Run Approval", "Account Adjustment Approval", "Refund Approval", "Bill Revision Approval", "Bulk Adjustment Approval", "Installment Plan Approval", "Write Off Approval", "Security Deposit Approval", "Opening Balance Approval"]]]},
 	{"dt": "Property Setter", "filters": [["name", "in", ["Utility Bill-main-default_print_format", "Payment Receipt-main-default_print_format"]]]},
 ]
 

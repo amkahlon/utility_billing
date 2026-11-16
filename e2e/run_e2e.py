@@ -2104,6 +2104,31 @@ def t_licence_and_ai(d: Desk):
 	expect_error(lambda: run_report(USERS["cashier"], "Theft Suspicion"))
 
 
+@case("QA-86", "Increment 25: action rights decided by the society; Society Users; a record printed to PDF on any server (bug report 1)")
+def t_rights_and_users(d: Desk):
+	rights, users = "utility_billing.utility_billing.rights", "utility_billing.utility_billing.users"
+	m = d.call(f"{rights}.matrix")
+	eq(("Access Manager" in m["roles"], "System Manager" in m["roles"], m["can_edit"]), (True, False, True), "the Role Rights screen")
+	USERS["cashier"].call("utility_billing.utility_billing.cashdesk.state")  # the cashier may use the cash counter
+	d.call(f"{rights}.set_right", action="cash.counter", role="Cashier", allowed=0)
+	try:
+		expect_error(lambda: USERS["cashier"].call("utility_billing.utility_billing.cashdesk.state"))
+	finally:
+		d.call(f"{rights}.set_right", action="cash.counter", role="Cashier", allowed=1)
+	USERS["cashier"].call("utility_billing.utility_billing.cashdesk.state")
+	expect_error(lambda: USERS["cashier"].call(f"{rights}.set_right", action="cash.counter", role="Meter Reader", allowed=1))
+	# a user made on the Society Users screen, with the values the form sends
+	email = f"qa86.{RUN}@example.com"
+	out = d.call(f"{users}.save_user", data=json.dumps({"email": email, "full_name": f"QA86 {RUN}", "roles": ["Cashier"],
+	                                                    "societies": [S["society"]], "enabled": 1}))
+	row = next(u for u in out["users"] if u["name"] == email)
+	eq((row["roles"], row["societies"]), (["Cashier"], [S["society"]]), "user created with role and society")
+	expect_error(lambda: d.call(f"{users}.save_user", data=json.dumps({"email": email, "roles": ["System Manager"], "societies": [S["society"]]})))
+	# Print > PDF of any record (Frappe's own print path, with the PDF fallbacks)
+	_reader, text = get_pdf_at(d, "frappe.utils.print_format.download_pdf", doctype="Connection", name=S["conn"])
+	eq(S["conn"] in text, True, "the connection's PDF")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

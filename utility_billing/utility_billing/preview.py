@@ -13,6 +13,7 @@ from frappe.utils import flt, getdate
 
 from utility_billing.utility_billing import bill_engine as engine
 from utility_billing.utility_billing import billing, mis, readings, tax_engine
+from utility_billing.utility_billing import rights
 
 ALLOWED = set(mis.EXEC + ["Billing Officer", "Society Admin", "Accounts Officer"])
 LIMIT = 5000
@@ -20,7 +21,7 @@ TOP = 10
 
 
 def require():
-	if not set(frappe.get_roles()) & ALLOWED and frappe.session.user != "Administrator":
+	if not rights.can("preview.view"):
 		frappe.throw(_("You can't see impact previews."), frappe.PermissionError)
 
 

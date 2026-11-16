@@ -13,6 +13,7 @@ from frappe import _
 from frappe.utils import flt, now_datetime
 
 from utility_billing.utility_billing import account
+from utility_billing.utility_billing import rights
 
 RESTORERS = {"System Manager", "General Manager", "Billing Manager"}
 
@@ -44,7 +45,7 @@ def latest(run):
 @frappe.whitelist(methods=["POST"])
 def restore(snapshot: str, reason: str):
 	"""Reverse the run and compare every account with its balance before posting."""
-	if not set(frappe.get_roles()) & RESTORERS:
+	if not rights.can("snapshot.restore"):
 		raise frappe.PermissionError(_("Only a manager can restore a bill run snapshot."))
 	snap = frappe.get_doc("Run Snapshot", snapshot)
 	if snap.status == "Restored":

@@ -4,15 +4,14 @@
 import frappe
 
 from utility_billing.ui_version import ui_version
+from utility_billing.utility_billing import rights
 
 
 def home_page(roles=None) -> str:
 	"""Where the app opens for this user: the dashboard for those who may see it, else the screen their role works in. Meter readers
 	and cashiers used to land on the dashboard and get "No permission for Page" (bug report 2026-11-16)."""
-	from utility_billing.utility_billing.dashboard import ALLOWED  # noqa: PLC0415
-
 	roles = set(roles if roles is not None else frappe.get_roles())
-	if roles & ALLOWED or "System Manager" in roles:
+	if rights.can("dashboard.view", roles=roles):
 		return "ub-dashboard"
 	if "Cashier" in roles:
 		return "ub-cash"
@@ -24,3 +23,4 @@ def home_page(roles=None) -> str:
 def boot_session(bootinfo):
 	bootinfo.ub_ui_version = ui_version()
 	bootinfo.ub_home = home_page()
+	bootinfo.ub_rights = rights.mine()

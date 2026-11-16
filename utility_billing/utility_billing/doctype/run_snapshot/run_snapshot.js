@@ -11,7 +11,7 @@ frappe.ui.form.on("Run Snapshot", {
 			__("Kept just before the bill run was posted. Restoring reverses the run and checks every account is back to its balance."),
 			"blue"
 		);
-		if (frappe.user.has_role(["Billing Manager", "General Manager", "System Manager"])) {
+		if (utility_billing.can("snapshot.restore")) {
 			frm.add_custom_button(__("Restore Run"), () => {
 				frappe.prompt(
 					[{ fieldname: "reason", fieldtype: "Small Text", label: __("Why is the run being restored?"), reqd: 1 }],

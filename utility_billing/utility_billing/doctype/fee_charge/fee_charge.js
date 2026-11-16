@@ -8,7 +8,7 @@ frappe.ui.form.on("Fee Charge", {
 	refresh(frm) {
 		const colors = { Draft: "orange", Posted: "blue", Reversed: "red" };
 		frm.page.set_indicator(__(frm.doc.status), colors[frm.doc.status] || "gray");
-		if (frm.doc.docstatus === 1 && frappe.user.has_role(["Billing Manager", "System Manager"])) {
+		if (frm.doc.docstatus === 1 && utility_billing.can("payments.reverse")) {
 			frm.add_custom_button(__("Reverse Fee"), () => {
 				const d = new frappe.ui.Dialog({
 					title: __("Reverse fee {0}", [frm.doc.name]),

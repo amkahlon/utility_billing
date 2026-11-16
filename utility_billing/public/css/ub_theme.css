@@ -347,3 +347,16 @@ body[data-path="login"] .web-footer, body[data-path="login"] footer { color: #94
 .ub-c360-bal { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
 .ub-c360-bal.due { color: var(--ub-red, #b91c1c); }
 .ub-c360-why { font-size: 11px; color: var(--ub-muted); text-transform: uppercase; letter-spacing: .04em; }
+
+/* Role Rights and Society Users (increment 25) */
+.ub-rr-wrap { overflow: auto; max-height: calc(100vh - 260px); }
+.ub-rr-tbl th { position: sticky; top: 0; z-index: 1; }
+.ub-rr-tbl td:first-child, .ub-rr-tbl th:first-child { position: sticky; left: 0; background: var(--ub-card); min-width: 260px; z-index: 2; }
+.ub-rr-rolehead span { display: inline-block; writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-size: 11px; }
+.ub-rr-cell { text-align: center; }
+.ub-rr-area td { background: var(--ub-soft); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: .04em; color: var(--ub-muted); }
+.ub-us-ticks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 6px; }
+.ub-us-tick { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 400; }
+.ub-us-h { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--ub-muted); margin: 14px 0 6px; }
+.ub-us-block { display: flex; gap: 6px; margin-bottom: 6px; }
+.ub-us-row.on { background: var(--ub-soft); }

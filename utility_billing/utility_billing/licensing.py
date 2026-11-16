@@ -17,6 +17,7 @@ from collections import defaultdict
 import frappe
 from frappe import _
 from frappe.utils import add_days, add_months, cint, flt, get_last_day, getdate, now_datetime, nowdate
+from utility_billing.utility_billing import rights
 
 SITE, CONTROL = "A society's site", "The SoftVerx control site"
 KEY_HEADER = "X-UMS-Licence-Key"
@@ -40,7 +41,7 @@ def key_hash(key: str) -> str:
 
 
 def require_manager():
-	if not set(frappe.get_roles()) & {"Licence Manager", "System Manager"}:
+	if not rights.can("licence.manage"):
 		raise frappe.PermissionError(_("Only a Licence Manager does this."))
 
 
@@ -101,7 +102,7 @@ def send_now(month: str | None = None):
 	"""The Send Usage Now button: last month (or the given one) counted and sent."""
 	if is_control():
 		frappe.throw(_("The control site receives usage; it doesn't send any."))
-	if not set(frappe.get_roles()) & {"System Manager", "Society Admin"}:
+	if not rights.can("licence.settings"):
 		raise frappe.PermissionError(_("Only a Society Admin sends the licence usage."))
 	usage = record_usage(month or add_months(month_start(nowdate()), -1))
 	return {"usage": usage.name, "accepted": send_usage(usage)}

@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, now_datetime, nowdate
+from utility_billing.utility_billing import rights
 
 APPROVERS = {"System Manager", "Billing Manager", "Accounts Officer"}
 CHEQUE_MODES = {"Cheque", "Pay Order"}
@@ -70,7 +71,7 @@ def open_day_of(user=None):
 @frappe.whitelist(methods=["POST"])
 def close_day(name: str, cash_counted: float, deposit_slip_no: str | None = None, remarks: str | None = None):
 	day = frappe.get_doc("Cashier Day", name)
-	if day.cashier != frappe.session.user and "System Manager" not in frappe.get_roles():
+	if day.cashier != frappe.session.user and not rights.can("cash.any_day"):
 		raise frappe.PermissionError(_("Only the cashier closes their own day."))
 	if day.status != "Open":
 		frappe.throw(_("This day is already closed."))
@@ -95,7 +96,7 @@ def close_day(name: str, cash_counted: float, deposit_slip_no: str | None = None
 @frappe.whitelist(methods=["POST"])
 def approve_day(name: str):
 	day = frappe.get_doc("Cashier Day", name)
-	if not set(frappe.get_roles()) & APPROVERS:
+	if not rights.can("cash.approve_day"):
 		raise frappe.PermissionError(_("Only a Billing Manager or Accounts Officer approves a cashier day."))
 	if day.cashier == frappe.session.user and frappe.session.user != "Administrator":
 		frappe.throw(_("You can't approve your own day."))

@@ -21,6 +21,7 @@ from frappe.utils import add_days, cint, flt, formatdate, getdate, now_datetime,
 
 from utility_billing.utility_billing import access, dashboard, flags, holders, mis, notify
 from utility_billing.utility_billing import recovery_engine as engine
+from utility_billing.utility_billing import rights
 
 RUNNERS = ["Recovery Officer", "Billing Manager", "General Manager", "Society Admin"]
 APPROVERS = ["Billing Manager", "General Manager"]
@@ -35,12 +36,12 @@ DEFAULT_STAGES = [
 ]
 
 
-def can(roles) -> bool:
-	return bool(set(frappe.get_roles()) & set(roles)) or frappe.session.user == "Administrator"
+def can(action) -> bool:
+	return rights.can(action)
 
 
-def require(roles, what):
-	if not can(roles):
+def require(action, what):
+	if not can(action):
 		frappe.throw(_("You don't have permission to {0}.").format(what), frappe.PermissionError)
 
 
@@ -175,7 +176,7 @@ def notice_message(rules, society_doc, stage, row_values) -> str:
 
 def issue_run(run):
 	"""Create the notices of the ticked rows. Stage dates are recorded; a disconnection order waits for approval."""
-	require(RUNNERS, _("issue recovery notices"))
+	require("recovery.run", _("issue recovery notices"))
 	if run.status not in (None, "", "Draft"):
 		frappe.throw(_("This run is already {0}.").format(run.status.lower()))
 	rows = [i for i in run.items if cint(i.include)]
@@ -219,7 +220,7 @@ def issue_run(run):
 
 def approve_disconnection(name):
 	"""A disconnection order needs a second person: not whoever ran or created the run (maker-checker)."""
-	require(APPROVERS, _("approve a disconnection order"))
+	require("recovery.approve", _("approve a disconnection order"))
 	n = frappe.get_doc("Recovery Notice", name)
 	if n.stage != engine.DISCONNECTION or n.status != "Awaiting Approval":
 		frappe.throw(_("Only a disconnection order that is awaiting approval can be approved."))
@@ -234,7 +235,7 @@ def approve_disconnection(name):
 
 
 def cancel_notice(name, reason):
-	require(RUNNERS, _("cancel a notice"))
+	require("recovery.run", _("cancel a notice"))
 	if not (reason or "").strip():
 		frappe.throw(_("Give a reason for cancelling the notice."))
 	n = frappe.get_doc("Recovery Notice", name)
@@ -247,7 +248,7 @@ def cancel_notice(name, reason):
 
 def mark_notice(name, status):
 	"""Staff record the result of a queued SMS or WhatsApp notice until a gateway does it (notifications increment)."""
-	require(RUNNERS, _("update a notice"))
+	require("recovery.run", _("update a notice"))
 	allowed = {"Queued": ("Sent", "Failed"), "Failed": ("Queued", "Sent")}
 	n = frappe.get_doc("Recovery Notice", name)
 	if status not in allowed.get(n.status, ()):
@@ -260,8 +261,8 @@ def mark_notice(name, status):
 # ---------------------------------------------------------------- cases
 def assign_cases(society, connections, user):
 	"""Open a case for each account that has none, and assign it. Accounts that already have an open case are reassigned."""
-	require(RUNNERS, _("assign defaulters"))
-	if not user or "Recovery Officer" not in frappe.get_roles(user):
+	require("recovery.run", _("assign defaulters"))
+	if not user or not rights.can("recovery.handle_case", user):
 		frappe.throw(_("{0} is not a Recovery Officer.").format(user or _("Choose a user")))
 	cases = open_cases(society)
 	made = changed = 0
@@ -282,7 +283,7 @@ def assign_cases(society, connections, user):
 def get_recovery(society: str | None = None, as_of: str | None = None, block: str | None = None, category: str | None = None,
                  show: str = "defaulters"):
 	"""Everything the Defaulters and Recovery page shows, in one call."""
-	require(VIEWERS, _("see recovery"))
+	require("recovery.view", _("see recovery"))
 	societies = frappe.get_all("Society", fields=["name", "society_name"], order_by="society_name")
 	if not societies:
 		return {"societies": [], "empty": True}
@@ -328,7 +329,7 @@ def get_recovery(society: str | None = None, as_of: str | None = None, block: st
 		"categories": frappe.get_all("Consumer Category", pluck="name", order_by="name"),
 		"officers": frappe.get_all("Has Role", filters={"role": "Recovery Officer", "parenttype": "User"}, pluck="parent"),
 		"rows": shown[:500], "truncated": len(shown) > 500, "total_rows": len(shown),
-		"can_run": can(RUNNERS), "can_target": can(["Billing Manager", "General Manager", "Society Admin"]),
+		"can_run": can("recovery.run"), "can_target": bool(frappe.has_permission("Recovery Target", "create")),
 	}
 
 
@@ -353,7 +354,7 @@ def stage_label(r) -> tuple[str, str]:
 def new_run(society: str, as_of: str | None = None, block: str | None = None, consumer_category: str | None = None, connections=None):
 	"""Create a draft recovery run and fill it, for the page's "Run recovery stages" button; with `connections`, for those accounts only
 	(the selection bar's "Send notice"). The run is reviewed before anything is issued."""
-	require(RUNNERS, _("run recovery stages"))
+	require("recovery.run", _("run recovery stages"))
 	run = frappe.get_doc({"doctype": "Recovery Run", "society": society, "as_of": as_of or nowdate(), "block": block,
 	                      "consumer_category": consumer_category})
 	prepare_run(run)
@@ -371,7 +372,7 @@ def new_run(society: str, as_of: str | None = None, block: str | None = None, co
 def disconnection_requests(society: str, connections):
 	"""The selection bar's "Create disconnection orders": a Disconnection service request per account (reason Defaulter), so the notice
 	period and the approval step still apply. Accounts with one already open are skipped."""
-	require(RUNNERS, _("create disconnection requests"))
+	require("recovery.run", _("create disconnection requests"))
 	from utility_billing.utility_billing import servicereq  # noqa: PLC0415
 
 	servicereq.ensure_types(society)
@@ -396,7 +397,7 @@ def assign(society: str, connections, user: str):
 @frappe.whitelist()
 def case_of(connection: str):
 	"""Open the account's recovery case, creating an unassigned one if needed."""
-	require(RUNNERS, _("open a recovery case"))
+	require("recovery.run", _("open a recovery case"))
 	society = frappe.db.get_value("Connection", connection, "society")
 	c = open_cases(society).get(connection)
 	if c:

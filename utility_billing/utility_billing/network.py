@@ -11,6 +11,7 @@ from frappe import _
 from frappe.utils import flt, get_last_day, getdate
 
 from utility_billing.utility_billing.readings import month_start
+from utility_billing.utility_billing import rights
 
 LOCATED = (  # doctype, label field, kind shown on the map
 	("Property", "property_no", "Property"),
@@ -42,7 +43,7 @@ def check_society(doc, link_doctype, link_name, what):
 @frappe.whitelist()
 def geojson(society: str):
 	"""Every record of the society with a map location, as GeoJSON (FS-MST-27)."""
-	if not set(frappe.get_roles()) & VIEWERS:
+	if not rights.can("network.view"):
 		raise frappe.PermissionError(_("You can't export the network map."))
 	features = []
 	for dt, label, kind in LOCATED:

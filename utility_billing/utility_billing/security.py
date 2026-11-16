@@ -6,6 +6,7 @@ It is never applied by itself: two-factor sign-in needs each manager to set up a
 import frappe
 from frappe import _
 from frappe.utils import cint
+from utility_billing.utility_billing import rights
 
 TWO_FACTOR_ROLES = ("System Manager", "Society Admin", "General Manager", "Billing Manager", "Management", "Accounts Officer")
 POLICY = {"enable_password_policy": 1, "minimum_password_score": "3", "allow_consecutive_login_attempts": 5, "allow_login_after_fail": 900,
@@ -29,7 +30,7 @@ def status() -> list[dict]:
 
 @frappe.whitelist()
 def get_status():
-	if "System Manager" not in frappe.get_roles() and not set(frappe.get_roles()) & {"Billing Auditor", "General Manager", "Society Admin"}:
+	if not rights.can("security.view"):
 		raise frappe.PermissionError(_("You can't see the security settings."))
 	return status()
 

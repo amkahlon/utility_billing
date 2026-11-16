@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, now_datetime
+from utility_billing.utility_billing import rights
 
 MANAGERS = {"System Manager", "Billing Manager", "General Manager"}
 
@@ -30,6 +31,6 @@ class RAFinding(Document):
 			if was != "Closed":
 				self.closed_by, self.closed_on = frappe.session.user, now_datetime()
 		elif was == "Closed":
-			if not set(frappe.get_roles()) & MANAGERS:
+			if not rights.can("ra.manage"):
 				raise frappe.PermissionError(_("Only a Billing Manager or General Manager reopens a closed finding."))
 			self.closed_by = self.closed_on = None

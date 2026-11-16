@@ -29,7 +29,7 @@ frappe.ui.form.on("Billing Period", {
 					});
 				});
 			}).addClass("btn-primary");
-		} else if (frappe.user.has_role(["General Manager", "System Manager"])) {
+		} else if (utility_billing.can("period.reopen")) {
 			frm.add_custom_button(__("Reopen"), () => {
 				frappe.prompt(
 					[{ fieldname: "reason", fieldtype: "Small Text", label: __("Why is it being reopened?"), reqd: 1 }],

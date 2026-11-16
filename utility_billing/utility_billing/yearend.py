@@ -10,6 +10,7 @@ from frappe import _
 from frappe.utils import add_months, flt, getdate, now_datetime
 
 from utility_billing.utility_billing import periods
+from utility_billing.utility_billing import rights
 
 CLOSERS = {"System Manager", "Billing Manager", "General Manager", "Accounts Officer"}
 BUCKETS = ("arrears", "current", "surcharge", "fees", "credit")
@@ -83,7 +84,7 @@ def _fill(doc):
 
 
 def _doc(name):
-	if not set(frappe.get_roles()) & CLOSERS:
+	if not rights.can("period.close"):
 		raise frappe.PermissionError(_("Only a Billing Manager, Accounts Officer or General Manager can work on the year end."))
 	doc = frappe.get_doc("Year End Close", name)
 	if doc.status == "Closed":

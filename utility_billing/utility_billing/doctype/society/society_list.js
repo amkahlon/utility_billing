@@ -2,7 +2,7 @@
 // New society from a template (FS-CFG-27).
 frappe.listview_settings["Society"] = {
 	onload(list) {
-		if (!frappe.user.has_role(["System Manager", "Society Admin"])) return;
+		if (!frappe.model.can_create("Society")) return;
 		list.page.add_inner_button(__("New Society from Template"), () => {
 			frappe.prompt(
 				[

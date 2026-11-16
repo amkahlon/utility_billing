@@ -13,6 +13,7 @@ from frappe.utils import add_days, cint, flt, getdate, now_datetime, nowdate
 
 from utility_billing.utility_billing import account_engine as engine
 from utility_billing.utility_billing import flags, periods
+from utility_billing.utility_billing import rights
 
 FIELDS = {"current": "current_balance", "arrears": "arrears_balance", "surcharge": "surcharge_balance",
           "fees": "fees_balance", "credit": "credit_balance"}
@@ -235,7 +236,7 @@ def recheck_surcharge(connection, payment_date):
 @frappe.whitelist(methods=["POST"])
 def run_surcharges(society: str | None = None):
 	"""Apply due surcharges now (the scheduler does this daily)."""
-	if not set(frappe.get_roles()) & REVERSERS:
+	if not rights.can("payments.reverse"):
 		raise frappe.PermissionError(_("Only a Billing Manager can run surcharges."))
 	return apply_surcharges(society=society)
 
@@ -325,7 +326,7 @@ def reverse_document(doctype: str, name: str, reason_code: str, remarks: str | N
 	what it paid (FS-PAY-12, FS-REC-12). Billing Manager only; never the person who took it."""
 	if doctype not in ("Payment Receipt", "Fee Charge"):
 		frappe.throw(_("Only payments and fees are reversed here."))
-	if not set(frappe.get_roles()) & REVERSERS:
+	if not rights.can("payments.reverse"):
 		raise frappe.PermissionError(_("Only a Billing Manager can reverse a {0}.").format(_(doctype)))
 	doc = frappe.get_doc(doctype, name)
 	if doc.docstatus != 1:

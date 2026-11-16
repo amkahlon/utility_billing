@@ -8,13 +8,14 @@ from frappe.utils import cint, flt, getdate, nowdate
 
 from utility_billing.utility_billing import access, flags
 from utility_billing.utility_billing import account as acct  # (view() has a parameter "account" and a variable "ledger")
+from utility_billing.utility_billing import rights
 
 STAFF = {"System Manager", "Society Admin", "Billing Manager", "General Manager", "Billing Officer", "Cashier", "Recovery Officer",
          "Accounts Officer", "Management", "Billing Auditor"}
 
 
 def _require():
-	if not set(frappe.get_roles()) & STAFF:
+	if not rights.can("consumer360.view"):
 		raise frappe.PermissionError(_("You can't open the consumer view."))
 
 
@@ -63,11 +64,6 @@ def consumer_of(account: str):
 
 def account_mod_connection(ref):
 	return acct.connection_of(ref) or (ref if frappe.db.exists("Connection", ref) else None)
-
-
-def roles_can(*roles) -> bool:
-	have = set(frappe.get_roles())
-	return bool(have & set(roles)) or "System Manager" in have
 
 
 def twelve_months(rows) -> list[dict]:
@@ -226,8 +222,9 @@ def view(consumer: str, account: str | None = None):
 		"complaints": frappe.get_all("Bill Dispute", filters={"connection": ["in", names]}, fields=["*"], order_by="creation desc", limit=20),
 		# the account the page shows (the mock-up's view of one account; a consumer with several switches between them)
 		"selected": selected, "overview": overview(selected) if selected else None,
-		"can": {"pay": roles_can("Cashier", "Accounts Officer"), "request": roles_can("Billing Officer", "Billing Manager", "Society Admin", "Recovery Officer"),
-		        "print": roles_can("Billing Officer", "Billing Manager", "Cashier", "Accounts Officer", "Society Admin", "General Manager")},
+		"can": {"pay": rights.can("cash.counter") or bool(frappe.has_permission("Payment Receipt", "create")),
+		        "request": bool(frappe.has_permission("Service Request", "create")),
+		        "print": bool(frappe.has_permission("Utility Bill", "print"))},
 	}
 
 

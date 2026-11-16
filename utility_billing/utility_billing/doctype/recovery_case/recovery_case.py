@@ -9,6 +9,7 @@ from frappe.model.document import Document
 from frappe.utils import flt, nowdate
 
 from utility_billing.utility_billing import recovery_engine as engine
+from utility_billing.utility_billing import rights
 
 
 class RecoveryCase(Document):
@@ -40,7 +41,7 @@ class RecoveryCase(Document):
 			frappe.throw(_("{0} already has an open recovery case, {1}.").format(self.connection, other))
 
 	def check_assignee(self):
-		if self.assigned_to and "Recovery Officer" not in frappe.get_roles(self.assigned_to):
+		if self.assigned_to and not rights.can("recovery.handle_case", self.assigned_to):
 			frappe.throw(_("{0} is not a Recovery Officer.").format(self.assigned_to))
 
 	def stamp_followups(self):

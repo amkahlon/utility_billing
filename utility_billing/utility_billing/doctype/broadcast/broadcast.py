@@ -6,6 +6,7 @@ from frappe import _
 from frappe.model.document import Document
 
 from utility_billing.utility_billing import notify
+from utility_billing.utility_billing import rights
 
 
 class Broadcast(Document):
@@ -26,7 +27,7 @@ class Broadcast(Document):
 
 	@frappe.whitelist()
 	def send(self):
-		if not set(frappe.get_roles()) & set(notify.SENDERS) and frappe.session.user != "Administrator":
+		if not rights.can("messages.send"):
 			frappe.throw(_("You can't send broadcasts."), frappe.PermissionError)
 		self.flags.sending = True
 		n = notify.send_broadcast(self)

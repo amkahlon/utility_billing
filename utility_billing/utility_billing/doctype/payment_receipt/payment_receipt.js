@@ -26,7 +26,7 @@ frappe.ui.form.on("Payment Receipt", {
 		if (!frm.is_new()) {
 			frm.add_custom_button(__("Receipt PDF"), () => open_receipt(frm.doc.name));
 		}
-		if (frm.doc.docstatus === 1 && frappe.user.has_role(["Billing Manager", "System Manager"])) {
+		if (frm.doc.docstatus === 1 && utility_billing.can("payments.reverse")) {
 			frm.add_custom_button(__("Reverse Payment"), () => reverse_dialog(frm, "Payment Receipt", "Payment Reversal"));
 		}
 	},

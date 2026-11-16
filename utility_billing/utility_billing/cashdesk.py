@@ -10,12 +10,13 @@ from frappe.utils import flt, nowdate
 
 from utility_billing.utility_billing import account
 from utility_billing.utility_billing.doctype.cashier_day.cashier_day import open_day_of
+from utility_billing.utility_billing import rights
 
 CASHIERS = {"Cashier", "Accounts Officer", "System Manager"}
 
 
 def require():
-	if not set(frappe.get_roles()) & CASHIERS:
+	if not rights.can("cash.counter"):
 		raise frappe.PermissionError(_("The cash counter is for cashiers."))
 
 

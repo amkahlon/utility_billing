@@ -24,7 +24,7 @@ frappe.ui.form.on("Meter Reading", {
 function add_review_buttons(frm) {
 	{
 		const s = frm.doc.status;
-		const reviewer = frappe.user.has_role(["Billing Officer", "Billing Manager", "System Manager"]);
+		const reviewer = utility_billing.can("readings.review");
 		if (!reviewer) return;
 		if (s === "Flagged") {
 			frm.add_custom_button(__("Approve as Read"), () =>
