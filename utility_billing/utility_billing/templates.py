@@ -6,6 +6,7 @@ and bank details are the society's own and are listed as what is left to do. GCC
 
 import frappe
 from frappe import _
+from utility_billing.utility_billing import rights
 
 TEMPLATES = ("Pakistan housing society",)
 CATEGORIES = ("Residential", "Commercial", "Common Area", "Temporary / Construction")
@@ -29,7 +30,7 @@ def ensure(doctype, name, values):
 @frappe.whitelist(methods=["POST"])
 def new_society(society_name: str, short_name: str, template: str = TEMPLATES[0]):
 	"""Make a society from the template and return it with the setup still to do."""
-	if not set(frappe.get_roles()) & CREATORS:
+	if not rights.can("templates.manage"):
 		raise frappe.PermissionError(_("Only a Society Admin sets up a new society."))
 	if template not in TEMPLATES:
 		frappe.throw(_("Choose a template: {0}.").format(", ".join(TEMPLATES)))

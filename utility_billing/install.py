@@ -156,6 +156,7 @@ def create_default_kpis():
 
 
 def after_install():
+	ensure_roles_and_workflows()
 	create_default_utilities()
 	create_default_exception_codes()
 	create_default_reason_codes()
@@ -180,6 +181,30 @@ def after_migrate():
 	for society in frappe.get_all("Society", pluck="name"):
 		servicereq.ensure_types(society)  # the standard service request types (FS-WF-00)
 	ensure_indexes()
+	ensure_roles_and_workflows()
+
+
+def ensure_roles_and_workflows():
+	"""The app's roles and approval workflows, and the starting roles of each action right: created where missing and never
+	changed afterwards, so what a society sets on the Role, Workflow and Role Rights screens stays (increment 25). A change to a
+	default that must reach existing sites is a patch."""
+	import json  # noqa: PLC0415
+	import os  # noqa: PLC0415
+
+	folder = os.path.join(os.path.dirname(__file__), "setup_data")
+	for row in json.load(open(os.path.join(folder, "roles.json"))):
+		if not frappe.db.exists("Role", row["name"]):
+			doc = {k: v for k, v in row.items() if k not in ("modified", "docstatus")}
+			frappe.get_doc(doc).insert(ignore_permissions=True)
+	for row in json.load(open(os.path.join(folder, "workflows.json"))):
+		if not frappe.db.exists("Workflow", row["name"]):
+			doc = {k: v for k, v in row.items() if k not in ("modified", "docstatus")}
+			for table in ("states", "transitions"):
+				doc[table] = [{k: v for k, v in r.items() if k not in ("name", "parent", "modified", "creation")} for r in doc.get(table) or []]
+			frappe.get_doc(doc).insert(ignore_permissions=True)
+	from utility_billing.utility_billing import rights  # noqa: PLC0415
+
+	rights.ensure_defaults()
 
 
 # Database indexes for the lookups made per account (increment 23, FS-RUN-07 and FS-NFR-02): without them every bill, ledger and reading

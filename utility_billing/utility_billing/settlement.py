@@ -22,6 +22,7 @@ from frappe import _
 from frappe.utils import cint, flt, getdate, now_datetime
 
 from utility_billing.utility_billing import account
+from utility_billing.utility_billing import rights
 
 POSTERS = ["Accounts Officer"]
 HANDLERS = ["Accounts Officer", "Billing Manager"]
@@ -35,8 +36,8 @@ ALIASES = {
 }
 
 
-def can(roles) -> bool:
-	return bool(set(frappe.get_roles()) & set(roles)) or frappe.session.user == "Administrator"
+def can(action) -> bool:
+	return rights.can(action)
 
 
 # ---------------------------------------------------------------- pure parts (unit tested)
@@ -187,7 +188,7 @@ def refresh_counts(doc):
 def post_unrecorded(doc):
 	"""For each 'Not recorded' row: post the payment when its reference number is a real account of this society, else hold
 	it in suspense (FS-PAY-10, 11). Money that reached the bank is never dropped."""
-	if not can(POSTERS):
+	if not can("settlement.post"):
 		frappe.throw(_("Only an Accounts Officer can post payments from a settlement file."), frappe.PermissionError)
 	if doc.status == "Closed":
 		frappe.throw(_("This settlement file is closed."))
@@ -213,7 +214,7 @@ def post_unrecorded(doc):
 
 
 def close_file(doc):
-	if not can(HANDLERS):
+	if not can("settlement.handle"):
 		frappe.throw(_("Only an Accounts Officer or Billing Manager can close a settlement file."), frappe.PermissionError)
 	if doc.status != "Matched":
 		frappe.throw(_("Import the file before closing it."))
@@ -233,14 +234,14 @@ def new_suspense(society, amount, paid_on, mode, txn_id, reference_text=None, se
 
 def match_suspense(s, connection):
 	"""Post a held payment to the account it belongs to."""
-	if not can(HANDLERS):
+	if not can("settlement.handle"):
 		frappe.throw(_("Only an Accounts Officer or Billing Manager can match a suspense payment."), frappe.PermissionError)
 	if s.status != "Held":
 		frappe.throw(_("This payment is already {0}.").format(s.status.lower()))
 	c = frappe.db.get_value("Connection", connection, ["society", "reference_no"], as_dict=True)
 	if not c or c.society != s.society:
 		frappe.throw(_("Choose an account of {0}.").format(s.society))
-	if not can(POSTERS):
+	if not can("settlement.post"):
 		frappe.throw(_("Posting the payment needs an Accounts Officer."), frappe.PermissionError)
 	r = frappe.get_doc({"doctype": "Payment Receipt", "reference_no": c.reference_no, "payment_channel": "Bank / Channel", "payment_date": s.payment_date,
 	                    "amount": s.amount, "mode": s.mode, "channel_txn_id": s.channel_txn_id, "remarks": _("From suspense {0}").format(s.name)})
@@ -253,7 +254,7 @@ def match_suspense(s, connection):
 
 
 def return_suspense(s, remarks):
-	if not can(HANDLERS):
+	if not can("settlement.handle"):
 		frappe.throw(_("Only an Accounts Officer or Billing Manager can return a suspense payment."), frappe.PermissionError)
 	if s.status != "Held":
 		frappe.throw(_("This payment is already {0}.").format(s.status.lower()))

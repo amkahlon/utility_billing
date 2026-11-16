@@ -195,12 +195,19 @@ def remind_and_escalate(as_of=None):
 
 
 # ---------------------------------------------------------------- delegation (FS-ACC-07)
+def approver_roles() -> list[str]:
+	"""The roles that approve something on any active workflow (lent during a delegation), as the Workflow screens say."""
+	rows = frappe.db.sql("""select distinct t.allowed from `tabWorkflow Transition` t join `tabWorkflow` w on w.name = t.parent
+	                       where w.is_active = 1 and t.action = 'Approve'""")
+	return [r[0] for r in rows] or list(APPROVER_ROLES)
+
+
 def roles_of(user):
 	return set(frappe.get_roles(user))
 
 
 def start_delegation(d):
-	lend = [r for r in APPROVER_ROLES if r in roles_of(d.delegator) and r not in roles_of(d.delegate)]
+	lend = [r for r in approver_roles() if r in roles_of(d.delegator) and r not in roles_of(d.delegate)]
 	user = frappe.get_doc("User", d.delegate)
 	for r in lend:
 		user.append("roles", {"role": r})

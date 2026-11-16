@@ -28,6 +28,7 @@ from frappe.utils import add_days, cint, flt, formatdate, get_datetime, get_url,
 
 from utility_billing.utility_billing import notify_engine as engine
 from utility_billing.utility_billing.recovery_engine import render_message
+from utility_billing.utility_billing import rights
 
 SENDERS = ["Billing Manager", "General Manager", "Society Admin", "Recovery Officer"]
 
@@ -252,7 +253,7 @@ def process_queue(limit=300):
 @frappe.whitelist(methods=["POST"])
 def send_now():
 	"""Staff: send the queued messages that are due now, without waiting for the scheduler's next tick."""
-	if not set(frappe.get_roles()) & set(SENDERS + ["Accounts Officer"]) and frappe.session.user != "Administrator":
+	if not rights.can("messages.send"):
 		frappe.throw(_("You can't send messages."), frappe.PermissionError)
 	return process_queue()
 

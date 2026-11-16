@@ -9,6 +9,7 @@ run, block or route, or for chosen bills.
 import frappe
 from frappe import _
 from frappe.utils import cint, getdate, now_datetime, nowdate
+from utility_billing.utility_billing import rights
 
 PRINTED, HANDED, DELIVERED, MESSAGE, RETURNED, NOT_DELIVERED = (
 	"Printed", "Handed to Distributor", "Delivered", "Sent by Message", "Returned", "Not Delivered")
@@ -56,7 +57,7 @@ def _bills(run, block, route, only=None):
 def mark(run: str, status: str, block: str | None = None, route: str | None = None, distributor: str | None = None,
          remarks: str | None = None, bills: str | None = None):
 	"""Record a delivery status for the posted bills of a run, optionally one block or route or chosen bills (a JSON list)."""
-	if not set(frappe.get_roles()) & STAFF:
+	if not rights.can("delivery.record"):
 		raise frappe.PermissionError(_("You can't record bill delivery."))
 	frappe.get_doc("Bill Run", run).check_permission("read")
 	only = frappe.parse_json(bills) if bills else None

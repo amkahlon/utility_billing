@@ -10,6 +10,7 @@ from frappe import _
 from frappe.utils import add_days, add_months, cint, flt, formatdate, get_last_day, getdate, nowdate
 
 from utility_billing.utility_billing import losses, mis
+from utility_billing.utility_billing import rights
 
 ALLOWED = set(mis.FINANCE + mis.BILLING + mis.RECOVERY + ["Society Admin"])
 MODES = ("Cash", "Cheque", "Pay Order", "Card", "Bank Transfer", "1Link", "Kuickpay")
@@ -283,7 +284,7 @@ def cards_of(society, month, series, as_of):
 # ---------------------------------------------------------------- the call
 @frappe.whitelist()
 def get_dashboard(society: str | None = None, month: str | None = None):
-	if not set(frappe.get_roles()) & ALLOWED:
+	if not rights.can("dashboard.view"):
 		raise frappe.PermissionError(_("You don't have access to the dashboard."))
 	societies = frappe.get_all("Society", fields=["name", "society_name"], order_by="creation desc", limit=200)
 	if not societies:

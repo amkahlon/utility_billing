@@ -76,7 +76,7 @@ def required_roles(doc) -> list[str] | None:
 	levels = []
 	if doc.get("society"):
 		levels = [r for r in frappe.get_cached_doc("Society", doc.society).get("approval_levels") or [] if r.transaction == doc.doctype]
-	if not levels:
+	if not levels:  # the society hasn't set approval levels for this kind of document (Society > Approval Levels by Amount): the default
 		return [DEFAULT_APPROVER[doc.doctype]]
 	levels.sort(key=lambda r: (flt(r.up_to_amount) == 0, flt(r.up_to_amount)))  # a level with no limit is the top
 	for i, r in enumerate(levels):

@@ -12,6 +12,7 @@ import calendar
 import frappe
 from frappe import _
 from frappe.utils import add_days, add_months, getdate, nowdate
+from utility_billing.utility_billing import rights
 
 CLOSERS = {"System Manager", "Billing Manager", "General Manager", "Accounts Officer"}
 REOPENERS = {"System Manager", "General Manager"}
@@ -189,7 +190,7 @@ def preview(period: str):
 @frappe.whitelist(methods=["POST"])
 def close(period: str):
 	"""Run the checklist and close the month when nothing failed."""
-	if not set(frappe.get_roles()) & CLOSERS:
+	if not rights.can("period.close"):
 		raise frappe.PermissionError(_("Only a Billing Manager, Accounts Officer or General Manager can close a month."))
 	doc = _doc(period)
 	if doc.status == "Closed":
@@ -213,7 +214,7 @@ def close(period: str):
 
 @frappe.whitelist(methods=["POST"])
 def reopen(period: str, reason: str):
-	if not set(frappe.get_roles()) & REOPENERS:
+	if not rights.can("period.reopen"):
 		raise frappe.PermissionError(_("Only a General Manager can reopen a closed month."))
 	if len((reason or "").strip()) < 10:
 		frappe.throw(_("Give the reason for reopening (at least 10 characters)."))

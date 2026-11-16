@@ -11,6 +11,7 @@ from frappe.utils import add_months, cstr, flt, getdate, now_datetime, nowdate
 
 from utility_billing.utility_billing import reading_engine as engine
 from utility_billing.utility_billing import routes
+from utility_billing.utility_billing import rights
 
 DONE = ("Valid", "Approved", "Estimated")
 ACTUAL_DONE = ("Valid", "Approved")
@@ -22,7 +23,7 @@ def month_start(d):
 
 
 def require_reviewer():
-	if not REVIEW_ROLES & set(frappe.get_roles()):
+	if not rights.can("readings.review"):
 		frappe.throw(_("Only a Billing Officer or Billing Manager can do this."), frappe.PermissionError)
 
 

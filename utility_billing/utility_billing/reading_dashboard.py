@@ -9,12 +9,13 @@ from frappe import _
 from frappe.utils import getdate
 
 from utility_billing.utility_billing import dashboard, mis
+from utility_billing.utility_billing import rights
 
 READ, ESTIMATED, WAITING, FLAGGED = ("Valid", "Approved"), ("Estimated",), ("Pending", "Re-read Requested"), ("Flagged",)
 
 
 def require():
-	if not (set(frappe.get_roles()) & set(mis.READINGS + mis.EXEC)) and frappe.session.user != "Administrator":
+	if not rights.can("readings.view"):
 		frappe.throw(_("You don't have permission to see the reading dashboard."), frappe.PermissionError)
 
 

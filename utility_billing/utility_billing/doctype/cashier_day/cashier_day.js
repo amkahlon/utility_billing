@@ -24,7 +24,7 @@ frappe.ui.form.on("Cashier Day", {
 		if (
 			frm.doc.status === "Closed" &&
 			frm.doc.cashier !== frappe.session.user &&
-			frappe.user.has_role(["Billing Manager", "Accounts Officer", "System Manager"])
+			utility_billing.can("cash.approve_day")
 		) {
 			frm.add_custom_button(__("Approve Day"), () =>
 				frappe.call({ method: `${DAY}.approve_day`, args: { name: frm.doc.name }, freeze: true }).then(() => frm.reload_doc())

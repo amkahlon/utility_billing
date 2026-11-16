@@ -20,6 +20,7 @@ from frappe.utils import add_days, cint, flt, getdate, now_datetime, nowdate
 
 from utility_billing.utility_billing import account, holders
 from utility_billing.utility_billing.doctype.security_deposit.security_deposit import held
+from utility_billing.utility_billing import rights
 
 NEW, TEMP, METER, DISC, RECON, CLOSE, CAT, LOAD, OWNER, T_IN, T_OUT, NODUES, CONTACT, TEST, DEPOSIT, DETECT = (
 	"New connection", "Temporary connection", "Meter change", "Disconnection", "Reconnection", "Permanent disconnection",
@@ -82,7 +83,7 @@ def ensure_types(society):
 
 @frappe.whitelist(methods=["POST"])
 def set_up_types(society: str):
-	if not set(frappe.get_roles()) & {"System Manager", "Society Admin", "Billing Manager"}:
+	if not rights.can("servicereq.setup"):
 		raise frappe.PermissionError(_("Only a Society Admin or Billing Manager sets up request types."))
 	return ensure_types(society)
 

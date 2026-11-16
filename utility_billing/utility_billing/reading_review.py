@@ -9,12 +9,13 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from utility_billing.utility_billing import mis
+from utility_billing.utility_billing import rights
 
 WAITING = ("Flagged", "Re-read Requested")
 
 
 def require():
-	if not (set(frappe.get_roles()) & set(mis.READINGS + mis.EXEC)) and frappe.session.user != "Administrator":
+	if not rights.can("readings.view"):
 		raise frappe.PermissionError(_("You can't review readings."))
 
 
@@ -68,5 +69,5 @@ def queue(cycle: str | None = None, society: str | None = None, route: str | Non
 		"routes": sorted({r for r in frappe.get_all("Meter Reading", filters={"reading_cycle": cycle, "route": ["is", "set"]}, pluck="route", distinct=True)}),
 		"codes": frappe.get_all("Reading Exception Code", filters={"enabled": 1}, pluck="name", order_by="name"),
 		"rows": rows, "route": route or "", "code": code or "",
-		"can_decide": bool(set(frappe.get_roles()) & {"Billing Officer", "Billing Manager", "System Manager"}),
+		"can_decide": rights.can("readings.review"),
 	}

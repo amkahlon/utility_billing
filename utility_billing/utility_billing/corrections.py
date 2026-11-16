@@ -17,12 +17,13 @@ from frappe.utils import add_days, cint, flt, formatdate, get_first_day, get_las
 
 from utility_billing.utility_billing import account, bill_print, billing, notify, plans, reading_engine
 from utility_billing.utility_billing import account_engine as engine
+from utility_billing.utility_billing import rights
 
 HANDLERS = ["Billing Manager", "General Manager", "Billing Officer", "Society Admin"]
 
 
 def is_gm() -> bool:
-	return "General Manager" in frappe.get_roles() or frappe.session.user == "Administrator"
+	return rights.can("corrections.senior")
 
 
 def due_date_of(bill):
@@ -187,7 +188,7 @@ def hold_surcharge(dispute):
 
 
 def resolve_dispute(d, outcome, remarks, revision=None):
-	if not set(frappe.get_roles()) & {"Billing Manager", "General Manager"} and frappe.session.user != "Administrator":
+	if not rights.can("disputes.decide"):
 		frappe.throw(_("Only a Billing Manager or General Manager decides a dispute."), frappe.PermissionError)
 	if d.status != "Open":
 		frappe.throw(_("This dispute was already decided."))

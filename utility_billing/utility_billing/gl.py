@@ -18,6 +18,7 @@ from collections import OrderedDict
 import frappe
 from frappe import _
 from frappe.utils import add_days, flt, formatdate, getdate, now_datetime, nowdate
+from utility_billing.utility_billing import rights
 
 EXPORTERS = {"System Manager", "Accounts Officer", "Billing Manager", "General Manager"}
 
@@ -263,7 +264,7 @@ def make_journals_for(society, up_to=None):
 
 @frappe.whitelist(methods=["POST"])
 def make_journals(society: str, up_to: str | None = None):
-	if not set(frappe.get_roles()) & EXPORTERS:
+	if not rights.can("gl.export"):
 		raise frappe.PermissionError(_("Only Accounts Officers and managers make journals."))
 	return make_journals_for(society, up_to)
 
@@ -311,7 +312,7 @@ def reconcile(society, save=True):
 
 @frappe.whitelist(methods=["POST"])
 def reconcile_now(society: str):
-	if not set(frappe.get_roles()) & (EXPORTERS | {"Billing Auditor", "Management"}):
+	if not rights.can("gl.view"):
 		raise frappe.PermissionError(_("You can't run the reconciliation."))
 	return reconcile(society)
 
@@ -348,7 +349,7 @@ def export_rows(journals, layout):
 def export_journals(society: str, from_date: str, to_date: str, layout: str, journal_type: str | None = None):
 	"""Journals of a period as CSV or Excel in the chosen layout, for Peachtree/Sage, QuickBooks or any
 	other accounting software (FS-GL-03). Each export is recorded on the journals."""
-	if not set(frappe.get_roles()) & EXPORTERS:
+	if not rights.can("gl.export"):
 		raise frappe.PermissionError(_("Only Accounts Officers and managers export journals."))
 	lay = frappe.get_doc("Journal Export Layout", layout)
 	filters = {"society": society, "posting_date": ["between", [getdate(from_date), getdate(to_date)]]}

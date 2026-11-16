@@ -16,6 +16,7 @@ import time
 import frappe
 from frappe import _
 from frappe.utils import add_months, cint, flt, getdate, nowdate
+from utility_billing.utility_billing import rights
 
 FEATURES = {"Insights": "enable_insights", "Ask": "enable_ask", "Anomaly": "enable_anomaly"}
 PRICE = {"claude-opus-5-5": (4, 20), "claude-sonnet-5-5": (2, 10), "claude-haiku-5-5": (0.10, 0.50), "claude-fable-5-2": (8, 40)}  # USD per 1M tokens
@@ -139,7 +140,7 @@ def insights(society: str, month: str | None = None):
 	"""The dashboard's Insights card: the facts always; a written summary when the society has switched it on."""
 	from utility_billing.utility_billing import dashboard  # noqa: PLC0415
 
-	if not set(frappe.get_roles()) & dashboard.ALLOWED:
+	if not rights.can("dashboard.view"):
 		raise frappe.PermissionError(_("You don't have access to the dashboard."))
 	month = month or dashboard.latest_billing_month(society)
 	found = facts(society, month)

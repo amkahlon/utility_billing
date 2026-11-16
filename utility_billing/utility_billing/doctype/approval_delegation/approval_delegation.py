@@ -8,6 +8,7 @@ from frappe.model.document import Document
 from frappe.utils import getdate, nowdate
 
 from utility_billing.utility_billing import access
+from utility_billing.utility_billing import rights
 
 OVERSEERS = {"System Manager", "General Manager", "Society Admin"}
 
@@ -20,7 +21,7 @@ class ApprovalDelegation(Document):
 			frappe.throw(_("The delegation ends before it starts."))
 		if self.is_new() and getdate(self.to_date) < getdate(nowdate()):
 			frappe.throw(_("The dates are already past."))
-		if frappe.session.user != self.delegator and not set(frappe.get_roles()) & OVERSEERS:
+		if frappe.session.user != self.delegator and not rights.can("approvals.delegate_others"):
 			frappe.throw(_("Only the approver themselves or a General Manager can delegate their approvals."))
 		if not set(access.APPROVER_ROLES) & access.roles_of(self.delegator):
 			frappe.throw(_("{0} doesn't approve anything, so there is nothing to delegate.").format(self.delegator))

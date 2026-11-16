@@ -18,6 +18,7 @@ from frappe.utils import add_months, cint, flt, get_last_day, getdate, now_datet
 
 from utility_billing.utility_billing import losses
 from utility_billing.utility_billing.mis import month_start
+from utility_billing.utility_billing import rights
 
 RESIDENTIAL_WORDS = ("resid", "domestic", "house")
 COMMERCIAL_PROPERTY = ("Shop", "Office", "Commercial Building")
@@ -369,7 +370,7 @@ def run_checks(society, month) -> dict:
 def run_now(society: str, month: str | None = None) -> dict:
 	"""The Run Checks button: a Billing Manager, General Manager or Recovery Officer runs the checks for a month (default: the
 	latest month with posted bills)."""
-	if not set(frappe.get_roles()) & WORKERS:
+	if not rights.can("ra.work"):
 		raise frappe.PermissionError(_("Only a Billing Manager, General Manager or Recovery Officer runs the revenue assurance checks."))
 	frappe.has_permission("Society", "read", society, throw=True)
 	month = month or frappe.db.get_value("Utility Bill", {"society": society, "docstatus": 1}, "billing_month", order_by="billing_month desc")

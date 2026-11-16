@@ -5,7 +5,7 @@ const GL = "utility_billing.utility_billing.gl";
 
 frappe.listview_settings["GL Journal"] = {
 	onload(listview) {
-		if (!frappe.user.has_role(["Accounts Officer", "Billing Manager", "General Manager", "System Manager"])) return;
+		if (!utility_billing.can("gl.export")) return;
 		listview.page.add_inner_button(__("Make Journals"), () =>
 			ask_society(__("Make Journals"), [], (v) =>
 				frappe.call({ method: `${GL}.make_journals`, args: { society: v.society }, freeze: true }).then(({ message }) => {
