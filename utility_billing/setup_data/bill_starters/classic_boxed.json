@@ -122,6 +122,13 @@
            "paid"
           ]
          }
+        },
+        {
+         "type": "meter_photo",
+         "options": {
+          "width": 28,
+          "caption": 1
+         }
         }
        ]
       },

@@ -153,6 +153,13 @@
          }
         },
         {
+         "type": "meter_photo",
+         "options": {
+          "width": 34,
+          "caption": 1
+         }
+        },
+        {
          "type": "notices",
          "options": {
           "heading": "",

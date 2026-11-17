@@ -12,6 +12,7 @@ placeholders are filled from FIELDS. A bill keeps the name of the template it wa
 approved template can't change, so a reprint is exact (FS-RUN-09). Bills without a template print with the fixed layout."""
 
 import copy
+import functools
 import json
 
 import frappe
@@ -186,6 +187,11 @@ BLOCKS = {
 }
 
 
+# every block can be made taller than its content (the designer's bottom grip), e.g. to reserve room on a tear-off copy
+for _spec in BLOCKS.values():
+	_spec["options"].append(_opt("min_height", "Minimum height (mm, 0 = as tall as its content)", "int", 0, min=0, max=200))
+
+
 # ---------------------------------------------------------------- layout checks
 def _as_dict(layout):
 	if not layout:
@@ -355,8 +361,11 @@ def render_bill(bill, settings, duplicate=0, ctx=None, designer=False) -> str:
 		from utility_billing.utility_billing import barcode  # noqa: PLC0415
 
 		ctx["barcode"] = barcode.png_data_uri(ref)
-	if _has_block(layout, "meter_photo") and not ctx.get("meter_photo") and bill.get("meter_reading") is not None:
-		ctx["meter_photo"] = bill_print.meter_photo_of(bill, ctx["snap"])
+	if _has_block(layout, "meter_photo") and not ctx.get("meter_photo"):
+		if bill.get("name") == SAMPLE_BILL:  # previews: a stand-in photo, so the space the photo takes is seen
+			ctx["meter_photo"] = sample_meter_photo()
+		elif bill.get("meter_reading") is not None:
+			ctx["meter_photo"] = bill_print.meter_photo_of(bill, ctx["snap"])
 
 	def field(key):
 		try:
@@ -382,6 +391,31 @@ def render_bill(bill, settings, duplicate=0, ctx=None, designer=False) -> str:
 
 
 # ---------------------------------------------------------------- the sample bill (previews before a society has bills)
+SAMPLE_BILL = "SAMPLE-BILL"
+
+
+@functools.cache
+def sample_meter_photo() -> str:
+	"""A drawn stand-in for a meter photo (a meter's display reading 03905 kWh), for previews of the sample bill."""
+	import base64  # noqa: PLC0415
+	import io  # noqa: PLC0415
+
+	from PIL import Image, ImageDraw, ImageFont  # noqa: PLC0415
+
+	img = Image.new("RGB", (480, 320), (58, 64, 72))
+	draw = ImageDraw.Draw(img)
+	draw.rounded_rectangle((30, 30, 450, 290), radius=28, fill=(226, 230, 234), outline=(30, 34, 40), width=6)
+	draw.rectangle((70, 95, 410, 205), fill=(150, 176, 138), outline=(40, 50, 40), width=4)
+	try:
+		font, small = ImageFont.load_default(size=72), ImageFont.load_default(size=28)
+	except TypeError:  # older Pillow
+		font = small = ImageFont.load_default()
+	draw.text((92, 110), "03905", fill=(28, 36, 28), font=font)
+	draw.text((330, 220), "kWh", fill=(30, 34, 40), font=small)
+	draw.text((70, 225), "SAMPLE", fill=(120, 126, 132), font=small)
+	out = io.BytesIO()
+	img.save(out, "JPEG", quality=75)
+	return "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode()
 def sample_bill(society):
 	from utility_billing.utility_billing import bill_print  # noqa: PLC0415
 
@@ -408,7 +442,7 @@ def sample_bill(society):
 	            "reading": {"meter": "4708508", "previous_reading": 3641, "previous_reading_date": str(month.replace(day=1)), "present_reading": 3905,
 	                        "reading_date": str(today), "multiplier": 1, "consumption_type": "Actual", "status": "Approved", "photo": None},
 	            "history": history}
-	return frappe._dict(name="SAMPLE-BILL", doctype="Utility Bill", docstatus=1, utility="Electricity", society=society, billing_month=month,
+	return frappe._dict(name=SAMPLE_BILL, doctype="Utility Bill", docstatus=1, utility="Electricity", society=society, billing_month=month,
 	                    issue_date=today, due_date=frappe.utils.add_days(today, 14), final_bill=0, period_note="", revision_no=0,
 	                    consumer_name="Muhammad Ashiq", units=264, consumption_type="Actual", current_amount=current, installment_due=0,
 	                    arrears=1104, payable_within_due=current + 1104, surcharge_amount=round(current * 0.1),

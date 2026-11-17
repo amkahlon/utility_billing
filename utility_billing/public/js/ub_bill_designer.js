@@ -285,7 +285,7 @@
 					${ro ? "" : `<div style="padding: 6px;"><button class="ub-btn bd-add bd-row-add" data-s="${si}">+ ${__("row")}</button></div>`}
 				</div>`).join("");
 			const palette = ro ? "" : `<h4>${__("Blocks")}</h4>
-				<div class="bd-help">${__("Drag a block onto the bill. On the bill: drag a box to move it, drag the edge between two boxes to resize them, click a box to set its options.")}</div>
+				<div class="bd-help">${__("Drag a block onto the bill. On the bill: drag a box to move it; click it, then drag its grips to change its width or height; double-click a title, heading, label or text to type over it.")}</div>
 				<div class="bd-palette">${this.meta.blocks.map((m) => `<span class="bd-pal" data-t="${m.type}" title="${e(m.description)}">${e(m.label)}</span>`).join("")}</div>`;
 			const $t = this.$root.find(".bd-tree").html(`${palette}<h4 style="margin-top:12px">${__("Outline")}</h4>${html}
 				${ro ? "" : `<button class="ub-btn bd-sec-add">+ ${__("section (e.g. a tear-off copy)")}</button>`}`);
@@ -599,6 +599,13 @@
 				.bd-h.col { cursor: col-resize; }
 				.bd-h.col:hover, .bd-h.col.on { background: rgba(31,95,139,.35); }
 				.bd-h.size { width: 9px; height: 9px; background: #1f5f8b; border: 1.5px solid #fff; border-radius: 2px; cursor: nwse-resize; }
+				.bd-h.col.grip { width: 10px; height: 18px; background: #fff; border: 2px solid #1f5f8b; border-radius: 3px; }
+				.bd-h.col.grip:hover, .bd-h.col.grip.on { background: #1f5f8b; }
+				.bd-h.minh { width: 18px; height: 10px; background: #fff; border: 2px solid #1f5f8b; border-radius: 3px; cursor: ns-resize; }
+				.bd-h.minh:hover { background: #1f5f8b; }
+				[data-edit] { cursor: text; }
+				[data-edit]:hover { background: rgba(31,95,139,.08); box-shadow: inset 0 -1px 0 #1f5f8b; }
+				.bd-edit { position: absolute; z-index: 70; font: inherit; border: 2px solid #1f5f8b; border-radius: 3px; padding: 1px 4px; background: #fff; color: #1d2329; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
 				.bd-tip { position: absolute; z-index: 60; background: #1d2329; color: #fff; font: 11px sans-serif; padding: 2px 6px; border-radius: 4px; pointer-events: none; }
 			</style>`).appendTo(doc.head);
 			// blocks with nothing to show on this bill (no photo, no notices…) still get a box to click and drag
@@ -609,8 +616,58 @@
 				}
 			});
 			doc.addEventListener("mousedown", (ev) => this.on_frame_down(ev));
+			doc.addEventListener("dblclick", (ev) => this.edit_text(ev));
 			doc.addEventListener("keydown", (ev) => this.on_key(ev));
 			this.paint_selection();
+		}
+
+		// double-click a title, heading, label, copy label, caption or free text and type over it; the layout keeps the words as
+		// written, placeholders such as {due_date} included (they are shown unfilled while editing)
+		edit_text(ev) {
+			const el = ev.target.closest("[data-edit]");
+			if (!el || this.ro) return;
+			ev.preventDefault();
+			const doc = this.idoc, win = doc.defaultView;
+			const key = el.getAttribute("data-edit");
+			const blockEl = el.closest("[data-p]");
+			const path = blockEl ? blockEl.getAttribute("data-p").split(",").map(Number) : null;
+			const sec = this.layout.sections[path ? path[0] : 0];
+			const block = path ? sec.rows[path[1]].cells[path[2]].blocks[path[3]] : null;
+			let get, set;
+			if (key === "@copy_label") {
+				get = () => sec.copy_label || "";
+				set = (v) => (sec.copy_label = v);
+			} else if (key.startsWith("field:")) {
+				const f = block.options.fields[Number(key.slice(6))];
+				const fallback = (this.meta.fields.find((x) => x.key === f.key) || {}).label || "";
+				get = () => f.label || fallback;
+				set = (v) => (f.label = v.trim() === fallback ? "" : v);
+			} else {
+				get = () => block.options[key] || "";
+				set = (v) => (block.options[key] = v);
+			}
+			const multi = key === "text";
+			const r = el.getBoundingClientRect();
+			const $ed = $(multi ? "<textarea class='bd-edit'></textarea>" : "<input class='bd-edit'>").val(get())
+				.css({ left: r.left + win.scrollX - 3, top: r.top + win.scrollY - 3, width: Math.max(r.width + 6, 120), height: multi ? Math.max(r.height + 30, 60) : r.height + 8,
+					fontSize: win.getComputedStyle(el).fontSize, fontWeight: win.getComputedStyle(el).fontWeight })
+				.appendTo(doc.body);
+			$ed.trigger("focus").trigger("select");
+			let done = false;
+			const finish = (save) => {
+				if (done) return;
+				done = true;
+				const v = $ed.val();
+				$ed.remove();
+				if (save && v !== get()) this.change(() => set(v));
+			};
+			$ed.on("keydown", (e) => {
+				if (e.key === "Escape") finish(false);
+				else if (e.key === "Enter" && (!multi || e.ctrlKey)) { e.preventDefault(); finish(true); }
+				e.stopPropagation();
+			});
+			$ed.on("blur", () => finish(true));
+			$ed.on("mousedown dblclick", (e) => e.stopPropagation());
 		}
 
 		on_key(ev) {
@@ -861,7 +918,21 @@
 				const el = doc.querySelector(`[data-p="${s.path.join(",")}"]`);
 				const SIZE = { spacer: "height", stamp: "height", image: "width", meter_photo: "width", qr: "size" };
 				const type = el && el.getAttribute("data-t");
-				if (el && SIZE[type]) {
+				if (!el) return;
+				const br = el.getBoundingClientRect();
+				// side grips: the box's width is its column's, so they move the column's edges (the neighbour takes up the rest)
+				const cell = el.closest("td[data-c]");
+				const [si, ri, ci] = cell.getAttribute("data-c").split(",").map(Number);
+				const n = this.layout.sections[si].rows[ri].cells.length;
+				const grip = (side, i, end) => $('<div class="bd-h col grip"></div>')
+					.attr({ "data-r": `${si},${ri}`, "data-i": i, "data-end": end, title: __("Drag to change the width") })
+					.css({ left: (side === "left" ? br.left : br.right) - 5 + sx, top: br.top + br.height / 2 - 9 + sy }).appendTo(doc.body);
+				grip("right", ci, ci === n - 1 ? 1 : 0);
+				if (ci > 0) grip("left", ci - 1, 0);
+				// bottom grip: a minimum height for the box
+				$('<div class="bd-h minh"></div>').attr({ "data-key": "min_height", title: __("Drag to change the height") })
+					.css({ left: br.left + br.width / 2 - 9 + sx, top: br.bottom - 5 + sy }).appendTo(doc.body);
+				if (SIZE[type]) {
 					const r = (el.querySelector("img, .stamp") || el).getBoundingClientRect();
 					$('<div class="bd-h size"></div>').attr({ "data-key": SIZE[type], title: __("Drag to resize") })
 						.css({ left: r.right - 5 + sx, top: r.bottom - 5 + sy }).appendTo(doc.body);
@@ -905,9 +976,11 @@
 				const [si, ri, ci, bi] = this.sel.path;
 				const block = this.layout.sections[si].rows[ri].cells[ci].blocks[bi];
 				const op = this.block_meta(block.type).options.find((o) => o.key === key);
-				const v0 = Number(block.options[key]) || op.default;
+				const el = doc.querySelector(`[data-p="${this.sel.path.join(",")}"]`);
+				// a minimum height starts from the box's height now, so the first pixel of dragging already shows
+				const v0 = key === "min_height" ? Number(block.options[key]) || Math.round(el.getBoundingClientRect().height / MM) : Number(block.options[key]) || op.default;
 				const move = (e) => {
-					const px = key === "height" ? e.clientY - startY : e.clientX - startX;
+					const px = key === "height" || key === "min_height" ? e.clientY - startY : e.clientX - startX;
 					const v = Math.max(op.min, Math.min(op.max, Math.round(v0 + px / MM)));
 					$tip.text(`${v} mm`).css({ left: e.clientX + 12 + win.scrollX, top: e.clientY + 12 + win.scrollY });
 					commit = () => (block.options[key] = v);

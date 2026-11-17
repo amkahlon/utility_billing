@@ -50,6 +50,19 @@ class IntegrationTestBillDesignerLayout(BillingCase):
 		self.assertIn("&lt;script&gt;x&lt;/script&gt; {unknown}", html)
 		self.assertNotIn("<script>x", html)
 
+	def test_designer_tags_only_in_the_preview_and_minimum_height(self):
+		bill = bill_designer.sample_bill(SOC)
+		layout = layout_of("header", "details", "text")
+		layout["sections"][0]["rows"][0]["cells"][0]["blocks"][1]["options"] = {"min_height": 40, "heading": "Member"}
+		settings = bill_designer._settings_from({}, layout)
+		printed, preview = bill_designer.render_bill(bill, settings), bill_designer.render_bill(bill, settings, designer=True)
+		for tag in ("data-edit=", "data-p=", "data-c=", "Double-click to type"):
+			self.assertNotIn(tag, printed, tag)  # a printed bill carries none of the designer's tags
+			self.assertIn(tag, preview, tag)
+		self.assertIn('data-edit="field:0"', preview)
+		self.assertIn("min-height: 40mm", printed)
+		self.assertEqual(json.loads(bill_designer.clean_layout(layout))["sections"][0]["rows"][0]["cells"][0]["blocks"][1]["options"]["min_height"], 40)
+
 	def test_every_block_and_starter_renders(self):
 		bill = bill_designer.sample_bill(SOC)
 		settings = bill_designer._settings_from({}, layout_of(*bill_designer.BLOCKS))
@@ -62,6 +75,8 @@ class IntegrationTestBillDesignerLayout(BillingCase):
 			# every ready-made layout prints what a consumer needs to pay: reference, bill number, due date and both amounts
 			for text in ("1217030008", "SAMPLE-BILL", frappe.utils.formatdate(bill.due_date), "22,627", "24,779"):
 				self.assertIn(text, html, f"{key}: {text}")
+			# the meter photo is printed on every layout (user's request 2026-11-16); previews show a stand-in photo
+			self.assertIn('class="meter-photo" src="data:image/jpeg;base64,', html, key)
 			self.assertGreater(len(st["layout"]["sections"]), 1, key)  # every starter has a tear-off copy
 
 

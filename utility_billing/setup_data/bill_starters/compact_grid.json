@@ -142,6 +142,13 @@
            "units"
           ]
          }
+        },
+        {
+         "type": "meter_photo",
+         "options": {
+          "width": 24,
+          "caption": 0
+         }
         }
        ]
       },
