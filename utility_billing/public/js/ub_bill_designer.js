@@ -44,7 +44,15 @@
 	.ub-bd .bd-fit.ok { background: #e7f6ec; color: #1b6b35; }
 	.ub-bd .bd-fit.over { background: #fdf0ef; color: #8f1d12; }
 	.ub-bd .bd-frame-wrap { height: calc(100vh - 260px); overflow: auto; position: relative; }
-	.ub-bd .bd-frame { border: 0; width: 100%; transform-origin: 0 0; background: transparent; }
+	.ub-bd .bd-sizer { position: relative; margin: 0 auto; }
+	.ub-bd .bd-frame { border: 0; width: 100%; transform-origin: 0 0; background: transparent; position: absolute; left: 0; top: 0; }
+	.ub-bd .bd-zoombar { display: inline-flex; gap: 4px; align-items: center; }
+	.ub-bd .bd-zoombar .ub-btn { padding: 3px 10px; }
+	.ub-bd.bd-max { position: fixed; inset: 0; z-index: 1040; background: #f4f6f8; padding: 12px 16px; overflow: auto; max-width: none; width: auto; margin: 0; }
+	body.bd-max-open { overflow: hidden; }
+	.ub-bd.bd-max .bd-main { grid-template-columns: 300px minmax(0, 1fr) 290px; }
+	.ub-bd.bd-max .bd-panel { max-height: calc(100vh - 90px); }
+	.ub-bd.bd-max .bd-frame-wrap { height: calc(100vh - 150px); }
 	.ub-bd .bd-opt { margin-bottom: 10px; }
 	.ub-bd .bd-opt label { font-size: 12px; color: #3b4650; display: block; margin-bottom: 3px; }
 	.ub-bd .bd-opt .form-control { height: 30px; font-size: 13px; }
@@ -195,14 +203,17 @@
 					<div class="bd-panel bd-tree"></div>
 					<div class="bd-preview"><div class="bd-preview-bar">
 						<select class="bd-bill"><option value="">${__("Sample bill")}</option></select>
-						<select class="bd-zoom"><option value="fit">${__("Fit width")}</option><option value="1">100%</option><option value="0.75">75%</option></select>
+						<span class="bd-zoombar"><button class="ub-btn bd-zout" title="${__("Zoom out")}">−</button>
+						<select class="bd-zoom"><option value="fit">${__("Fit width")}</option>${["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"].map((v) => `<option value="${v}">${Math.round(v * 100)}%</option>`).join("")}</select>
+						<button class="ub-btn bd-zin" title="${__("Zoom in (or Ctrl + mouse wheel)")}">+</button><span class="bd-zoom-pct text-muted small"></span>
+						<button class="ub-btn bd-full" title="${__("Full screen (Esc to leave)")}">⛶ ${__("Full screen")}</button></span>
 						<span class="bd-fit"></span><span class="bd-grow"></span><span class="text-muted small">${__("The PDF button shows the exact print.")}</span></div>
-						<div class="bd-frame-wrap"><iframe class="bd-frame"></iframe></div></div>
+						<div class="bd-frame-wrap"><div class="bd-sizer"><iframe class="bd-frame"></iframe></div></div></div>
 					<div class="bd-panel bd-opts"></div>
 				</div>`);
 			this.ro = ro;
 			const $r = this.$root;
-			$r.find(".bd-back").on("click", () => this.leave(() => this.gallery()));
+			$r.find(".bd-back").on("click", () => this.leave(() => { this.toggle_full(false); this.gallery(); }));
 			$r.find(".bd-name").on("input", () => (this.dirty = true));
 			$r.find(".bd-undo").on("click", () => this.do_undo());
 			$r.find(".bd-page").on("click", () => this.page_dialog());
@@ -212,6 +223,25 @@
 			$r.find(".bd-export").on("click", () => window.open(`/api/method/${M}export_template?name=${encodeURIComponent(this.t.name)}`));
 			$r.find(".bd-form").on("click", () => this.leave(() => frappe.set_route("Form", "Bill Template", this.t.name)));
 			$r.find(".bd-zoom").on("change", () => this.zoom());
+			$r.find(".bd-zin").on("click", () => this.zoom_step(1));
+			$r.find(".bd-zout").on("click", () => this.zoom_step(-1));
+			$r.find(".bd-full").on("click", () => this.toggle_full());
+			if (!this.route_hook) {
+				this.route_hook = true;
+				frappe.router.on("change", () => {
+					if (this.$root.hasClass("bd-max") && !frappe.get_route_str().includes("ub-bill-designer")) this.toggle_full(false);
+				});
+			}
+			$r.find(".bd-frame-wrap").on("wheel", (ev) => {
+				if (!ev.ctrlKey) return;
+				ev.preventDefault();
+				this.zoom_step(ev.originalEvent.deltaY < 0 ? 1 : -1);
+			});
+			// leaving the browser's full screen (Esc) leaves the enlarged designer too
+			$(document).off("fullscreenchange.ubbd").on("fullscreenchange.ubbd", () => {
+				if (!document.fullscreenElement && this.$root.hasClass("bd-max")) this.toggle_full(false);
+				else setTimeout(() => this.zoom(), 150);
+			});
 			$r.find(".bd-bill").on("change", (ev) => {
 				this.bill = ev.target.value;
 				this.refresh();
@@ -221,7 +251,7 @@
 				if (this.bill && bills.some((b) => b.name === this.bill)) $r.find(".bd-bill").val(this.bill);
 				else this.bill = "";
 			});
-			$(window).off("resize.ubbd").on("resize.ubbd", () => { this.zoom(); this.place_handles && this.idoc && this.place_handles(); });
+			$(window).off("resize.ubbd").on("resize.ubbd", () => this.zoom());
 			$(document).off("keydown.ubbd").on("keydown.ubbd", (ev) => {
 				if (frappe.get_route_str().includes("ub-bill-designer") && this.mode === "editor") this.on_key(ev);
 			});
@@ -514,9 +544,10 @@
 			const $f = this.$root.find(".bd-frame");
 			const frame = $f[0];
 			frame.onload = () => {
+				this.idoc = null; // the previous page is gone: nothing may draw on it any more
 				this.mark_pages(frame);
-				this.zoom();
 				if (!this.ro) this.attach(frame);
+				this.zoom();
 			};
 			frame.srcdoc = html;
 		}
@@ -544,20 +575,43 @@
 			frame.style.height = `${doc.documentElement.scrollHeight + 10}px`;
 		}
 
+		// the preview is scaled with a transform; a sizer around it takes the scaled size, so a zoomed-in bill scrolls both ways
 		zoom() {
 			const frame = this.$root.find(".bd-frame")[0];
-			if (!frame || !frame.contentDocument) return;
-			const wrapW = this.$root.find(".bd-frame-wrap").width() || 800;
+			if (!frame || !frame.contentDocument || !frame.contentDocument.documentElement) return;
+			const wrapW = (this.$root.find(".bd-frame-wrap").width() || 800) - 4;
 			const sheetW = ((this.meta.paper_mm[this.t.paper_size] || [210])[0] + 12) * MM;
 			const z = this.$root.find(".bd-zoom").val();
-			const scale = z === "fit" ? Math.min(1, wrapW / sheetW) : parseFloat(z);
-			frame.style.width = `${Math.max(wrapW / scale, sheetW)}px`;
+			const scale = z === "fit" ? Math.min(2, wrapW / sheetW) : parseFloat(z);
+			const W = z === "fit" ? wrapW / scale : sheetW;
+			frame.style.width = `${W}px`;
 			frame.style.transform = `scale(${scale})`;
 			this.scale = scale;
 			const h = frame.contentDocument.documentElement.scrollHeight + 10;
 			frame.style.height = `${h}px`;
-			frame.parentElement.style.minHeight = "";
-			$(frame).css("margin-bottom", `${-(h * (1 - scale))}px`);
+			$(frame.parentElement).css({ width: W * scale, height: h * scale });
+			this.$root.find(".bd-zoom-pct").text(`${Math.round(scale * 100)}%`);
+			if (this.idoc && this.idoc === frame.contentDocument && this.idoc.body) this.place_handles();
+		}
+
+		zoom_step(dir) {
+			const steps = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+			const now = this.scale || 1;
+			const next = dir > 0 ? steps.find((x) => x > now + 0.01) || 2 : [...steps].reverse().find((x) => x < now - 0.01) || 0.5;
+			this.$root.find(".bd-zoom").val(String(next));
+			this.zoom();
+		}
+
+		// full screen: the whole designer (palette, bill, options) on the monitor; Esc leaves it
+		toggle_full(force) {
+			const on = force === undefined ? !this.$root.hasClass("bd-max") : force;
+			// always: the designer covers the whole browser window; where the browser allows it, the whole screen too
+			this.$root.toggleClass("bd-max", on);
+			$("body").toggleClass("bd-max-open", on);
+			if (on && !document.fullscreenElement && this.$root[0].requestFullscreen) this.$root[0].requestFullscreen().catch(() => {});
+			if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+			this.$root.find(".bd-full").html(on ? `✕ ${__("Leave full screen")}` : `⛶ ${__("Full screen")}`);
+			setTimeout(() => this.zoom(), 150);
 		}
 
 		async fit_check() {
@@ -671,6 +725,10 @@
 		}
 
 		on_key(ev) {
+			if (ev.key === "Escape" && this.$root.hasClass("bd-max") && !$(ev.target).is("input, textarea, select")) {
+				this.toggle_full(false);
+				return;
+			}
 			if (this.ro || !this.sel || this.sel.kind !== "block" || !["Delete", "Backspace"].includes(ev.key)) return;
 			if ($(ev.target).is("input, textarea, select, [contenteditable]")) return;
 			ev.preventDefault();
