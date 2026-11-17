@@ -190,6 +190,8 @@ BLOCKS = {
 # every block can be made taller than its content (the designer's bottom grip), e.g. to reserve room on a tear-off copy
 for _spec in BLOCKS.values():
 	_spec["options"].append(_opt("min_height", "Minimum height (mm, 0 = as tall as its content)", "int", 0, min=0, max=200))
+	# own wording for the block's fixed labels ("Payable within due date" -> "Amount due"), set by double-clicking them on the bill
+	_spec["options"].append(_opt("labels", "Own wording for labels", "labels", {}))
 
 
 # ---------------------------------------------------------------- layout checks
@@ -230,6 +232,13 @@ def clean_option(spec, value):
 			key = f.get("key") if isinstance(f, dict) else f
 			if key in FIELDS and len(out) < 40:
 				out.append({"key": key, "label": _text(f.get("label") if isinstance(f, dict) else "", 80).strip()})
+		return out
+	if kind == "labels":
+		out = {}
+		for k, v in (value.items() if isinstance(value, dict) else []):
+			k, v = _text(k, 60).strip(), _text(v, 80).strip()
+			if k and v and len(out) < 40:
+				out[k] = v
 		return out
 	if kind == "image":
 		v = _text(value, 300).strip()
