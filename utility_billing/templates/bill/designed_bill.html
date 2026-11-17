@@ -9,7 +9,7 @@
 	.ubd td, .ubd th { padding: 0; vertical-align: top; }
 	.ubd .row > tbody > tr > td.cell, .ubd .row > tr > td.cell { padding-right: 2.5mm; }
 	.ubd .row td.cell.last { padding-right: 0; }
-	.ubd .blk { margin-bottom: 1.6mm; }
+	.ubd .blk { margin-bottom: 1.2mm; }
 	.ubd .last-row .blk:last-child { margin-bottom: 0; }
 	.ubd .nw { white-space: nowrap; }
 	.ubd table.row { table-layout: fixed; }
@@ -82,8 +82,9 @@
 </table>
 {%- endmacro -%}
 
-{%- macro block(kind, o, s) %}
-<div class="blk blk-{{ kind }}">
+{%- macro block(kind, o, s, path) %}
+{%- set T = t_en if s.english_only else t %}
+<div class="blk blk-{{ kind }}"{% if designer %} data-p="{{ path }}" data-t="{{ kind }}"{% endif %}>
 {%- if kind == "header" %}
 	<table><tr>
 		{%- if o.logo == "Left" and logo %}<td style="width: 22mm;"><img src="{{ logo }}" style="width: 19mm; height: 19mm;"></td>{% endif %}
@@ -109,18 +110,18 @@
 {%- elif kind == "title_band" %}
 	<table class="band {{ 'filled' if o.filled else 'plain' }}"><tr>
 		<td class="title">{% if bill.final_bill %}{{ _("FINAL BILL") }} · {% endif %}{{ fill(o.text) }}{% if bill.period_note %}<div class="small" style="font-weight: 400;">{{ bill.period_note | e }}</div>{% endif %}</td>
-		{%- if o.show_bill_no %}<td class="title right">{{ t("Bill No") }} {{ bill.name | e }}{% if bill.revision_no and bill.revision_no > 1 %} &nbsp;({{ _("Revised, version") }} {{ bill.revision_no }}){% endif %}</td>{% endif %}
+		{%- if o.show_bill_no %}<td class="title right">{{ T("Bill No") }} {{ bill.name | e }}{% if bill.revision_no and bill.revision_no > 1 %} &nbsp;({{ _("Revised, version") }} {{ bill.revision_no }}){% endif %}</td>{% endif %}
 	</tr></table>
 {%- elif kind == "copy_label" %}
 	{%- if s.copy_label %}<div style="text-align: {{ o.align | lower }};"><span class="copybox{{ ' boxed' if o.boxed else '' }}">{{ s.copy_label | e }}</span></div>{% endif %}
 {%- elif kind == "details" %}
 	<div class="{{ 'box' if o.boxed else '' }}">
-		{%- if o.heading %}<div class="box-h">{{ t(o.heading) }}</div>{% endif %}
+		{%- if o.heading %}<div class="box-h">{{ T(o.heading) }}</div>{% endif %}
 		<table class="kv">
 			{%- for chunk in o.fields | batch(o.columns) %}
 			<tr>
 				{%- for f in chunk %}
-				<td class="k">{{ (f.label | e) if f.label else t(field_label(f.key)) }}</td>
+				<td class="k">{{ (f.label | e) if f.label else T(field_label(f.key)) }}</td>
 				{%- set v = field(f.key) %}
 				<td class="{{ 'strong' if o.bold_values or amount_field(f.key) else '' }}{{ ' nw' if v | length <= 12 else '' }}">{% if amount_field(f.key) %}Rs {% endif %}{{ v | e }}</td>
 				{%- endfor %}
@@ -131,14 +132,14 @@
 	</div>
 {%- elif kind == "reference" %}
 	<div class="{{ 'box pad' if o.boxed else '' }}">
-		<div class="small muted">{{ t("Reference No") }}</div>
+		<div class="small muted">{{ T("Reference No") }}</div>
 		<div class="ref{{ '' if o.large else ' normal' }}">{{ (con.reference_no or "") | e }}</div>
 		{%- if o.barcode and barcode %}<img class="barcode" src="{{ barcode }}" alt="{{ (con.reference_no or '') | e }}">{% endif %}
 		{%- if o.dates %}
 		<table class="kv" style="margin-top: 1mm;">
-			<tr><td class="k">{{ t("Bill month") }}</td><td>{{ month | e }}</td></tr>
-			<tr><td class="k">{{ t("Issue date") }}</td><td class="nw">{{ issue_date }}</td></tr>
-			<tr><td class="k">{{ t("Due date") }}</td><td class="strong nw">{{ due_date }}</td></tr>
+			<tr><td class="k">{{ T("Bill month") }}</td><td>{{ month | e }}</td></tr>
+			<tr><td class="k">{{ T("Issue date") }}</td><td class="nw">{{ issue_date }}</td></tr>
+			<tr><td class="k">{{ T("Due date") }}</td><td class="strong nw">{{ due_date }}</td></tr>
 		</table>
 		{%- endif %}
 	</div>
@@ -149,20 +150,20 @@
 	{%- if reading %}
 	{%- if o.style == "List" %}
 	<table class="kv box">
-		{%- if "previous" in o.columns %}<tr><td class="k">{{ t("Previous reading") }}</td><td class="right">{{ qty(reading.previous_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.previous_reading_date) }}</span>{% endif %}</td></tr>{% endif %}
-		{%- if "present" in o.columns %}<tr><td class="k">{{ t("Present reading") }}</td><td class="right">{{ qty(reading.present_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.reading_date) }}</span>{% endif %}</td></tr>{% endif %}
-		{%- if "multiplier" in o.columns %}<tr><td class="k">{{ t("Multiplier") }}</td><td class="right">{{ qty(reading.multiplier or 1) }}</td></tr>{% endif %}
-		{%- if "units" in o.columns %}<tr><td class="k">{{ t("Units") }}</td><td class="right strong">{{ qty(bill.units) }}</td></tr>{% endif %}
-		{%- if "type" in o.columns %}<tr><td class="k">{{ t("Reading") }}</td><td class="right">{{ (bill.consumption_type or reading.consumption_type or "") | e }}</td></tr>{% endif %}
+		{%- if "previous" in o.columns %}<tr><td class="k">{{ T("Previous reading") }}</td><td class="right">{{ qty(reading.previous_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.previous_reading_date) }}</span>{% endif %}</td></tr>{% endif %}
+		{%- if "present" in o.columns %}<tr><td class="k">{{ T("Present reading") }}</td><td class="right">{{ qty(reading.present_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.reading_date) }}</span>{% endif %}</td></tr>{% endif %}
+		{%- if "multiplier" in o.columns %}<tr><td class="k">{{ T("Multiplier") }}</td><td class="right">{{ qty(reading.multiplier or 1) }}</td></tr>{% endif %}
+		{%- if "units" in o.columns %}<tr><td class="k">{{ T("Units") }}</td><td class="right strong">{{ qty(bill.units) }}</td></tr>{% endif %}
+		{%- if "type" in o.columns %}<tr><td class="k">{{ T("Reading") }}</td><td class="right">{{ (bill.consumption_type or reading.consumption_type or "") | e }}</td></tr>{% endif %}
 	</table>
 	{%- else %}
 	<table class="grid box">
 		<tr>
-			{%- if "previous" in o.columns %}<th>{{ t("Previous reading") }}</th>{% endif %}
-			{%- if "present" in o.columns %}<th>{{ t("Present reading") }}</th>{% endif %}
-			{%- if "multiplier" in o.columns %}<th class="right">{{ t("Multiplier") }}</th>{% endif %}
-			{%- if "units" in o.columns %}<th class="right">{{ t("Units") }}</th>{% endif %}
-			{%- if "type" in o.columns %}<th>{{ t("Reading") }}</th>{% endif %}
+			{%- if "previous" in o.columns %}<th>{{ T("Previous reading") }}</th>{% endif %}
+			{%- if "present" in o.columns %}<th>{{ T("Present reading") }}</th>{% endif %}
+			{%- if "multiplier" in o.columns %}<th class="right">{{ T("Multiplier") }}</th>{% endif %}
+			{%- if "units" in o.columns %}<th class="right">{{ T("Units") }}</th>{% endif %}
+			{%- if "type" in o.columns %}<th>{{ T("Reading") }}</th>{% endif %}
 		</tr>
 		<tr>
 			{%- if "previous" in o.columns %}<td>{{ qty(reading.previous_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.previous_reading_date) }}</span>{% endif %}</td>{% endif %}
@@ -176,14 +177,14 @@
 	{%- endif %}
 {%- elif kind == "meter_photo" %}
 	{%- if meter_photo %}<img class="meter-photo" src="{{ meter_photo }}" style="width: {{ o.width }}mm; height: {{ (o.width * 2 / 3) | round(1) }}mm;" alt="">
-		{%- if o.caption %}<div class="note">{{ t("Meter photo") }}</div>{% endif %}{% endif %}
+		{%- if o.caption %}<div class="note">{{ T("Meter photo") }}</div>{% endif %}{% endif %}
 {%- elif kind == "charges" %}
 	{%- set measured = o.style == "Table" %}
 	<table class="{{ 'grid box' if o.style == 'Table' else 'tlist box' }}">
 		{%- if o.style == "Table" %}
-		<tr><th>{{ t(o.heading) if o.heading else "" }}</th>{% if o.units %}<th class="right">{{ t("Units") }}</th>{% endif %}{% if o.rate %}<th class="right">{{ t("Rate") }}</th>{% endif %}<th class="right">{{ t("Amount (Rs)") }}</th></tr>
+		<tr><th>{{ T(o.heading) if o.heading else "" }}</th>{% if o.units %}<th class="right">{{ T("Units") }}</th>{% endif %}{% if o.rate %}<th class="right">{{ T("Rate") }}</th>{% endif %}<th class="right">{{ T("Amount (Rs)") }}</th></tr>
 		{%- elif o.heading %}
-		<tr class="big"><td colspan="{{ 1 + (1 if o.units else 0) + (1 if o.rate else 0) + 1 }}">{{ t(o.heading) }}</td></tr>
+		<tr class="big"><td colspan="{{ 1 + (1 if o.units else 0) + (1 if o.rate else 0) + 1 }}">{{ T(o.heading) }}</td></tr>
 		{%- endif %}
 		{%- set ns = namespace(group=None) %}
 		{%- for l in lines %}
@@ -198,44 +199,44 @@
 		</tr>
 		{%- endfor %}
 		{%- if o.subtotal %}
-		<tr class="tot {{ 'big' if o.style != 'Table' else '' }}"><td colspan="{{ 1 + (1 if o.units else 0) + (1 if o.rate else 0) }}" class="strong">{{ t("Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>
+		<tr class="tot {{ 'big' if o.style != 'Table' else '' }}"><td colspan="{{ 1 + (1 if o.units else 0) + (1 if o.rate else 0) }}" class="strong">{{ T("Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>
 		{%- endif %}
 	</table>
 {%- elif kind == "totals" %}
 	{%- if o.style == "List" %}
 	<table class="tlist box">
-		{%- if "current" in o.rows %}<tr><td>{{ t("Current bill") }}</td><td class="right">{{ money(bill.current_amount) }}</td></tr>{% endif %}
+		{%- if "current" in o.rows %}<tr><td>{{ T("Current bill") }}</td><td class="right">{{ money(bill.current_amount) }}</td></tr>{% endif %}
 		{%- if "arrears" in o.rows %}
 		{%- if bill.installment_due %}
 		<tr><td>{{ _("Arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
 		<tr><td>{{ _("Installment due with this bill") }} ({{ _("No") }} {{ bill.installment_no }})</td><td class="right">{{ money(bill.installment_due) }}</td></tr>
-		{%- else %}<tr><td>{{ t("Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>{% endif %}
+		{%- else %}<tr><td>{{ T("Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>{% endif %}
 		{%- endif %}
-		{%- if "within" in o.rows %}<tr class="big"><td>{{ t("Payable within due date") }}{% if o.show_due_date %} <span class="note">({{ due_date }})</span>{% endif %}</td><td class="right">{{ money(bill.payable_within_due) }}</td></tr>{% endif %}
-		{%- if "surcharge" in o.rows %}<tr><td>{{ t("Late payment surcharge") }}</td><td class="right">{{ money(bill.surcharge_amount) }}</td></tr>{% endif %}
-		{%- if "after" in o.rows %}<tr class="big"><td>{{ t("Payable after due date") }}</td><td class="right">{{ money(bill.payable_after_due) }}</td></tr>{% endif %}
+		{%- if "within" in o.rows %}<tr class="big"><td>{{ T("Payable within due date") }}{% if o.show_due_date %} <span class="note">({{ due_date }})</span>{% endif %}</td><td class="right">{{ money(bill.payable_within_due) }}</td></tr>{% endif %}
+		{%- if "surcharge" in o.rows %}<tr><td>{{ T("Late payment surcharge") }}</td><td class="right">{{ money(bill.surcharge_amount) }}</td></tr>{% endif %}
+		{%- if "after" in o.rows %}<tr class="big"><td>{{ T("Payable after due date") }}</td><td class="right">{{ money(bill.payable_after_due) }}</td></tr>{% endif %}
 	</table>
 	{%- else %}
 	{%- if "current" in o.rows or "arrears" in o.rows %}
 	<table class="grid box" style="margin-bottom: 1.5mm;">
-		{%- if "current" in o.rows %}<tr><td class="strong">{{ t("Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>{% endif %}
+		{%- if "current" in o.rows %}<tr><td class="strong">{{ T("Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>{% endif %}
 		{%- if "arrears" in o.rows %}
 		{%- if bill.installment_due %}
 		<tr><td>{{ _("Arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
 		<tr><td>{{ _("Installment due with this bill") }} ({{ _("No") }} {{ bill.installment_no }})</td><td class="right">{{ money(bill.installment_due) }}</td></tr>
-		{%- else %}<tr><td>{{ t("Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>{% endif %}
+		{%- else %}<tr><td>{{ T("Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>{% endif %}
 		{%- endif %}
 	</table>
 	{%- endif %}
 	<table class="pay">
-		{%- if "within" in o.rows %}<tr class="within"><td>{{ t("Payable within due date") }}{% if o.show_due_date %} <span style="font-weight: 400; font-size: {{ base_size - 1 }}pt;">({{ due_date }})</span>{% endif %}</td><td class="right">{{ rs(bill.payable_within_due) }}</td></tr>{% endif %}
-		{%- if "surcharge" in o.rows %}<tr class="surcharge"><td>{{ t("Late payment surcharge") }}<span class="sub2">{{ _("added if paid after the due date") }}</span></td><td class="right">{{ rs(bill.surcharge_amount) }}</td></tr>{% endif %}
-		{%- if "after" in o.rows %}<tr class="after"><td>{{ t("Payable after due date") }}</td><td class="right">{{ rs(bill.payable_after_due) }}</td></tr>{% endif %}
+		{%- if "within" in o.rows %}<tr class="within"><td>{{ T("Payable within due date") }}{% if o.show_due_date %} <span style="font-weight: 400; font-size: {{ base_size - 1 }}pt;">({{ due_date }})</span>{% endif %}</td><td class="right">{{ rs(bill.payable_within_due) }}</td></tr>{% endif %}
+		{%- if "surcharge" in o.rows %}<tr class="surcharge"><td>{{ T("Late payment surcharge") }}<span class="sub2">{{ _("added if paid after the due date") }}</span></td><td class="right">{{ rs(bill.surcharge_amount) }}</td></tr>{% endif %}
+		{%- if "after" in o.rows %}<tr class="after"><td>{{ T("Payable after due date") }}</td><td class="right">{{ rs(bill.payable_after_due) }}</td></tr>{% endif %}
 	</table>
 	{%- endif %}
 {%- elif kind == "history" %}
 	{%- set rows = history[:o.months] %}
-	{%- if o.heading %}<div class="box-h">{{ t(o.heading) }}</div>{% endif %}
+	{%- if o.heading %}<div class="box-h">{{ T(o.heading) }}</div>{% endif %}
 	{%- if not rows %}<div class="box muted center" style="padding: 3mm;">{{ _("No earlier bills") }}</div>
 	{%- elif o.split and rows | length > 1 %}
 	{%- set half = ((rows | length) + 1) // 2 %}
@@ -246,14 +247,14 @@
 	{%- set l2 = notices_second if o.languages in ("Both", "Second language") else [] %}
 	{%- if en or l2 %}
 	<div class="{{ 'box' if o.boxed else '' }}">
-		{%- if o.heading %}<div class="box-h">{{ t(o.heading) }}</div>{% endif %}
+		{%- if o.heading %}<div class="box-h">{{ T(o.heading) }}</div>{% endif %}
 		{%- if en %}<ul class="notices small" style="margin: 1.5mm 0; padding-left: 5mm;">{% for n in en %}<li>{{ n | e }}</li>{% endfor %}</ul>{% endif %}
 		{%- if l2 %}<ul class="notices small rtl" lang="{{ lang2 }}" style="margin: 1.5mm 0; padding-right: 5mm; padding-left: 0; list-style: none;">{% for n in l2 %}<li>{{ rtl(n) }}</li>{% endfor %}</ul>{% endif %}
 	</div>
 	{%- endif %}
 {%- elif kind == "payment" %}
 	<div class="{{ 'box' if o.boxed else '' }}">
-		{%- if o.heading %}<div class="box-h">{{ t(o.heading) }}</div>{% endif %}
+		{%- if o.heading %}<div class="box-h">{{ T(o.heading) }}</div>{% endif %}
 		<div class="small pad">
 			{%- if o.instructions and soc.payment_instructions %}<div>{% for l in soc.payment_instructions.split("\n") %}{{ l | e }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div>{% endif %}
 			{%- if o.instructions and payment_instructions_second %}<table style="margin-top: 1mm; table-layout: fixed;"><tr><td class="rtl" dir="rtl" lang="{{ lang2 }}">{% for l in payment_instructions_second.split("\n") %}{{ rtl(l) }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr></table>{% endif %}
@@ -266,7 +267,7 @@
 			{%- endfor %}
 			{%- elif o.banks == "Table" and soc.banks %}
 			<table class="grid" style="margin-top: 1mm;">
-				<tr><th>{{ t("Bank") }}</th><th>{{ t("Account title") }}</th><th>{{ t("Account No") }}</th><th>IBAN</th></tr>
+				<tr><th>{{ T("Bank") }}</th><th>{{ T("Account title") }}</th><th>{{ T("Account No") }}</th><th>IBAN</th></tr>
 				{%- for b in soc.banks %}<tr><td class="strong">{{ b.bank | e }}</td><td>{{ (b.title or "") | e }}</td><td>{{ (b.account or "") | e }}</td><td>{{ (b.iban or "") | e }}</td></tr>{% endfor %}
 			</table>
 			{%- endif %}
@@ -288,7 +289,7 @@
 		{%- if signature %}<img src="{{ signature }}" style="height: 10mm; display: inline-block;"><br>{% endif %}
 		<span class="strong">{{ signatory.name | e }}</span><br><span class="muted">{{ signatory.designation | e }}</span></div>{% endif %}
 {%- elif kind == "stamp" %}
-	<div class="stamp" style="height: {{ o.height }}mm;">{{ t(o.label) if o.label else "" }}</div>
+	<div class="stamp" style="height: {{ o.height }}mm;">{{ T(o.label) if o.label else "" }}</div>
 {%- elif kind == "footer" %}
 	<div class="small muted" style="text-align: {{ o.align | lower }};">
 		{%- if o.footer and soc.footer %}<div>{{ soc.footer | e }}</div>{% endif %}
@@ -301,21 +302,36 @@
 </div>
 {%- endmacro %}
 
+{#- in the designer's preview only: every section, row, column and block is tagged with its place in the layout, and empty
+    places show a drop target. Printed bills carry none of this. #}
+{%- if designer %}
+<style>
+	.ubd .sec { position: relative; }
+	.ubd [data-p] { cursor: move; }
+	.ubd [data-p]:hover { outline: 1px dashed #1f5f8b; outline-offset: 1px; }
+	.ubd .dz-empty { border: 1.5px dashed #9fb3c8; color: #6b7f94; font: 11px sans-serif; text-align: center; padding: 3mm 1mm; border-radius: 2mm; background: #f5f8fb; }
+	.ubd .dz-free { border-left: 1.5px dashed #c9d4df; }
+</style>
+{%- endif %}
 <div class="ubd">
 {%- if watermark %}<div class="wm">{{ watermark | e }}</div>{% endif %}
-{%- for s in layout.sections %}
+{%- for s in layout.sections %}{% set si = loop.index0 %}
+<div class="sec"{% if designer %} data-s="{{ si }}"{% endif %}>
 	{%- if s.new_page and not loop.first %}<div style="page-break-before: always;"></div>{% endif %}
 	{%- if s.cut_line_before %}<div class="cut"><span>✂ &nbsp;{{ (s.cut_text or _("cut here")) | e }}</span></div>{% endif %}
-	{%- for r in s.rows %}
-	<table class="row{{ ' last-row' if loop.last and s is sameas layout.sections[-1] else '' }}"><tr>
+	{%- if designer and not s.rows %}<div class="dz-empty" data-z="{{ si }}">{{ _("Empty section: drag a block here") }}</div>{% endif %}
+	{%- for r in s.rows %}{% set ri = loop.index0 %}
+	<table class="row{{ ' last-row' if loop.last and s is sameas layout.sections[-1] else '' }}"{% if designer %} data-r="{{ si }},{{ ri }}"{% endif %}><tr>
 		{%- set used = r.cells | sum(attribute="width") %}
-		{%- for cell in r.cells %}
-		<td class="cell{{ ' last' if loop.last and used >= 100 else '' }}" style="width: {{ cell.width }}%;">
-			{%- for b in cell.blocks %}{{ block(b.type, b.options, s) }}{% endfor %}
+		{%- for cell in r.cells %}{% set ci = loop.index0 %}
+		<td class="cell{{ ' last' if loop.last and used >= 100 else '' }}" style="width: {{ cell.width }}%;"{% if designer %} data-c="{{ si }},{{ ri }},{{ ci }}"{% endif %}>
+			{%- for b in cell.blocks %}{{ block(b.type, b.options, s, si ~ "," ~ ri ~ "," ~ ci ~ "," ~ loop.index0) }}{% endfor %}
+			{%- if designer and not cell.blocks %}<div class="dz-empty">{{ _("Drag a block here") }}</div>{% endif %}
 		</td>
 		{%- endfor %}
-		{%- if used < 100 %}<td style="width: {{ 100 - used }}%;"></td>{% endif %}
+		{%- if used < 100 %}<td style="width: {{ 100 - used }}%;"{% if designer %} class="dz-free"{% endif %}></td>{% endif %}
 	</tr></table>
 	{%- endfor %}
+</div>
 {%- endfor %}
 </div>

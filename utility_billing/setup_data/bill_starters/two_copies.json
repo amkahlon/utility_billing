@@ -6,6 +6,7 @@
    "cut_line_before": 0,
    "cut_text": "",
    "new_page": 0,
+   "english_only": 0,
    "rows": [
     {
      "cells": [
@@ -79,6 +80,15 @@
             "key": "reading_date"
            },
            {
+            "key": "previous_reading"
+           },
+           {
+            "key": "present_reading"
+           },
+           {
+            "key": "units"
+           },
+           {
             "key": "plot_size"
            },
            {
@@ -108,17 +118,6 @@
       {
        "width": 50,
        "blocks": [
-        {
-         "type": "reading",
-         "options": {
-          "style": "List",
-          "columns": [
-           "previous",
-           "present",
-           "units"
-          ]
-         }
-        },
         {
          "type": "charges",
          "options": {
@@ -193,11 +192,12 @@
    "cut_line_before": 1,
    "cut_text": "cut here",
    "new_page": 0,
+   "english_only": 1,
    "rows": [
     {
      "cells": [
       {
-       "width": 60,
+       "width": 42,
        "blocks": [
         {
          "type": "details",
@@ -222,7 +222,29 @@
        ]
       },
       {
-       "width": 40,
+       "width": 30,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "boxed": 1,
+          "fields": [
+           {
+            "key": "billing_month_short"
+           },
+           {
+            "key": "payable_within_due"
+           },
+           {
+            "key": "payable_after_due"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 28,
        "blocks": [
         {
          "type": "copy_label",
@@ -236,37 +258,6 @@
           "large": 0,
           "dates": 0,
           "boxed": 0
-         }
-        },
-        {
-         "type": "text",
-         "options": {
-          "text": "Billing month: {billing_month_short}",
-          "bold": 1,
-          "align": "Right"
-         }
-        }
-       ]
-      }
-     ]
-    },
-    {
-     "cells": [
-      {
-       "width": 100,
-       "blocks": [
-        {
-         "type": "details",
-         "options": {
-          "columns": 2,
-          "fields": [
-           {
-            "key": "payable_within_due"
-           },
-           {
-            "key": "payable_after_due"
-           }
-          ]
          }
         }
        ]
@@ -281,11 +272,12 @@
    "cut_line_before": 1,
    "cut_text": "cut here",
    "new_page": 0,
+   "english_only": 1,
    "rows": [
     {
      "cells": [
       {
-       "width": 60,
+       "width": 42,
        "blocks": [
         {
          "type": "details",
@@ -310,7 +302,29 @@
        ]
       },
       {
-       "width": 40,
+       "width": 30,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "boxed": 1,
+          "fields": [
+           {
+            "key": "billing_month_short"
+           },
+           {
+            "key": "payable_within_due"
+           },
+           {
+            "key": "payable_after_due"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 28,
        "blocks": [
         {
          "type": "copy_label",
@@ -324,37 +338,6 @@
           "large": 0,
           "dates": 0,
           "boxed": 0
-         }
-        },
-        {
-         "type": "text",
-         "options": {
-          "text": "Billing month: {billing_month_short}",
-          "bold": 1,
-          "align": "Right"
-         }
-        }
-       ]
-      }
-     ]
-    },
-    {
-     "cells": [
-      {
-       "width": 100,
-       "blocks": [
-        {
-         "type": "details",
-         "options": {
-          "columns": 2,
-          "fields": [
-           {
-            "key": "payable_within_due"
-           },
-           {
-            "key": "payable_after_due"
-           }
-          ]
          }
         }
        ]
@@ -385,6 +368,6 @@
   "paper_size": "A4",
   "margin_top": 5,
   "margin_side": 8,
-  "font_size": 8
+  "font_size": 7.5
  }
 }

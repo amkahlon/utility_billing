@@ -52,6 +52,8 @@ FIELDS = {
 	"issue_date": ("Issue date", lambda c: c["issue_date"]),
 	"due_date": ("Due date", lambda c: c["due_date"]),
 	"reading_date": ("Reading date", lambda c: c["date"]((c.get("reading") or {}).get("reading_date"))),
+	"previous_reading": ("Previous reading", lambda c: c["qty"]((c.get("reading") or {}).get("previous_reading")) if c.get("reading") else ""),
+	"present_reading": ("Present reading", lambda c: c["qty"]((c.get("reading") or {}).get("present_reading")) if c.get("reading") else ""),
 	"units": ("Units", lambda c: c["qty"](c["bill"].units)),
 	"current_bill": ("Current bill", lambda c: c["money"](c["bill"].current_amount)),
 	"arrears": ("Arrears", lambda c: c["money"](c["bill"].arrears)),
@@ -257,6 +259,7 @@ def clean_layout(layout) -> str:
 				frappe.throw(_("Section {0}, row {1}: the cells add up to more than 100% of the width.").format(len(sections) + 1, len(out_rows) + 1))
 			out_rows.append({"cells": cells})
 		sections.append({"label": _text(s.get("label"), 80), "copy_label": _text(s.get("copy_label"), 60),
+		                 "english_only": 1 if cint(s.get("english_only")) else 0,
 		                 "cut_line_before": 1 if cint(s.get("cut_line_before")) else 0, "cut_text": _text(s.get("cut_text"), 120),
 		                 "new_page": 1 if cint(s.get("new_page")) else 0, "rows": out_rows})
 	if len(sections) > MAX_SECTIONS or rows > MAX_ROWS or blocks > MAX_BLOCKS:
@@ -297,7 +300,7 @@ def template_settings(name_or_doc) -> dict:
 	doc = frappe.get_cached_doc("Bill Template", name_or_doc) if isinstance(name_or_doc, str) else name_or_doc
 	return {"name": doc.get("name"), "paper_size": doc.paper_size or "A4", "font_family": doc.font_family or "Helvetica / Arial",
 	        "font_size": flt(doc.font_size) or 9, "margin_top": flt(doc.margin_top), "margin_side": flt(doc.margin_side),
-	        "accent_colour": doc.accent_colour, "layout": _as_dict(doc.layout)}
+	        "accent_colour": doc.accent_colour, "pages_per_bill": pages_limit(doc), "layout": _as_dict(doc.layout)}
 
 
 def pdf_options(settings) -> dict:
@@ -308,6 +311,13 @@ def pdf_options(settings) -> dict:
 # ---------------------------------------------------------------- rendering
 def _has_block(layout, kind):
 	return any(b["type"] == kind for s in layout.get("sections") or [] for r in s.get("rows") or [] for c in r.get("cells") or [] for b in c.get("blocks") or [])
+
+
+def english_labels():
+	"""Labels without the second language, for a section set to English only (e.g. a narrow tear-off copy)."""
+	from markupsafe import Markup, escape  # noqa: PLC0415
+
+	return lambda label: Markup(escape(_(label)))
 
 
 def fill_plain(text, ctx) -> str:
@@ -331,8 +341,9 @@ def fill(text, ctx):
 	return Markup(str(escape(fill_plain(text, ctx))).replace("\n", "<br>"))
 
 
-def render_bill(bill, settings, duplicate=0, ctx=None) -> str:
-	"""HTML of one bill in a designed template (the body only; pdf_of adds the page)."""
+def render_bill(bill, settings, duplicate=0, ctx=None, designer=False) -> str:
+	"""HTML of one bill in a designed template (the body only; pdf_of adds the page). `designer`: tag every place in the layout
+	for the Bill Designer's on-page editing (preview only, never printed)."""
 	from utility_billing.utility_billing import bill_print  # noqa: PLC0415
 
 	ctx = ctx or bill_print.bill_context(bill, duplicate)
@@ -365,7 +376,7 @@ def render_bill(bill, settings, duplicate=0, ctx=None) -> str:
 		"layout": layout, "page": settings, "accent": settings.get("accent_colour") or soc.get("colour") or "#1F5F8B",
 		"font": FONTS.get(settings.get("font_family"), FONTS["Helvetica / Arial"]), "base_size": settings.get("font_size") or 9,
 		"field": field, "field_label": lambda key: FIELDS[key][0] if key in FIELDS else key, "amount_field": lambda key: key in AMOUNT_FIELDS,
-		"fill": lambda text: fill(text, ctx), "fill_plain": lambda text: fill_plain(text, ctx), "image": image,
+		"designer": bool(designer), "fill": lambda text: fill(text, ctx), "t_en": english_labels(), "fill_plain": lambda text: fill_plain(text, ctx), "image": image,
 	})
 	return frappe.render_template("utility_billing/templates/bill/designed_bill.html", ctx)
 
@@ -404,6 +415,53 @@ def sample_bill(society):
 	                    payable_after_due=current + 1104 + round(current * 0.1), meter_reading=None, lines=lines, print_snapshot=snapshot)
 
 
+def long_bill(society):
+	"""The sample bill made as long as a real one is likely to get: 8 charge lines (2 with notes), 24 months of history (a block shows
+	the months it is set to), an installment plan, a period note, a long name and address. A template must print it within its
+	pages per bill (user's rule, 2026-11-17)."""
+	bill = sample_bill(society)
+	snap = bill.print_snapshot
+	snap["consumer"].update({"name": "Muhammad Abdul Rehman Khan Niazi (Late) through Legal Heirs",
+	                         "address": "House 1234-B, Street 56, Overseas Block Extension, Phase 2, Near Jamia Masjid"})
+	months = [getdate(frappe.utils.add_months(bill.billing_month, -(i + 1))) for i in range(24)]
+	snap["history"] = [{"month": str(m), "units": 1234, "billed": 123456, "current": 123456, "paid_on": str(m.replace(day=12)), "paid": 123456}
+	                   for m in months]
+	names = ["Energy charge", "Fuel price adjustment", "Quarterly tariff adjustment", "Fixed charges", "Maintenance charges",
+	         "Security charges", "Water and sewerage", "Electricity duty"]
+	bill.lines = [frappe._dict(label=n, basis="Per Unit" if i < 3 else "Fixed", quantity=1234 if i < 3 else 0, rate=70.5 if i < 3 else 0,
+	                           amount=12345, note="August 2026 units 831" if i in (1, 2) else "", line_order=i, idx=i + 1,
+	                           charge_group="Electricity" if i < 4 else "Society charges") for i, n in enumerate(names)]
+	bill.update({"installment_due": 5000, "installment_no": 3, "period_note": "Includes a pro-rata period after a meter change"})
+	return bill
+
+
+def pages_of(settings, bill) -> int:
+	from io import BytesIO  # noqa: PLC0415
+
+	from frappe.utils.pdf import get_pdf  # noqa: PLC0415
+	from pypdf import PdfReader  # noqa: PLC0415
+
+	from utility_billing.utility_billing import bill_print  # noqa: PLC0415
+
+	pdf = get_pdf(bill_print.wrap_pages([render_bill(bill, settings)]), options=pdf_options(settings))
+	return len(PdfReader(BytesIO(pdf)).pages)
+
+
+def pages_limit(doc) -> int:
+	"""Pages per bill the template allows: 1 unless the society chose 2 (user's rule, 2026-11-17)."""
+	return 2 if cint(doc.get("pages_per_bill")) == 2 else 1
+
+
+def check_fit(doc):
+	"""The long bill must print within the template's pages per bill; checked when it goes for approval and when it is approved."""
+	limit = pages_limit(doc)
+	pages = pages_of(template_settings(doc), long_bill(doc.society))
+	if pages > limit:
+		frappe.throw(_("This template runs to {0} pages on a long bill (many charges and a full history) but allows {1}. Shorten it or use a "
+		               "smaller text size{2}.").format(pages, limit, _(", or set Pages per Bill to 2") if limit == 1 else ""),
+		             title=_("Doesn't fit in {0} page(s)").format(limit))
+
+
 # ---------------------------------------------------------------- the designer page's endpoints
 def _can_design(society=None):
 	if not frappe.has_permission("Bill Template", "create") and not frappe.has_permission("Bill Template", "write"):
@@ -416,6 +474,7 @@ def _settings_from(page, layout):
 	page = frappe.parse_json(page or {})
 	doc = frappe._dict(paper_size=page.get("paper_size") or "A4", font_family=page.get("font_family"), font_size=page.get("font_size"),
 	                   margin_top=page.get("margin_top", 6), margin_side=page.get("margin_side", 8), accent_colour=page.get("accent_colour"),
+	                   pages_per_bill=page.get("pages_per_bill"),
 	                   layout=clean_layout(layout))
 	if doc.paper_size not in PAPER_MM:
 		doc.paper_size = "A4"
@@ -444,7 +503,8 @@ def designer_data(template: str | None = None):
 		d.check_permission("read")
 		access.check_society(d.society)
 		doc = {k: d.get(k) for k in ("name", "template_name", "society", "utility", "consumer_category", "effective_from", "description", "paper_size",
-		                             "font_family", "font_size", "margin_top", "margin_side", "accent_colour", "docstatus", "workflow_state")}
+		                             "font_family", "font_size", "margin_top", "margin_side", "accent_colour", "pages_per_bill", "docstatus",
+		                             "workflow_state")}
 		doc["layout"] = _as_dict(d.layout)
 		doc["can_write"] = d.docstatus == 0 and d.has_permission("write")
 	return {
@@ -484,16 +544,26 @@ def starter(key: str):
 
 
 @frappe.whitelist(methods=["POST"])
-def preview(society: str, layout: str, page: str | None = None, bill: str | None = None):
-	"""The bill rendered with an unsaved layout, as a whole HTML page at paper width, for the designer's live preview."""
+def preview(society: str, layout: str, page: str | None = None, bill: str | None = None, designer: int = 0):
+	"""The bill rendered with an unsaved layout, as a whole HTML page at paper width, for the designer's live preview
+	(`designer`: with every block tagged for on-page editing)."""
 	_can_design(society)
 	settings = _settings_from(page, layout)
 	doc = _preview_bill(society, bill)
-	body = render_bill(doc, settings)
+	body = render_bill(doc, settings, designer=cint(designer))
 	w, _h = PAPER_MM[settings["paper_size"]]
 	return (f'<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{{margin:0;background:#e9edf1}}'
 	        f'.sheet{{width:{w}mm;min-height:{_h}mm;box-sizing:border-box;padding:{settings["margin_top"]}mm {settings["margin_side"]}mm;'
 	        f'margin:6mm auto;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.18)}}</style></head><body><div class="sheet">{body}</div></body></html>')
+
+
+@frappe.whitelist(methods=["POST"])
+def fit_check(society: str, layout: str, page: str | None = None, bill: str | None = None):
+	"""Pages the layout takes for the sample (or chosen) bill and for the long bill, as the PDF engine prints them."""
+	_can_design(society)
+	settings = _settings_from(page, layout)
+	return {"pages": pages_of(settings, _preview_bill(society, bill)), "long": pages_of(settings, long_bill(society)),
+	        "limit": settings["pages_per_bill"]}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -515,7 +585,7 @@ def save_template(values: str):
 	"""Create or update a draft template from the designer."""
 	values = frappe.parse_json(values)
 	fields = ("template_name", "society", "utility", "consumer_category", "effective_from", "description", "paper_size", "font_family", "font_size",
-	          "margin_top", "margin_side", "accent_colour")
+	          "margin_top", "margin_side", "accent_colour", "pages_per_bill")
 	if values.get("name"):
 		doc = frappe.get_doc("Bill Template", values["name"])
 		if doc.docstatus != 0:
@@ -536,6 +606,7 @@ def export_template(name: str):
 	doc.check_permission("read")
 	access.check_society(doc.society)
 	data = {"kind": "utility_billing.bill_template", "version": 1, "template_name": doc.template_name, "description": doc.description,
+	        "pages_per_bill": pages_limit(doc),
 	        "paper_size": doc.paper_size, "font_family": doc.font_family, "font_size": doc.font_size, "margin_top": doc.margin_top,
 	        "margin_side": doc.margin_side, "accent_colour": doc.accent_colour, "layout": _as_dict(doc.layout)}
 	frappe.local.response.filename = f"{frappe.scrub(doc.template_name)}.bill-template.json"
@@ -560,7 +631,7 @@ def import_template(data: str, society: str):
 							b["options"][o["key"]] = ""
 	doc = frappe.new_doc("Bill Template")
 	doc.update({k: data.get(k) for k in ("template_name", "description", "paper_size", "font_family", "font_size", "margin_top", "margin_side",
-	                                      "accent_colour")})
+	                                      "accent_colour", "pages_per_bill")})
 	doc.update({"society": society, "effective_from": nowdate(), "layout": json.dumps(layout)})
 	doc.template_name = _text(doc.template_name or _("Imported template"), 140)
 	doc.insert()

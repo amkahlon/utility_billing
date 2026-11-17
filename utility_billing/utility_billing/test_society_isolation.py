@@ -25,6 +25,7 @@ class IntegrationTestSocietyIsolation(BillingCase):
 		frappe.set_user("Administrator")
 		frappe.local.request = None
 		super().tearDown()
+		frappe.clear_cache(user=BILLING_MANAGER)  # the limit is rolled back but stays in the permission cache otherwise
 
 	def limit_to(self, society):
 		frappe.set_user("Administrator")

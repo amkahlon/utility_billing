@@ -6,6 +6,7 @@
    "cut_line_before": 0,
    "cut_text": "",
    "new_page": 0,
+   "english_only": 0,
    "rows": [
     {
      "cells": [
@@ -179,6 +180,7 @@
    "cut_line_before": 1,
    "cut_text": "cut here",
    "new_page": 0,
+   "english_only": 1,
    "rows": [
     {
      "cells": [
@@ -249,8 +251,8 @@
  ],
  "page": {
   "paper_size": "A4",
-  "margin_top": 6,
+  "margin_top": 5,
   "margin_side": 8,
-  "font_size": 9
+  "font_size": 8.5
  }
 }

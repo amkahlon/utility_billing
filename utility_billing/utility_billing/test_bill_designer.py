@@ -69,6 +69,8 @@ class IntegrationTestBillDesigner(BillingCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		super().tearDown()
+		# the society limit is rolled back, but the user's permissions stay cached; later tests would see it (found 2026-11-17)
+		frappe.clear_cache(user=BILLING_MANAGER)
 
 	def template(self, starter="two_copies", approve=True, effective="2026-10-01", **kw):
 		st = bill_designer.starter(starter)
@@ -175,6 +177,33 @@ class IntegrationTestBillDesigner(BillingCase):
 		self.assertNotIn("/files/logo.png", new.layout)  # images don't travel between sites
 		with self.assertRaises(frappe.ValidationError):
 			bill_designer.import_template(json.dumps({"kind": "something else"}), SOC)
+
+	def test_pages_per_bill_is_enforced(self):
+		"""User's rule (2026-11-17): a template prints on one page unless the society chose 2; it must fit a long bill."""
+		long = bill_designer.long_bill(SOC)
+		for key in bill_designer.STARTERS:  # every ready-made layout fits a long bill on one page
+			st = bill_designer.starter(key)
+			self.assertEqual(bill_designer.pages_of(bill_designer._settings_from(st["page"], st["layout"]), long), 1, key)
+		tall = {"sections": [{"label": "Tall", "rows": [{"cells": [{"width": 100, "blocks": [{"type": "spacer", "options": {"height": 60}}] * 6
+		                                                             + [{"type": "charges"}]}]}]}]}
+		doc = frappe.get_doc({"doctype": "Bill Template", "template_name": "Tall", "society": SOC, "effective_from": "2026-10-01",
+		                      "layout": json.dumps(tall)}).insert()  # a draft may overflow while it is designed
+		self.assertEqual(doc.pages_per_bill, "1")
+		with self.assertRaises(frappe.ValidationError):
+			act(doc, "Submit for Approval", BILLING_MANAGER)
+		doc.reload()
+		doc.pages_per_bill = "2"
+		doc.save()
+		act(doc, "Submit for Approval", BILLING_MANAGER)  # two pages allowed: it fits
+		act(doc, "Approve", GENERAL_MANAGER)
+		self.assertEqual(bill_designer.template_settings(doc.name)["pages_per_bill"], 2)
+		taller = {"sections": [{"label": "Taller", "rows": [{"cells": [{"width": 100, "blocks": [{"type": "spacer", "options": {"height": 60}}] * 12}]}]}]}
+		doc = frappe.get_doc({"doctype": "Bill Template", "template_name": "Taller", "society": SOC, "effective_from": "2026-10-01",
+		                      "pages_per_bill": "2", "layout": json.dumps(taller)}).insert()
+		with self.assertRaises(frappe.ValidationError):
+			act(doc, "Submit for Approval", BILLING_MANAGER)
+		fit = bill_designer.fit_check(SOC, json.dumps(tall), json.dumps({"pages_per_bill": "1"}))
+		self.assertEqual((fit["limit"], fit["long"] > 1), (1, True))
 
 	def test_preview_pdf(self):
 		bill_designer.preview_pdf(SOC, json.dumps(layout_of("header", "charges", "totals")))

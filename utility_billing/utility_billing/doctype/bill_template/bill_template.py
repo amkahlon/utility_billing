@@ -19,6 +19,9 @@ class BillTemplate(Document):
 		self.layout = bill_designer.clean_layout(self.layout)
 		bill_designer.check_page(self)
 		approval.validate_transition(self)
+		# within its pages per bill, 1 unless the society chose 2 (user, 2026-11-17): a draft may overflow while it is designed, not once it goes for approval
+		if self.workflow_state in (approval.PENDING, approval.APPROVED) and self.has_value_changed("workflow_state"):
+			bill_designer.check_fit(self)
 
 	def before_submit(self):
 		if approval.workflow_active(self.doctype) and self.workflow_state != approval.APPROVED:

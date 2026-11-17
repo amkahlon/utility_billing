@@ -2164,6 +2164,61 @@ def t_pdf_header_footer(d: Desk):
 	eq((len(pages) > 1, all("QA88 HEADER" in p and "QA88 FOOTER" in p for p in pages)), (True, True), "header and footer on every page")
 
 
+BD = "utility_billing.utility_billing.bill_designer"
+
+
+@case("QA-89", "Increment 27: a ready-made layout chosen, customised and saved by a Billing Manager, approved by a General Manager (maker-checker)")
+def t_bill_designer(d: Desk):
+	bm, gm = USERS["bm"], USERS["gm"]
+	data = bm.call(f"{BD}.designer_data")
+	eq(sorted(s["key"] for s in data["starters"]), ["classic_boxed", "compact_grid", "standard", "two_copies"], "ready-made layouts")
+	eq({b["type"] for b in data["blocks"]} >= {"header", "details", "charges", "totals", "history", "payment", "text"}, True, "blocks offered")
+	st = bm.call(f"{BD}.starter", key="two_copies")
+	layout = st["layout"]
+	# customise: a free-text block with placeholders, as the designer sends it (all values as strings)
+	layout["sections"][0]["rows"][-1]["cells"][0]["blocks"].append({"type": "text", "options": {"text": "Dear {consumer_name}, pay by {due_date}.", "size": "10", "bold": "1"}})
+	html = bm.call(f"{BD}.preview", society=S["society"], layout=json.dumps(layout), page=json.dumps(st["page"]))
+	eq(("Bank Copy" in html, "Dear Muhammad Ashiq, pay by" in html), (True, True), "live preview with the placeholders filled")
+	values = dict({k: str(v) for k, v in st["page"].items()}, template_name=f"QA89 {RUN}", society=S["society"], effective_from="2026-01-01", layout=layout)
+	name = bm.call(f"{BD}.save_template", values=json.dumps(values))
+	doc = d.get("Bill Template", name)
+	eq((doc["docstatus"], doc["workflow_state"], doc["font_size"], doc["pages_per_bill"]), (0, "Draft", 7.5, "1"), "saved as a one-page draft")
+	fit = bm.call(f"{BD}.fit_check", society=S["society"], layout=json.dumps(layout), page=json.dumps(st["page"]))
+	eq((fit["limit"], fit["long"]), (1, 1), "fits a long bill on one page")
+	expect_error(lambda: bm.call(f"{BD}.save_template", values=json.dumps(dict(values, layout={"sections": [{"rows": [{"cells": [
+		{"width": "70", "blocks": []}, {"width": "40", "blocks": []}]}]}]}))), "100%")
+	bm.workflow(doc, "Submit for Approval")
+	expect_error(lambda: bm.workflow(doc, "Approve"))  # the maker can't approve
+	gm.workflow(doc, "Approve")
+	doc = d.get("Bill Template", name)
+	eq((doc["docstatus"], doc["workflow_state"]), (1, "Approved"), "approved")
+	expect_error(lambda: bm.call(f"{BD}.save_template", values=json.dumps(dict(values, name=name))), "Amend")
+	S["template"] = name
+
+
+@case("QA-90", "Increment 27: preview and exact PDF of a real bill; an issued bill keeps its format; another society's designer refused")
+def t_bill_designer_print(d: Desk):
+	from pypdf import PdfReader
+
+	bm = USERS["bm"]
+	st = bm.call(f"{BD}.starter", key="compact_grid")
+	ref = d.get("Connection", d.get("Utility Bill", S["bill"])["connection"])["reference_no"]
+	html = bm.call(f"{BD}.preview", society=S["society"], layout=json.dumps(st["layout"]), page=json.dumps(st["page"]), bill=S["bill"])
+	eq((ref in html, S["bill"] in html), (True, True), "a real bill in the preview")
+	r = bm.s.post(f"{URL}/api/method/{BD}.preview_pdf", data={"society": S["society"], "layout": json.dumps(st["layout"]), "page": json.dumps(st["page"]),
+	                                                         "bill": S["bill"]})
+	if r.status_code != 200 or not r.content.startswith(b"%PDF"):
+		raise ServerError(r.status_code, r.text[:300])
+	pages = PdfReader(io.BytesIO(r.content)).pages
+	text = " ".join(" ".join(p.extract_text() for p in pages).split())
+	eq((len(pages), ref in text, "Office Copy" in text), (1, True, True), "the exact PDF, one page")
+	_, text = get_pdf(USERS["cashier"], "download_bill", name=S["bill"])
+	eq(text, S["bill_text"], "the bill issued before the template still reprints exactly")
+	expect_error(lambda: USERS["iso"].call(f"{BD}.preview", society="QA-ISO", layout=json.dumps(st["layout"])), "access")
+	r = Desk().s.post(f"{URL}/api/method/{BD}.preview", data={"society": S["society"], "layout": json.dumps(st["layout"])})
+	eq(r.status_code in (401, 403), True, "a visitor can't preview")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

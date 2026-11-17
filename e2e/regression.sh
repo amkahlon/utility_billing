@@ -23,8 +23,12 @@ echo "== DocType clash check on test.localhost (with ERPNext)"
 for site in ${TEST_SITES:-qa.localhost}; do
   echo "== unit + integration on $site"
   out=$(bench --site "$site" run-tests --app utility_billing 2>&1 | sed "s/\x1b\[[0-9;]*m//g")
-  echo "$out" | grep -E "✖|FAIL|ERROR|^Ran |^OK"
-  echo "$out" | grep -qE "FAILED|ERROR" && status=1
+  grep -E "✖|FAIL|ERROR|^Ran |^OK" <<< "$out"
+  # a here-string, not `echo | grep -q`: grep -q stops at the first match, echo then dies of a broken pipe and, with pipefail,
+  # the pipeline counts as false, so a failed run was reported as PASSED (found 2026-11-17). Every "Ran" must be followed by OK.
+  if grep -qE "FAILED|ERROR" <<< "$out" || [ "$(grep -c '^Ran ' <<< "$out")" -ne "$(grep -c '^OK' <<< "$out")" ]; then
+    status=1
+  fi
 done
 
 echo "== restarting QA server on :8001"
