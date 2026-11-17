@@ -63,6 +63,24 @@ class IntegrationTestBillDesignerLayout(BillingCase):
 		self.assertIn("min-height: 40mm", printed)
 		self.assertEqual(json.loads(bill_designer.clean_layout(layout))["sections"][0]["rows"][0]["cells"][0]["blocks"][1]["options"]["min_height"], 40)
 
+	def test_own_wording_for_any_label(self):
+		"""Every fixed label in every block can be reworded by double-clicking it (user, 2026-11-17)."""
+		bill = bill_designer.sample_bill(SOC)
+		layout = {"sections": [{"rows": [{"cells": [{"width": 100, "blocks": [
+			{"type": "totals", "options": {"style": "List", "labels": {"Arrears": "Previous dues", "Payable after due date": "  ", "": "x"}}},
+			{"type": "history", "options": {"labels": {"Month": "Bill month"}}},
+			{"type": "reading"}]}]}]}]}
+		clean = json.loads(bill_designer.clean_layout(layout))["sections"][0]["rows"][0]["cells"][0]["blocks"]
+		self.assertEqual([b["options"]["labels"] for b in clean], [{"Arrears": "Previous dues"}, {"Month": "Bill month"}, {}])  # blanks dropped
+		settings = bill_designer._settings_from({}, layout)
+		printed, preview = bill_designer.render_bill(bill, settings), bill_designer.render_bill(bill, settings, designer=True)
+		self.assertIn("Previous dues", printed)
+		self.assertIn("Bill month", printed)
+		self.assertIn("Payable after due date", printed)  # not reworded: the standard label
+		self.assertNotIn('data-edit="label:', printed)
+		for key in ("Arrears", "Payable within due date", "Month", "Previous reading", "Units"):  # totals, history and reading labels
+			self.assertIn(f'data-edit="label:{key}"', preview, key)
+
 	def test_every_block_and_starter_renders(self):
 		bill = bill_designer.sample_bill(SOC)
 		settings = bill_designer._settings_from({}, layout_of(*bill_designer.BLOCKS))

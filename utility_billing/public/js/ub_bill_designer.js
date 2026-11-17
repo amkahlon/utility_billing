@@ -206,7 +206,7 @@
 						<span class="bd-zoombar"><button class="ub-btn bd-zout" title="${__("Zoom out")}">−</button>
 						<select class="bd-zoom"><option value="fit">${__("Fit width")}</option>${["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"].map((v) => `<option value="${v}">${Math.round(v * 100)}%</option>`).join("")}</select>
 						<button class="ub-btn bd-zin" title="${__("Zoom in (or Ctrl + mouse wheel)")}">+</button><span class="bd-zoom-pct text-muted small"></span>
-						<button class="ub-btn bd-full" title="${__("Full screen (Esc to leave)")}">⛶ ${__("Full screen")}</button></span>
+						<button class="ub-btn bd-full" title="${__("Fill the window (Esc to leave). Press F11 as well for the whole screen.")}">⛶ ${__("Full screen")}</button></span>
 						<span class="bd-fit"></span><span class="bd-grow"></span><span class="text-muted small">${__("The PDF button shows the exact print.")}</span></div>
 						<div class="bd-frame-wrap"><div class="bd-sizer"><iframe class="bd-frame"></iframe></div></div></div>
 					<div class="bd-panel bd-opts"></div>
@@ -237,11 +237,8 @@
 				ev.preventDefault();
 				this.zoom_step(ev.originalEvent.deltaY < 0 ? 1 : -1);
 			});
-			// leaving the browser's full screen (Esc) leaves the enlarged designer too
-			$(document).off("fullscreenchange.ubbd").on("fullscreenchange.ubbd", () => {
-				if (!document.fullscreenElement && this.$root.hasClass("bd-max")) this.toggle_full(false);
-				else setTimeout(() => this.zoom(), 150);
-			});
+			// F11 (the browser's own full screen) changes the window size: fit the bill again
+			$(document).off("fullscreenchange.ubbd").on("fullscreenchange.ubbd", () => setTimeout(() => this.zoom(), 150));
 			$r.find(".bd-bill").on("change", (ev) => {
 				this.bill = ev.target.value;
 				this.refresh();
@@ -453,6 +450,13 @@
 						<input class="form-control bd-flabel" data-i="${i}" value="${e(f.label)}" placeholder="${__("own label")}" ${ro}>
 						${this.ro ? "" : `<button class="bd-x bd-fup" data-i="${i}">↑</button><button class="bd-x bd-fdel" data-i="${i}">✕</button>`}</div>`).join("")}
 					${this.ro ? "" : `<select class="form-control bd-fadd"><option value="">+ ${__("field")}</option>${this.meta.fields.map((f) => `<option value="${f.key}">${e(f.label)}</option>`).join("")}</select>`}</div>`;
+				if (op.type === "labels") {
+					const own = Object.entries(v || {});
+					return `<div class="bd-opt"><label>${e(op.label)}</label>${own.length
+						? own.map(([k, w]) => `<div class="bd-field"><span title="${e(k)}">${e(k)}</span><input class="form-control" value="${e(w)}" disabled>
+							${this.ro ? "" : `<button class="bd-x bd-lreset" data-l="${e(k)}" title="${__("Back to the standard label")}">✕</button>`}</div>`).join("")
+						: `<div class="bd-help">${__("Double-click any label on the bill to change its wording.")}</div>`}</div>`;
+				}
 				return "";
 			});
 			$o.html(`<h4>${e(meta.label)}</h4><div class="bd-help">${e(meta.description)}</div>${parts.join("")}
@@ -477,6 +481,7 @@
 				new frappe.ui.FileUploader({ allow_multiple: false, restrictions: { allowed_file_types: ["image/*"] }, on_success: (file) => set(k, file.file_url) });
 			});
 			$o.find(".bd-clear").on("click", (ev) => set($(ev.currentTarget).attr("data-k"), ""));
+			$o.find(".bd-lreset").on("click", (ev) => this.change(() => delete o.labels[$(ev.currentTarget).attr("data-l")]));
 			const blocks = L.sections[si].rows[ri].cells[ci].blocks;
 			$o.find(".bd-bup, .bd-bdown").on("click", (ev) => this.change(() => {
 				const d = $(ev.currentTarget).hasClass("bd-bup") ? -1 : 1, j = bi + d;
@@ -605,11 +610,11 @@
 		// full screen: the whole designer (palette, bill, options) on the monitor; Esc leaves it
 		toggle_full(force) {
 			const on = force === undefined ? !this.$root.hasClass("bd-max") : force;
-			// always: the designer covers the whole browser window; where the browser allows it, the whole screen too
+			// the designer covers the whole browser window. Not the browser's own full screen: that shows only the designer's own
+			// elements, so the layer that follows the mouse while dragging and Frappe's dialogs (kept on the page body) vanished,
+			// and boxes could not be moved or dropped (user's report 2026-11-17). F11 still gives the whole screen.
 			this.$root.toggleClass("bd-max", on);
 			$("body").toggleClass("bd-max-open", on);
-			if (on && !document.fullscreenElement && this.$root[0].requestFullscreen) this.$root[0].requestFullscreen().catch(() => {});
-			if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
 			this.$root.find(".bd-full").html(on ? `✕ ${__("Leave full screen")}` : `⛶ ${__("Full screen")}`);
 			setTimeout(() => this.zoom(), 150);
 		}
@@ -658,6 +663,8 @@
 				.bd-h.minh { width: 18px; height: 10px; background: #fff; border: 2px solid #1f5f8b; border-radius: 3px; cursor: ns-resize; }
 				.bd-h.minh:hover { background: #1f5f8b; }
 				[data-edit] { cursor: text; }
+				.bd-cur-col, .bd-cur-col * { cursor: col-resize !important; }
+				.bd-cur-ns, .bd-cur-ns * { cursor: ns-resize !important; }
 				[data-edit]:hover { background: rgba(31,95,139,.08); box-shadow: inset 0 -1px 0 #1f5f8b; }
 				.bd-edit { position: absolute; z-index: 70; font: inherit; border: 2px solid #1f5f8b; border-radius: 3px; padding: 1px 4px; background: #fff; color: #1d2329; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
 				.bd-tip { position: absolute; z-index: 60; background: #1d2329; color: #fff; font: 11px sans-serif; padding: 2px 6px; border-radius: 4px; pointer-events: none; }
@@ -670,6 +677,13 @@
 				}
 			});
 			doc.addEventListener("mousedown", (ev) => this.on_frame_down(ev));
+			// near a box's edge the cursor shows it can be dragged to resize
+			doc.addEventListener("mousemove", (ev) => {
+				if (ev.buttons) return;
+				const edge = (this.edge_hit(ev) || {}).edge;
+				doc.documentElement.classList.toggle("bd-cur-col", edge === "left" || edge === "right");
+				doc.documentElement.classList.toggle("bd-cur-ns", edge === "bottom");
+			});
 			doc.addEventListener("dblclick", (ev) => this.edit_text(ev));
 			doc.addEventListener("keydown", (ev) => this.on_key(ev));
 			this.paint_selection();
@@ -696,6 +710,15 @@
 				const fallback = (this.meta.fields.find((x) => x.key === f.key) || {}).label || "";
 				get = () => f.label || fallback;
 				set = (v) => (f.label = v.trim() === fallback ? "" : v);
+			} else if (key.startsWith("label:")) {
+				// a fixed label of the block ("Payable within due date"): the block's own wording, or back to the standard one when cleared
+				const std = key.slice(6);
+				get = () => (block.options.labels || {})[std] || std;
+				set = (v) => {
+					block.options.labels = block.options.labels || {};
+					if (!v.trim() || v.trim() === std) delete block.options.labels[std];
+					else block.options.labels[std] = v.trim();
+				};
 			} else {
 				get = () => block.options[key] || "";
 				set = (v) => (block.options[key] = v);
@@ -755,7 +778,16 @@
 			const h = ev.target.closest(".bd-h");
 			if (h) {
 				ev.preventDefault();
-				this.start_resize(h, ev);
+				this.start_resize(this.resize_spec(h), ev);
+				return;
+			}
+			// on a box's edge: resize it by that edge, selected first so its grips and options show
+			const hit = this.edge_hit(ev);
+			if (hit) {
+				ev.preventDefault();
+				const spec = this.edge_spec(hit.b, hit.edge);
+				this.select("block", hit.b.getAttribute("data-p").split(",").map(Number));
+				this.start_resize(spec, ev);
 				return;
 			}
 			const b = ev.target.closest("[data-p]");
@@ -789,21 +821,53 @@
 
 		// a transparent cover over the whole screen takes the mouse while dragging, so moves over the preview and the panels
 		// are seen in one place; positions are turned into the preview's own coordinates
+		// Follows the mouse while a button is held, wherever it is. A press that starts on the bill (an inner frame) keeps sending
+		// the mouse to the frame until release, while one that starts outside (the palette) reaches the outer page; so both are
+		// listened to, with a cover over the outer page. `move` gets the bill's own coordinates and the window's (user's report
+		// 2026-11-17: boxes didn't move or resize with a real mouse, only with simulated events).
+		follow(move, done, cursor) {
+			const doc = this.idoc;
+			const $cover = $('<div class="bd-drag-cover"></div>').css("cursor", cursor || "grabbing").appendTo("body");
+			const fromFrame = (e) => {
+				const [px, py] = this.to_parent(e.clientX, e.clientY);
+				move(e.clientX, e.clientY, px, py);
+			};
+			const fromTop = (e) => {
+				const [fx, fy] = this.to_frame(e.clientX, e.clientY);
+				move(fx, fy, e.clientX, e.clientY);
+			};
+			let ended = false;
+			const end = () => {
+				if (ended) return;
+				ended = true;
+				if (doc) {
+					doc.removeEventListener("mousemove", fromFrame, true);
+					doc.removeEventListener("mouseup", end, true);
+				}
+				$cover.remove();
+				$(window).off("blur.ubbdfollow");
+				done();
+			};
+			if (doc) {
+				doc.addEventListener("mousemove", fromFrame, true);
+				doc.addEventListener("mouseup", end, true);
+			}
+			$cover.on("mousemove", fromTop).on("mouseup", end);
+			$(window).on("blur.ubbdfollow", end); // a release outside the browser
+		}
+
 		start_drag(info, cx, cy) {
-			const $cover = $('<div class="bd-drag-cover"></div>').appendTo("body");
-			const $ghost = $(`<div class="bd-drag-ghost">${e(info.label || "")}</div>`).appendTo("body");
+			const $ghost = $(`<div class="bd-drag-ghost">${e(info.label || "")}</div>`).appendTo(this.$root.hasClass("bd-max") ? this.$root : "body");
 			$(this.idoc).find(".bd-h").hide();
 			let target = null;
-			const place = (x, y) => {
-				$ghost.css({ left: x + 12, top: y + 10 });
-				const [fx, fy] = this.to_frame(x, y);
+			const place = (fx, fy, px, py) => {
+				$ghost.css({ left: px + 12, top: py + 10 });
 				target = this.idoc ? this.target_at(fx, fy) : null;
 				this.show_indicator(target);
 			};
-			place(cx, cy);
-			$cover.on("mousemove", (ev) => place(ev.clientX, ev.clientY));
-			$cover.on("mouseup", () => {
-				$cover.remove();
+			const [fx0, fy0] = this.to_frame(cx, cy);
+			place(fx0, fy0, cx, cy);
+			this.follow(place, () => {
 				$ghost.remove();
 				this.show_indicator(null);
 				$(this.idoc).find(".bd-h").show();
@@ -998,15 +1062,60 @@
 			}
 		}
 
-		start_resize(h, ev) {
+		// what a grip resizes, read from its attributes
+		resize_spec(h) {
+			if (h.classList.contains("col")) {
+				const [si, ri] = h.getAttribute("data-r").split(",").map(Number);
+				return { col: true, si, ri, i: +h.getAttribute("data-i"), end: h.getAttribute("data-end") === "1", grip: h };
+			}
+			return { key: h.getAttribute("data-key"), path: this.sel.path };
+		}
+
+		// a box's edge under the mouse, for resizing by dragging the edge itself: "left"/"right" move its column's edges, "bottom" sets
+		// its minimum height. A few screen pixels either side of the edge count, whatever the zoom.
+		edge_at(b, x, y) {
+			const r = b.getBoundingClientRect(), near = Math.max(4, 7 / (this.scale || 1));
+			if (y < r.top - near || y > r.bottom + near) return null;
+			const cell = b.closest("td[data-c]");
+			if (!cell) return null;
+			const ci = +cell.getAttribute("data-c").split(",")[2];
+			if (Math.abs(x - r.right) <= near) return "right";
+			if (ci > 0 && Math.abs(x - r.left) <= near) return "left";
+			if (Math.abs(y - r.bottom) <= near && x > r.left && x < r.right) return "bottom";
+			return null;
+		}
+
+		// the box and edge under the mouse: the box pointed at, or, in the gap beside boxes (a column's padding), the column's boxes
+		edge_hit(ev) {
+			const t = ev.target;
+			if (!t || !t.closest || t.closest(".bd-h, .bd-edit")) return null;
+			const b = t.closest("[data-p]");
+			const cell = t.closest("td[data-c]");
+			const near = b ? [b] : cell ? [...cell.querySelectorAll(":scope > [data-p]")] : [];
+			for (const x of near) {
+				const edge = this.edge_at(x, ev.clientX, ev.clientY);
+				if (edge) return { b: x, edge };
+			}
+			return null;
+		}
+
+		edge_spec(b, edge) {
+			const [si, ri, ci, bi] = b.getAttribute("data-p").split(",").map(Number);
+			if (edge === "bottom") return { key: "min_height", path: [si, ri, ci, bi] };
+			const n = this.layout.sections[si].rows[ri].cells.length;
+			if (edge === "left") return { col: true, si, ri, i: ci - 1, end: false };
+			return { col: true, si, ri, i: ci, end: ci === n - 1 };
+		}
+
+		start_resize(spec, ev) {
 			const doc = this.idoc;
 			const startX = ev.clientX, startY = ev.clientY;
 			const $tip = $('<div class="bd-tip"></div>').appendTo(doc.body);
 			const win = doc.defaultView;
 			let commit = null;
-			if (h.classList.contains("col")) {
-				const [si, ri] = h.getAttribute("data-r").split(",").map(Number);
-				const i = +h.getAttribute("data-i"), end = h.getAttribute("data-end") === "1";
+			if (spec.col) {
+				const { si, ri, i, end } = spec;
+				const h = spec.grip || { classList: { add() {}, remove() {} } };
 				const rowEl = doc.querySelector(`table[data-r="${si},${ri}"]`);
 				const tds = [...rowEl.querySelectorAll(":scope > tbody > tr > td, :scope > tr > td")];
 				const cells = this.layout.sections[si].rows[ri].cells;
@@ -1030,16 +1139,17 @@
 				};
 				this.track(doc, move, () => { $tip.remove(); if (commit) this.change(commit); else h.classList.remove("on"); });
 			} else {
-				const key = h.getAttribute("data-key");
-				const [si, ri, ci, bi] = this.sel.path;
+				const { key, path } = spec;
+				const [si, ri, ci, bi] = path;
 				const block = this.layout.sections[si].rows[ri].cells[ci].blocks[bi];
 				const op = this.block_meta(block.type).options.find((o) => o.key === key);
-				const el = doc.querySelector(`[data-p="${this.sel.path.join(",")}"]`);
+				const el = doc.querySelector(`[data-p="${path.join(",")}"]`);
 				// a minimum height starts from the box's height now, so the first pixel of dragging already shows
 				const v0 = key === "min_height" ? Number(block.options[key]) || Math.round(el.getBoundingClientRect().height / MM) : Number(block.options[key]) || op.default;
 				const move = (e) => {
 					const px = key === "height" || key === "min_height" ? e.clientY - startY : e.clientX - startX;
 					const v = Math.max(op.min, Math.min(op.max, Math.round(v0 + px / MM)));
+					if (key === "min_height") el.style.minHeight = `${v}mm`; // seen at once; the preview redraws on release
 					$tip.text(`${v} mm`).css({ left: e.clientX + 12 + win.scrollX, top: e.clientY + 12 + win.scrollY });
 					commit = () => (block.options[key] = v);
 				};
@@ -1047,14 +1157,10 @@
 			}
 		}
 
+		// a resize follows the mouse like a move (see follow); `move` gets the position in the bill's own coordinates
 		track(doc, move, done) {
-			const up = () => {
-				doc.removeEventListener("mousemove", move);
-				doc.removeEventListener("mouseup", up);
-				done();
-			};
-			doc.addEventListener("mousemove", move);
-			doc.addEventListener("mouseup", up);
+			const cursor = doc.documentElement.classList.contains("bd-cur-ns") ? "ns-resize" : "col-resize";
+			this.follow((fx, fy) => move({ clientX: fx, clientY: fy }), done, cursor);
 		}
 
 		// ------------------------------------------------------------ save, import
