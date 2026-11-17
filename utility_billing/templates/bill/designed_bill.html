@@ -1,0 +1,342 @@
+{#- A bill in a designed Bill Template (increment 27). Rendered by bill_designer.render_bill from the bill's stored lines, its print
+    snapshot and the template's layout only, so a reprint matches the original (FS-RUN-09). Tables only: the PDF engine
+    (wkhtmltopdf) does not support flexbox or grid. Layout values are choices and plain text: text is escaped here, and
+    placeholders are filled by fill(), which escapes too. -#}
+{%- set c = accent -%}
+<style>
+	.ubd { font-family: {{ font }}; font-size: {{ base_size }}pt; color: #1d2329; position: relative; line-height: 1.3; }
+	.ubd table { border-collapse: collapse; width: 100%; }
+	.ubd td, .ubd th { padding: 0; vertical-align: top; }
+	.ubd .row > tbody > tr > td.cell, .ubd .row > tr > td.cell { padding-right: 2.5mm; }
+	.ubd .row td.cell.last { padding-right: 0; }
+	.ubd .blk { margin-bottom: 1.2mm; }
+	.ubd .last-row .blk:last-child { margin-bottom: 0; }
+	.ubd .nw { white-space: nowrap; }
+	.ubd .blk.mh > div { min-height: inherit; box-sizing: border-box; }
+	.ubd table.row { table-layout: fixed; }
+	.ubd .muted { color: #5b6670; }
+	.ubd .small { font-size: {{ base_size - 1.5 }}pt; }
+	.ubd .note { font-size: {{ base_size - 2 }}pt; color: #6b7680; }
+	.ubd .right { text-align: right; }
+	.ubd .center { text-align: center; }
+	.ubd .strong { font-weight: 700; }
+	.ubd .head-name { font-size: {{ base_size + 6 }}pt; font-weight: 700; color: {{ c }}; }
+	.ubd .head-title { font-size: {{ base_size + 2 }}pt; font-weight: 700; margin-top: .5mm; }
+	.ubd .head-lh { font-size: {{ base_size - 1 }}pt; color: #5b6670; }
+	.ubd .band td.title { font-size: {{ base_size + 2 }}pt; font-weight: 700; padding: 1.5mm 3mm; }
+	.ubd .band.filled { background: {{ c }}; color: #fff; }
+	.ubd .band.plain { border-top: 2px solid {{ c }}; border-bottom: 2px solid {{ c }}; color: {{ c }}; }
+	.ubd .tag { display: inline-block; border: 1.5px solid #b42318; color: #b42318; font-weight: 700; padding: .5mm 2mm; letter-spacing: 1px; }
+	.ubd .copybox { display: inline-block; font-weight: 700; font-size: {{ base_size + 2 }}pt; padding: .8mm 3mm; }
+	.ubd .copybox.boxed { border: 1.5px solid #1d2329; }
+	.ubd .box { border: 1px solid #c9d1d8; }
+	.ubd .box-h { background: #eef2f5; font-weight: 700; padding: 1mm 2mm; font-size: {{ base_size - 1 }}pt; text-transform: uppercase; letter-spacing: .4px; color: #3b4650; }
+	.ubd .kv td { padding: .55mm 1.6mm; border-bottom: 1px solid #edf0f2; }
+	.ubd .kv td.k { color: #5b6670; }
+	.ubd .ref { font-size: {{ base_size + 6 }}pt; font-weight: 700; letter-spacing: 1px; color: {{ c }}; }
+	.ubd .ref.normal { font-size: {{ base_size + 2 }}pt; }
+	.ubd .grid th { background: #eef2f5; font-size: {{ base_size - 1.5 }}pt; font-weight: 700; color: #3b4650; padding: 1mm 1.5mm; text-align: left; border-bottom: 1px solid #c9d1d8; }
+	.ubd .grid td { padding: .6mm 1.5mm; border-bottom: 1px solid #edf0f2; }
+	.ubd .grid th.right, .ubd .grid td.right { text-align: right; }
+	.ubd .grid tr.grp td { background: #f6f8fa; font-weight: 700; font-size: {{ base_size - 1 }}pt; color: #3b4650; }
+	.ubd .tot td { padding: 1.1mm 1.5mm; border-top: 1px solid #c9d1d8; }
+	.ubd .pay td { padding: 1.6mm 2mm; font-size: {{ base_size + 1.5 }}pt; font-weight: 700; }
+	.ubd .pay td.right { white-space: nowrap; width: 30mm; }
+	.ubd .pay .sub2 { display: block; font-weight: 400; font-size: {{ base_size - 1.5 }}pt; }
+	.ubd .pay .within { background: {{ c }}; color: #fff; }
+	.ubd .pay .after { background: #fdf0ef; color: #8f1d12; }
+	.ubd .pay .surcharge td { padding: 1mm 2mm; font-size: {{ base_size }}pt; font-weight: 400; }
+	.ubd .tlist td { padding: .6mm 1.6mm; border-bottom: 1px solid #edf0f2; }
+	.ubd .tlist tr.big td { font-weight: 700; background: #eef2f5; }
+	.ubd .notices li { margin-bottom: .6mm; }
+	.ubd .cut { border-top: 1.5px dashed #8a959e; margin: 4mm 0 2mm; text-align: center; font-size: {{ base_size - 1.5 }}pt; color: #6b7680; }
+	.ubd .cut span { background: #fff; position: relative; top: -2.2mm; padding: 0 2mm; }
+	.ubd .stamp { border: 1px dashed #8a959e; color: #8a959e; font-size: {{ base_size - 1.5 }}pt; text-align: center; padding-top: 1mm; }
+	.ubd .wm { position: absolute; top: 85mm; left: 0; width: 100%; text-align: center; font-size: 64pt; font-weight: 700;
+		color: rgba(180, 35, 24, .13); -webkit-transform: rotate(-24deg); transform: rotate(-24deg); z-index: 0; }
+	.ubd .l2 { font-family: "Noto Naskh Arabic", "DejaVu Sans", sans-serif; color: #5b6670; font-weight: 400; }
+	.ubd .band .l2, .ubd .pay .l2 { color: inherit; }
+	.ubd .rtl { text-align: right; word-wrap: break-word; font-family: "Noto Naskh Arabic", "DejaVu Sans", sans-serif; }
+	.ubd .barcode { display: block; height: 11mm; width: 52mm; max-width: 100%; margin-top: 1mm; }
+	.ubd .meter-photo { object-fit: cover; border: 1px solid #d9dee3; border-radius: 1.5mm; display: block; }
+	.ubd .pad { padding: 1.5mm 2mm; }
+</style>
+
+{%- macro rs(v) %}Rs {{ money(v) }}{% endmacro -%}
+
+{%- macro history_table(rows, o) %}
+<table class="grid box">
+	<tr><th>{{ t("Month") }}</th>
+		{%- if "units" in o.columns %}<th class="right">{{ t("Units") }}</th>{% endif %}
+		{%- if "billed" in o.columns %}<th class="right">{{ t("Bill") }}</th>{% endif %}
+		{%- if "current" in o.columns %}<th class="right">{{ t("Current bill") }}</th>{% endif %}
+		{%- if "paid_on" in o.columns %}<th>{{ t("Paid on") }}</th>{% endif %}
+		{%- if "paid" in o.columns %}<th class="right">{{ t("Paid") }}</th>{% endif %}</tr>
+	{%- for h in rows %}
+	<tr><td class="nw">{{ month_name(h.month, True) }}</td>
+		{%- if "units" in o.columns %}<td class="right">{{ qty(h.units) }}</td>{% endif %}
+		{%- if "billed" in o.columns %}<td class="right">{{ money(h.billed) }}</td>{% endif %}
+		{%- if "current" in o.columns %}<td class="right">{{ money(h.current) }}</td>{% endif %}
+		{%- if "paid_on" in o.columns %}<td class="nw">{{ date(h.paid_on) if h.paid_on else "—" }}</td>{% endif %}
+		{%- if "paid" in o.columns %}<td class="right">{{ money(h.paid) if h.paid is not none else "—" }}</td>{% endif %}</tr>
+	{%- endfor %}
+</table>
+{%- endmacro -%}
+
+{#- designer preview only: marks text the user can edit by double-clicking it (the option it comes from) #}
+{%- macro ed(key) %}{% if designer %} data-edit="{{ key }}"{% endif %}{% endmacro -%}
+
+{%- macro block(kind, o, s, path) %}
+{%- set T = t_en if s.english_only else t %}
+<div class="blk blk-{{ kind }}{{ ' mh' if o.min_height else '' }}"{% if o.min_height %} style="min-height: {{ o.min_height }}mm;"{% endif %}{% if designer %} data-p="{{ path }}" data-t="{{ kind }}"{% endif %}>
+{%- if kind == "header" %}
+	<table><tr>
+		{%- if o.logo == "Left" and logo %}<td style="width: 22mm;"><img src="{{ logo }}" style="width: 19mm; height: 19mm;"></td>{% endif %}
+		{%- if o.second_image and o.second_image_position == "Left" and image(o.second_image) %}<td style="width: 26mm;"><img src="{{ image(o.second_image) }}" style="max-width: 24mm; max-height: 19mm;"></td>{% endif %}
+		<td style="text-align: {{ o.align | lower }};">
+			{%- if o.show_name %}<div class="head-name">{{ soc.name | e }}</div>{% endif %}
+			{%- if o.show_letterhead %}
+			{%- if soc.letterhead %}{% for l in soc.letterhead.split("\n") if l.strip() and l.strip() != soc.name %}<div class="head-lh">{{ l | e }}</div>{% endfor %}
+			{%- elif soc.address %}<div class="head-lh">{{ soc.address | e }}</div>{% endif %}
+			{%- endif %}
+			{%- if o.show_tax_ids and (soc.ntn or soc.strn) %}<div class="head-lh">{% if soc.ntn %}NTN {{ soc.ntn | e }}{% endif %}{% if soc.strn %} &nbsp;·&nbsp; STRN {{ soc.strn | e }}{% endif %}</div>{% endif %}
+			{%- if o.title %}<div class="head-title"{{ ed("title") }}>{% if bill.final_bill %}{{ _("FINAL BILL") }} · {% endif %}{{ fill(o.title) }}</div>{% endif %}
+		</td>
+		{%- if o.second_image and o.second_image_position == "Right" and image(o.second_image) %}<td style="width: 26mm;" class="right"><img src="{{ image(o.second_image) }}" style="max-width: 24mm; max-height: 19mm;"></td>{% endif %}
+		{%- if o.logo == "Right" and logo %}<td style="width: 22mm;" class="right"><img src="{{ logo }}" style="width: 19mm; height: 19mm;"></td>{% endif %}
+		{%- if watermark or (o.show_copy_label and s.copy_label) %}
+		<td class="right" style="width: 42mm;">
+			{%- if o.show_copy_label and s.copy_label %}<div class="copybox boxed"{{ ed("@copy_label") }}>{{ s.copy_label | e }}</div>{% endif %}
+			{%- if watermark %}<div style="margin-top: 1mm;"><span class="tag">{{ watermark | e }}{% if duplicate %} {{ duplicate }}{% endif %}</span></div>{% endif %}
+		</td>
+		{%- endif %}
+	</tr></table>
+{%- elif kind == "title_band" %}
+	<table class="band {{ 'filled' if o.filled else 'plain' }}"><tr>
+		<td class="title"{{ ed("text") }}>{% if bill.final_bill %}{{ _("FINAL BILL") }} · {% endif %}{{ fill(o.text) }}{% if bill.period_note %}<div class="small" style="font-weight: 400;">{{ bill.period_note | e }}</div>{% endif %}</td>
+		{%- if o.show_bill_no %}<td class="title right">{{ T("Bill No") }} {{ bill.name | e }}{% if bill.revision_no and bill.revision_no > 1 %} &nbsp;({{ _("Revised, version") }} {{ bill.revision_no }}){% endif %}</td>{% endif %}
+	</tr></table>
+{%- elif kind == "copy_label" %}
+	{%- if s.copy_label %}<div style="text-align: {{ o.align | lower }};"><span class="copybox{{ ' boxed' if o.boxed else '' }}"{{ ed("@copy_label") }}>{{ s.copy_label | e }}</span></div>{% endif %}
+{%- elif kind == "details" %}
+	<div class="{{ 'box' if o.boxed else '' }}">
+		{%- if o.heading %}<div class="box-h"{{ ed("heading") }}>{{ T(o.heading) }}</div>{% endif %}
+		<table class="kv">
+			{%- for chunk in o.fields | batch(o.columns) %}{% set row_i = loop.index0 %}
+			<tr>
+				{%- for f in chunk %}
+				<td class="k"{{ ed("field:" ~ (row_i * o.columns + loop.index0)) }}>{{ (f.label | e) if f.label else T(field_label(f.key)) }}</td>
+				{%- set v = field(f.key) %}
+				<td class="{{ 'strong' if o.bold_values or amount_field(f.key) else '' }}{{ ' nw' if v | length <= 12 else '' }}">{% if amount_field(f.key) %}Rs {% endif %}{{ v | e }}</td>
+				{%- endfor %}
+				{%- for i in range(o.columns - (chunk | length)) %}<td></td><td></td>{% endfor %}
+			</tr>
+			{%- endfor %}
+		</table>
+	</div>
+{%- elif kind == "reference" %}
+	<div class="{{ 'box pad' if o.boxed else '' }}">
+		<div class="small muted">{{ T("Reference No") }}</div>
+		<div class="ref{{ '' if o.large else ' normal' }}">{{ (con.reference_no or "") | e }}</div>
+		{%- if o.barcode and barcode %}<img class="barcode" src="{{ barcode }}" alt="{{ (con.reference_no or '') | e }}">{% endif %}
+		{%- if o.dates %}
+		<table class="kv" style="margin-top: 1mm;">
+			<tr><td class="k">{{ T("Bill month") }}</td><td>{{ month | e }}</td></tr>
+			<tr><td class="k">{{ T("Issue date") }}</td><td class="nw">{{ issue_date }}</td></tr>
+			<tr><td class="k">{{ T("Due date") }}</td><td class="strong nw">{{ due_date }}</td></tr>
+		</table>
+		{%- endif %}
+	</div>
+{%- elif kind == "qr" %}
+	{%- if qr %}<div style="text-align: {{ o.align | lower }};"><img src="{{ qr }}" style="width: {{ o.size }}mm; height: {{ o.size }}mm;">
+		{%- if o.caption %}<div class="note"{{ ed("caption") }}>{{ fill(o.caption) }}</div>{% endif %}</div>{% endif %}
+{%- elif kind == "reading" %}
+	{%- if reading %}
+	{%- if o.style == "List" %}
+	<table class="kv box">
+		{%- if "previous" in o.columns %}<tr><td class="k">{{ T("Previous reading") }}</td><td class="right">{{ qty(reading.previous_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.previous_reading_date) }}</span>{% endif %}</td></tr>{% endif %}
+		{%- if "present" in o.columns %}<tr><td class="k">{{ T("Present reading") }}</td><td class="right">{{ qty(reading.present_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.reading_date) }}</span>{% endif %}</td></tr>{% endif %}
+		{%- if "multiplier" in o.columns %}<tr><td class="k">{{ T("Multiplier") }}</td><td class="right">{{ qty(reading.multiplier or 1) }}</td></tr>{% endif %}
+		{%- if "units" in o.columns %}<tr><td class="k">{{ T("Units") }}</td><td class="right strong">{{ qty(bill.units) }}</td></tr>{% endif %}
+		{%- if "type" in o.columns %}<tr><td class="k">{{ T("Reading") }}</td><td class="right">{{ (bill.consumption_type or reading.consumption_type or "") | e }}</td></tr>{% endif %}
+	</table>
+	{%- else %}
+	<table class="grid box">
+		<tr>
+			{%- if "previous" in o.columns %}<th>{{ T("Previous reading") }}</th>{% endif %}
+			{%- if "present" in o.columns %}<th>{{ T("Present reading") }}</th>{% endif %}
+			{%- if "multiplier" in o.columns %}<th class="right">{{ T("Multiplier") }}</th>{% endif %}
+			{%- if "units" in o.columns %}<th class="right">{{ T("Units") }}</th>{% endif %}
+			{%- if "type" in o.columns %}<th>{{ T("Reading") }}</th>{% endif %}
+		</tr>
+		<tr>
+			{%- if "previous" in o.columns %}<td>{{ qty(reading.previous_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.previous_reading_date) }}</span>{% endif %}</td>{% endif %}
+			{%- if "present" in o.columns %}<td>{{ qty(reading.present_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.reading_date) }}</span>{% endif %}</td>{% endif %}
+			{%- if "multiplier" in o.columns %}<td class="right">{{ qty(reading.multiplier or 1) }}</td>{% endif %}
+			{%- if "units" in o.columns %}<td class="right strong">{{ qty(bill.units) }}</td>{% endif %}
+			{%- if "type" in o.columns %}<td>{{ (bill.consumption_type or reading.consumption_type or "") | e }}</td>{% endif %}
+		</tr>
+	</table>
+	{%- endif %}
+	{%- endif %}
+{%- elif kind == "meter_photo" %}
+	{%- if meter_photo %}<img class="meter-photo" src="{{ meter_photo }}" style="width: {{ o.width }}mm; height: {{ (o.width * 2 / 3) | round(1) }}mm;" alt="">
+		{%- if o.caption %}<div class="note">{{ T("Meter photo") }}</div>{% endif %}{% endif %}
+{%- elif kind == "charges" %}
+	{%- set measured = o.style == "Table" %}
+	<table class="{{ 'grid box' if o.style == 'Table' else 'tlist box' }}">
+		{%- if o.style == "Table" %}
+		<tr><th{{ ed("heading") }}>{{ T(o.heading) if o.heading else "" }}</th>{% if o.units %}<th class="right">{{ T("Units") }}</th>{% endif %}{% if o.rate %}<th class="right">{{ T("Rate") }}</th>{% endif %}<th class="right">{{ T("Amount (Rs)") }}</th></tr>
+		{%- elif o.heading %}
+		<tr class="big"><td{{ ed("heading") }} colspan="{{ 1 + (1 if o.units else 0) + (1 if o.rate else 0) + 1 }}">{{ T(o.heading) }}</td></tr>
+		{%- endif %}
+		{%- set ns = namespace(group=None) %}
+		{%- for l in lines %}
+		{%- if o.group and l.group and l.group != ns.group %}{% set ns.group = l.group %}
+		<tr class="grp"><td colspan="{{ 2 + (1 if o.units else 0) + (1 if o.rate else 0) }}">{{ l.group | e }}</td></tr>
+		{%- endif %}
+		<tr>
+			<td>{{ l.label | e }}{% if l.note %}<div class="note">{{ l.note | e }}</div>{% endif %}</td>
+			{%- if o.units %}<td class="right">{{ l.quantity }}</td>{% endif %}
+			{%- if o.rate %}<td class="right">{{ l.rate }}</td>{% endif %}
+			<td class="right">{{ l.amount }}</td>
+		</tr>
+		{%- endfor %}
+		{%- if o.subtotal %}
+		<tr class="tot {{ 'big' if o.style != 'Table' else '' }}"><td colspan="{{ 1 + (1 if o.units else 0) + (1 if o.rate else 0) }}" class="strong">{{ T("Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>
+		{%- endif %}
+	</table>
+{%- elif kind == "totals" %}
+	{%- if o.style == "List" %}
+	<table class="tlist box">
+		{%- if "current" in o.rows %}<tr><td>{{ T("Current bill") }}</td><td class="right">{{ money(bill.current_amount) }}</td></tr>{% endif %}
+		{%- if "arrears" in o.rows %}
+		{%- if bill.installment_due %}
+		<tr><td>{{ _("Arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
+		<tr><td>{{ _("Installment due with this bill") }} ({{ _("No") }} {{ bill.installment_no }})</td><td class="right">{{ money(bill.installment_due) }}</td></tr>
+		{%- else %}<tr><td>{{ T("Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>{% endif %}
+		{%- endif %}
+		{%- if "within" in o.rows %}<tr class="big"><td>{{ T("Payable within due date") }}{% if o.show_due_date %} <span class="note">({{ due_date }})</span>{% endif %}</td><td class="right">{{ money(bill.payable_within_due) }}</td></tr>{% endif %}
+		{%- if "surcharge" in o.rows %}<tr><td>{{ T("Late payment surcharge") }}</td><td class="right">{{ money(bill.surcharge_amount) }}</td></tr>{% endif %}
+		{%- if "after" in o.rows %}<tr class="big"><td>{{ T("Payable after due date") }}</td><td class="right">{{ money(bill.payable_after_due) }}</td></tr>{% endif %}
+	</table>
+	{%- else %}
+	{%- if "current" in o.rows or "arrears" in o.rows %}
+	<table class="grid box" style="margin-bottom: 1.5mm;">
+		{%- if "current" in o.rows %}<tr><td class="strong">{{ T("Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>{% endif %}
+		{%- if "arrears" in o.rows %}
+		{%- if bill.installment_due %}
+		<tr><td>{{ _("Arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
+		<tr><td>{{ _("Installment due with this bill") }} ({{ _("No") }} {{ bill.installment_no }})</td><td class="right">{{ money(bill.installment_due) }}</td></tr>
+		{%- else %}<tr><td>{{ T("Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>{% endif %}
+		{%- endif %}
+	</table>
+	{%- endif %}
+	<table class="pay">
+		{%- if "within" in o.rows %}<tr class="within"><td>{{ T("Payable within due date") }}{% if o.show_due_date %} <span style="font-weight: 400; font-size: {{ base_size - 1 }}pt;">({{ due_date }})</span>{% endif %}</td><td class="right">{{ rs(bill.payable_within_due) }}</td></tr>{% endif %}
+		{%- if "surcharge" in o.rows %}<tr class="surcharge"><td>{{ T("Late payment surcharge") }}<span class="sub2">{{ _("added if paid after the due date") }}</span></td><td class="right">{{ rs(bill.surcharge_amount) }}</td></tr>{% endif %}
+		{%- if "after" in o.rows %}<tr class="after"><td>{{ T("Payable after due date") }}</td><td class="right">{{ rs(bill.payable_after_due) }}</td></tr>{% endif %}
+	</table>
+	{%- endif %}
+{%- elif kind == "history" %}
+	{%- set rows = history[:o.months] %}
+	{%- if o.heading %}<div class="box-h"{{ ed("heading") }}>{{ T(o.heading) }}</div>{% endif %}
+	{%- if not rows %}<div class="box muted center" style="padding: 3mm;">{{ _("No earlier bills") }}</div>
+	{%- elif o.split and rows | length > 1 %}
+	{%- set half = ((rows | length) + 1) // 2 %}
+	<table><tr><td style="width: 50%; padding-right: 1.5mm;">{{ history_table(rows[:half], o) }}</td><td style="width: 50%; padding-left: 1.5mm;">{{ history_table(rows[half:], o) }}</td></tr></table>
+	{%- else %}{{ history_table(rows, o) }}{% endif %}
+{%- elif kind == "notices" %}
+	{%- set en = soc.notices if o.languages in ("Both", "English") else [] %}
+	{%- set l2 = notices_second if o.languages in ("Both", "Second language") else [] %}
+	{%- if en or l2 %}
+	<div class="{{ 'box' if o.boxed else '' }}">
+		{%- if o.heading %}<div class="box-h"{{ ed("heading") }}>{{ T(o.heading) }}</div>{% endif %}
+		{%- if en %}<ul class="notices small" style="margin: 1.5mm 0; padding-left: 5mm;">{% for n in en %}<li>{{ n | e }}</li>{% endfor %}</ul>{% endif %}
+		{%- if l2 %}<ul class="notices small rtl" lang="{{ lang2 }}" style="margin: 1.5mm 0; padding-right: 5mm; padding-left: 0; list-style: none;">{% for n in l2 %}<li>{{ rtl(n) }}</li>{% endfor %}</ul>{% endif %}
+	</div>
+	{%- endif %}
+{%- elif kind == "payment" %}
+	<div class="{{ 'box' if o.boxed else '' }}">
+		{%- if o.heading %}<div class="box-h"{{ ed("heading") }}>{{ T(o.heading) }}</div>{% endif %}
+		<div class="small pad">
+			{%- if o.instructions and soc.payment_instructions %}<div>{% for l in soc.payment_instructions.split("\n") %}{{ l | e }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div>{% endif %}
+			{%- if o.instructions and payment_instructions_second %}<table style="margin-top: 1mm; table-layout: fixed;"><tr><td class="rtl" dir="rtl" lang="{{ lang2 }}">{% for l in payment_instructions_second.split("\n") %}{{ rtl(l) }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr></table>{% endif %}
+			{%- if o.banks == "List" %}
+			{%- for b in soc.banks %}
+			<div style="margin-top: 1mm;"><span class="strong">{{ b.bank | e }}</span> {{ (b.title or "") | e }} · {{ _("A/c") }} {{ (b.account or "") | e }}
+				{%- if b.iban %}<br><span class="muted">IBAN</span> {{ b.iban | e }}{% endif %}
+				{%- if b.channel %}<br><span class="muted">{{ b.channel | e }}{% if b.biller_code %} {{ _("biller code") }}{% endif %}</span> {{ (b.biller_code or "") | e }} · {{ _("consumer ref") }} {{ (con.reference_no or "") | e }}{% endif %}
+			</div>
+			{%- endfor %}
+			{%- elif o.banks == "Table" and soc.banks %}
+			<table class="grid" style="margin-top: 1mm;">
+				<tr><th>{{ T("Bank") }}</th><th>{{ T("Account title") }}</th><th>{{ T("Account No") }}</th><th>IBAN</th></tr>
+				{%- for b in soc.banks %}<tr><td class="strong">{{ b.bank | e }}</td><td>{{ (b.title or "") | e }}</td><td>{{ (b.account or "") | e }}</td><td>{{ (b.iban or "") | e }}</td></tr>{% endfor %}
+			</table>
+			{%- endif %}
+		</div>
+	</div>
+{%- elif kind == "text" %}
+	{%- if o.text %}
+	{%- if o.rtl %}
+	<table class="{{ 'box' if o.boxed else '' }}" style="table-layout: fixed;"><tr><td class="rtl {{ 'pad' if o.boxed else '' }}"{{ ed("text") }} dir="rtl" style="font-size: {{ o.size }}pt;{% if o.bold %} font-weight: 700;{% endif %}">
+		{%- for l in fill_plain(o.text).split("\n") %}{{ rtl(l) }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr></table>
+	{%- else %}
+	<div class="{{ 'box pad' if o.boxed else '' }}" style="font-size: {{ o.size }}pt; text-align: {{ o.align | lower }};{% if o.bold %} font-weight: 700;{% endif %}"{{ ed("text") }}>{{ fill(o.text) }}</div>
+	{%- endif %}
+	{%- elif designer %}<div class="note"{{ ed("text") }}>{{ _("Double-click to type your text") }}</div>
+	{%- endif %}
+{%- elif kind == "image" %}
+	{%- if o.image and image(o.image) %}<div style="text-align: {{ o.align | lower }};"><img src="{{ image(o.image) }}" style="width: {{ o.width }}mm;"></div>{% endif %}
+{%- elif kind == "signatory" %}
+	{%- if signatory %}<div class="small" style="text-align: {{ o.align | lower }};">
+		{%- if signature %}<img src="{{ signature }}" style="height: 10mm; display: inline-block;"><br>{% endif %}
+		<span class="strong">{{ signatory.name | e }}</span><br><span class="muted">{{ signatory.designation | e }}</span></div>{% endif %}
+{%- elif kind == "stamp" %}
+	<div class="stamp" style="height: {{ o.height }}mm;"{{ ed("label") }}>{{ T(o.label) if o.label else "" }}</div>
+{%- elif kind == "footer" %}
+	<div class="small muted" style="text-align: {{ o.align | lower }};">
+		{%- if o.footer and soc.footer %}<div>{{ soc.footer | e }}</div>{% endif %}
+		{%- set contact = [soc.phone, soc.email, soc.website, soc.office_hours] | select | list %}
+		{%- if o.contacts and contact %}<div>{% for x in contact %}{{ x | e }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+	</div>
+{%- elif kind == "spacer" %}
+	<div style="height: {{ o.height }}mm;"></div>
+{%- endif %}
+</div>
+{%- endmacro %}
+
+{#- in the designer's preview only: every section, row, column and block is tagged with its place in the layout, and empty
+    places show a drop target. Printed bills carry none of this. #}
+{%- if designer %}
+<style>
+	.ubd .sec { position: relative; }
+	.ubd [data-p] { cursor: move; }
+	.ubd [data-p]:hover { outline: 1px dashed #1f5f8b; outline-offset: 1px; }
+	.ubd .dz-empty { border: 1.5px dashed #9fb3c8; color: #6b7f94; font: 11px sans-serif; text-align: center; padding: 3mm 1mm; border-radius: 2mm; background: #f5f8fb; }
+	.ubd .dz-free { border-left: 1.5px dashed #c9d4df; }
+</style>
+{%- endif %}
+<div class="ubd">
+{%- if watermark %}<div class="wm">{{ watermark | e }}</div>{% endif %}
+{%- for s in layout.sections %}{% set si = loop.index0 %}
+<div class="sec"{% if designer %} data-s="{{ si }}"{% endif %}>
+	{%- if s.new_page and not loop.first %}<div style="page-break-before: always;"></div>{% endif %}
+	{%- if s.cut_line_before %}<div class="cut"><span>✂ &nbsp;{{ (s.cut_text or _("cut here")) | e }}</span></div>{% endif %}
+	{%- if designer and not s.rows %}<div class="dz-empty" data-z="{{ si }}">{{ _("Empty section: drag a block here") }}</div>{% endif %}
+	{%- for r in s.rows %}{% set ri = loop.index0 %}
+	<table class="row{{ ' last-row' if loop.last and s is sameas layout.sections[-1] else '' }}"{% if designer %} data-r="{{ si }},{{ ri }}"{% endif %}><tr>
+		{%- set used = r.cells | sum(attribute="width") %}
+		{%- for cell in r.cells %}{% set ci = loop.index0 %}
+		<td class="cell{{ ' last' if loop.last and used >= 100 else '' }}" style="width: {{ cell.width }}%;"{% if designer %} data-c="{{ si }},{{ ri }},{{ ci }}"{% endif %}>
+			{%- for b in cell.blocks %}{{ block(b.type, b.options, s, si ~ "," ~ ri ~ "," ~ ci ~ "," ~ loop.index0) }}{% endfor %}
+			{%- if designer and not cell.blocks %}<div class="dz-empty">{{ _("Drag a block here") }}</div>{% endif %}
+		</td>
+		{%- endfor %}
+		{%- if used < 100 %}<td style="width: {{ 100 - used }}%;"{% if designer %} class="dz-free"{% endif %}></td>{% endif %}
+	</tr></table>
+	{%- endfor %}
+</div>
+{%- endfor %}
+</div>

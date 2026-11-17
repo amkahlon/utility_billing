@@ -37,7 +37,10 @@ frappe.pages["ub-ask"].on_page_load = function (wrapper) {
 				.catch(() => out.html(""));
 		};
 		$root.on("click", ".ub-go", ask);
-		$root.on("keydown", ".ub-q", (ev) => ev.key === "Enter" && ask());
+		// a block body: an arrow returning false (any key but Enter) makes jQuery cancel the key, so nothing could be typed
+		$root.on("keydown", ".ub-q", (ev) => {
+			if (ev.key === "Enter") ask();
+		});
 		$root.on("click", ".ub-explain", () => {
 			const out = $root.find(".ub-exp").html(`<div class="ub-kpi-note">${__("Working it out…")}</div>`);
 			frappe.xcall("utility_billing.utility_billing.ai.explain_account", { society, connection: $root.find(".ub-acc").val().trim() })

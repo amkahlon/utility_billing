@@ -1,0 +1,271 @@
+{
+ "sections": [
+  {
+   "label": "Consumer copy",
+   "copy_label": "Consumer copy",
+   "cut_line_before": 0,
+   "cut_text": "",
+   "new_page": 0,
+   "english_only": 0,
+   "rows": [
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "header",
+         "options": {
+          "logo": "Left",
+          "title": "",
+          "show_copy_label": 1
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "title_band",
+         "options": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 52,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "heading": "Consumer",
+          "fields": [
+           {
+            "key": "consumer_name"
+           },
+           {
+            "key": "property"
+           },
+           {
+            "key": "category"
+           },
+           {
+            "key": "sanctioned_load"
+           },
+           {
+            "key": "meter_no"
+           },
+           {
+            "key": "mobile"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 32,
+       "blocks": [
+        {
+         "type": "reference",
+         "options": {
+          "dates": 1
+         }
+        }
+       ]
+      },
+      {
+       "width": 16,
+       "blocks": [
+        {
+         "type": "qr",
+         "options": {
+          "size": 22
+         }
+        },
+        {
+         "type": "meter_photo",
+         "options": {
+          "width": 26,
+          "caption": 1
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "reading",
+         "options": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 58,
+       "blocks": [
+        {
+         "type": "charges",
+         "options": {}
+        },
+        {
+         "type": "totals",
+         "options": {
+          "style": "List",
+          "rows": [
+           "arrears",
+           "within",
+           "surcharge",
+           "after"
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 42,
+       "blocks": [
+        {
+         "type": "history",
+         "options": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 58,
+       "blocks": [
+        {
+         "type": "notices",
+         "options": {}
+        },
+        {
+         "type": "footer",
+         "options": {
+          "align": "Left",
+          "footer": 0
+         }
+        }
+       ]
+      },
+      {
+       "width": 42,
+       "blocks": [
+        {
+         "type": "payment",
+         "options": {}
+        },
+        {
+         "type": "signatory",
+         "options": {}
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Office copy",
+   "copy_label": "Office copy",
+   "cut_line_before": 1,
+   "cut_text": "cut here — office / bank copy",
+   "new_page": 0,
+   "english_only": 1,
+   "rows": [
+    {
+     "cells": [
+      {
+       "width": 64,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "heading": "",
+          "columns": 3,
+          "boxed": 0,
+          "fields": [
+           {
+            "key": "reference_no"
+           },
+           {
+            "key": "consumer_name"
+           },
+           {
+            "key": "property"
+           },
+           {
+            "key": "billing_month"
+           },
+           {
+            "key": "due_date"
+           },
+           {
+            "key": "bill_no"
+           },
+           {
+            "key": "payable_within_due"
+           },
+           {
+            "key": "payable_after_due"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 20,
+       "blocks": [
+        {
+         "type": "reference",
+         "options": {
+          "large": 0,
+          "dates": 0,
+          "boxed": 0
+         }
+        }
+       ]
+      },
+      {
+       "width": 16,
+       "blocks": [
+        {
+         "type": "stamp",
+         "options": {
+          "height": 14
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "page": {
+  "paper_size": "A4",
+  "margin_top": 5,
+  "margin_side": 8,
+  "font_size": 7.5
+ }
+}

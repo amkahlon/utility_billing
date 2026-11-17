@@ -73,7 +73,8 @@ def build_snapshot(bill) -> dict:
 	prop = (props.get(conn.property) if props is not None else None) or frappe.db.get_value("Property", conn.property, prop_fields,
 	                                                                                        as_dict=True) or {}
 	# the bill's own consumer: on a final bill the outgoing holder, not the account's holder now (increment 22)
-	consumer = frappe.db.get_value("Consumer", g("consumer") or conn.consumer, ["consumer_name", "mobile_no", "address"], as_dict=True) or {}
+	consumer = frappe.db.get_value("Consumer", g("consumer") or conn.consumer, ["consumer_name", "mobile_no", "address", "id_number", "tax_no"],
+	                               as_dict=True) or {}
 	reading_fields = ["meter", "previous_reading", "previous_reading_date", "present_reading", "reading_date", "multiplier",
 	                  "consumption_type", "status", "photo"]
 	cycle = runcache.tariff(("cycle", g("bill_run")), lambda: frappe.db.get_value("Bill Run", g("bill_run"), "reading_cycle")) \
@@ -85,37 +86,12 @@ def build_snapshot(bill) -> dict:
 		reading = (run_readings or {}).get(g("meter_reading")) or frappe.db.get_value("Meter Reading", g("meter_reading"), reading_fields,
 		                                                                              as_dict=True)
 	category = frappe.get_cached_value("Consumer Category", g("consumer_category"), "category_name") if g("consumer_category") else ""
-	from utility_billing.utility_billing import branding  # noqa: PLC0415
-
-	brand = branding.effective(society, g("issue_date"))  # the branding in force on the issue date (FS-CLT-09)
 	return {
 		"version": SNAPSHOT_VERSION,
 		"captured_on": str(now_datetime()),
-		"society": {
-			"name": society.society_name, "short_name": society.short_name, "address": society.address,
-			"phone": society.phone, "email": society.email, "website": society.website,
-			"office_hours": society.office_hours, "ntn": society.ntn, "strn": society.strn_vat,
-			"logo": brand["logo"], "colour": brand["colour"],
-			"letterhead": brand["letterhead"], "footer": brand["footer"],
-			"signatory": branding.signatory(society, "Bill", g("issue_date")),  # FS-CLT-07
-			"notices": [n.strip() for n in (society.bill_notices or "").splitlines() if n.strip()],
-			"payment_instructions": society.payment_instructions,
-			"banks": [{"bank": b.bank_name, "title": b.account_title, "account": b.account_number, "iban": b.iban,
-			           "channel": b.biller_channel, "biller_code": b.biller_code}
-			          for b in society.bank_accounts if b.print_on_bill],
-			"office_copy": bool(cint(society.print_office_copy)),
-			"show_qr": bool(cint(society.show_qr_code)),
-			# increment 21 (gap 12, FS-LOC): barcode and QR each on or off, what the QR holds, a second language
-			"show_barcode": bool(cint(society.get("show_barcode"))),
-			"show_meter_photo": bool(cint(society.get("show_meter_photo"))),  # user's request 2026-11-16
-			"qr_content": society.get("qr_content") or "Reference number",
-			"qr_link_template": society.get("qr_link_template"),
-			"second_language": society.get("second_language") or None,
-			"notices_second": [n.strip() for n in (society.get("bill_notices_second") or "").splitlines() if n.strip()],
-			"payment_instructions_second": society.get("payment_instructions_second"),
-		},
+		"society": society_snapshot(society, g("issue_date")),
 		"consumer": {"name": consumer.get("consumer_name") or g("consumer_name"), "mobile": consumer.get("mobile_no"),
-		             "address": consumer.get("address")},
+		             "address": consumer.get("address"), "id_number": consumer.get("id_number"), "tax_no": consumer.get("tax_no")},
 		"connection": {
 			"reference_no": conn.reference_no, "property_no": prop.get("property_no"), "block": prop.get("block"),
 			"sector": prop.get("sector"), "area": flt(prop.get("area")), "area_unit": prop.get("area_unit"),
@@ -125,6 +101,47 @@ def build_snapshot(bill) -> dict:
 		"reading": dict(reading, previous_reading_date=str(reading.previous_reading_date or ""),
 		                reading_date=str(reading.reading_date or "")) if reading else None,
 		"history": bill_history(g("connection"), g("billing_month"), history_months(society), g("issue_date")),
+		# the society's approved Bill Template in force on the issue date (increment 27); none: the fixed layout
+		"template": template_for(g),
+	}
+
+
+def template_for(g):
+	"""The approved Bill Template a bill prints with (increment 27), looked up once per society, utility, category and date in a run."""
+	from utility_billing.utility_billing import bill_designer, runcache  # noqa: PLC0415
+
+	key = (g("society"), g("utility"), g("consumer_category"), str(g("issue_date")))
+	find = lambda: bill_designer.choose_template(*key)  # noqa: E731
+	return runcache.tariff(("bill template", *key), find) if runcache.active() else find()
+
+
+def society_snapshot(society, on=None) -> dict:
+	"""The society part of a print snapshot: branding in force on the issue date (FS-CLT-09), notices, banks and print switches."""
+	from utility_billing.utility_billing import branding  # noqa: PLC0415
+
+	brand = branding.effective(society, on)
+	return {
+		"name": society.society_name, "short_name": society.short_name, "address": society.address,
+		"phone": society.phone, "email": society.email, "website": society.website,
+		"office_hours": society.office_hours, "ntn": society.ntn, "strn": society.strn_vat,
+		"logo": brand["logo"], "colour": brand["colour"],
+		"letterhead": brand["letterhead"], "footer": brand["footer"],
+		"signatory": branding.signatory(society, "Bill", on),  # FS-CLT-07
+		"notices": [n.strip() for n in (society.bill_notices or "").splitlines() if n.strip()],
+		"payment_instructions": society.payment_instructions,
+		"banks": [{"bank": b.bank_name, "title": b.account_title, "account": b.account_number, "iban": b.iban,
+		           "channel": b.biller_channel, "biller_code": b.biller_code}
+		          for b in society.bank_accounts if b.print_on_bill],
+		"office_copy": bool(cint(society.print_office_copy)),
+		"show_qr": bool(cint(society.show_qr_code)),
+		# increment 21 (gap 12, FS-LOC): barcode and QR each on or off, what the QR holds, a second language
+		"show_barcode": bool(cint(society.get("show_barcode"))),
+		"show_meter_photo": bool(cint(society.get("show_meter_photo"))),  # user's request 2026-11-16
+		"qr_content": society.get("qr_content") or "Reference number",
+		"qr_link_template": society.get("qr_link_template"),
+		"second_language": society.get("second_language") or None,
+		"notices_second": [n.strip() for n in (society.get("bill_notices_second") or "").splitlines() if n.strip()],
+		"payment_instructions_second": society.get("payment_instructions_second"),
 	}
 
 
@@ -286,7 +303,8 @@ def bill_context(bill, duplicate=0) -> dict:
 		"bill": bill, "snap": snap, "soc": soc, "con": snap["connection"], "consumer": snap["consumer"],
 		"reading": snap.get("reading"), "history": snap.get("history") or [],
 		"lines": [{"label": l.label, "quantity": qty(l.quantity) if l.basis in MEASURED else "",
-		           "rate": rate(l.rate) if l.basis in MEASURED else "", "amount": money(l.amount), "note": l.note}
+		           "rate": rate(l.rate) if l.basis in MEASURED else "", "amount": money(l.amount), "note": l.note,
+		           "group": l.get("charge_group") or ""}
 		          for l in lines],
 		"title": _(TITLES.get(bill.utility, f"{bill.utility} Bill" if bill.utility else "Utility Bill")),
 		"month": month_name(bill.billing_month), "issue_date": date(bill.issue_date), "due_date": date(bill.due_date),
@@ -304,9 +322,25 @@ def bill_context(bill, duplicate=0) -> dict:
 
 
 def bill_html(name, duplicate=0) -> str:
-	"""HTML of one bill (consumer copy, and the office copy if the society prints one)."""
+	"""HTML of one bill: in the Bill Template its snapshot names (increment 27), otherwise the fixed layout (consumer copy, and the
+	office copy if the society prints one)."""
 	bill = frappe.get_doc("Utility Bill", name)
+	settings = template_of(bill)
+	if settings:
+		from utility_billing.utility_billing import bill_designer  # noqa: PLC0415
+
+		return bill_designer.render_bill(bill, settings, duplicate)
 	return frappe.render_template("utility_billing/templates/bill/utility_bill.html", bill_context(bill, duplicate))
+
+
+def template_of(bill):
+	"""The page settings and layout of the template a bill was issued with, or None for the fixed layout."""
+	name = snapshot_of(bill).get("template")
+	if not name or not frappe.db.exists("Bill Template", name):
+		return None
+	from utility_billing.utility_billing import bill_designer  # noqa: PLC0415
+
+	return bill_designer.template_settings(name)
 
 
 def utility_bill_html(name):
@@ -314,17 +348,31 @@ def utility_bill_html(name):
 	return bill_html(name)
 
 
-def document_html(names, duplicate=0) -> str:
-	pages = "".join(f'<div class="ub-page">{bill_html(n, duplicate)}</div>' for n in names)
+def wrap_pages(bodies) -> str:
+	pages = "".join(f'<div class="ub-page">{b}</div>' for b in bodies)
 	return ('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bills</title>'
 	        "<style>.ub-page{page-break-after:always}.ub-page:last-child{page-break-after:auto}</style>"
 	        f"</head><body>{pages}</body></html>")
 
 
+def document_html(names, duplicate=0) -> str:
+	return wrap_pages(bill_html(n, duplicate) for n in names)
+
+
+def pdf_options_for(names) -> dict:
+	"""Paper size and margins of the first bill's template (a run's bills share one; one PDF has one paper size)."""
+	settings = template_of(frappe.get_doc("Utility Bill", names[0])) if names else None
+	if settings:
+		from utility_billing.utility_billing import bill_designer  # noqa: PLC0415
+
+		return bill_designer.pdf_options(settings)
+	return dict(PDF_OPTIONS)
+
+
 def pdf_of(names, duplicate=0) -> bytes:
 	from frappe.utils.pdf import get_pdf
 
-	return get_pdf(document_html(names, duplicate), options=dict(PDF_OPTIONS))
+	return get_pdf(document_html(names, duplicate), options=pdf_options_for(names))
 
 
 def send_pdf(content: bytes, filename: str):

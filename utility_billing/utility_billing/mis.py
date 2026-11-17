@@ -1487,12 +1487,13 @@ def consumer_census(f):
 PENDING = (("Tariff", "tariff_title", "General Manager"), ("Tariff Adjustment", "adjustment_title", "General Manager"),
            ("Bill Run", "run_title", "Billing Manager"), ("Account Adjustment", "adjustment_title", "General Manager"), ("Refund", "refund_title", "General Manager"),
            ("Bill Revision", "revision_title", "Billing Manager"), ("Bulk Adjustment", "adjustment_title", "General Manager"),
-           ("Installment Plan", "plan_title", "Billing Manager"), ("Write Off", "writeoff_title", "General Manager"))
+           ("Installment Plan", "plan_title", "Billing Manager"), ("Write Off", "writeoff_title", "General Manager"),
+           ("Bill Template", "template_name", "Billing Manager"))
 
 
 @report("pending_approvals", "Pending Approvals", APPROVERS,
         [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
-         dict(fieldname="transaction", label="Transaction", fieldtype="Select", options="\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund\nBill Revision\nBulk Adjustment\nInstallment Plan\nWrite Off"),
+         dict(fieldname="transaction", label="Transaction", fieldtype="Select", options="\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund\nBill Revision\nBulk Adjustment\nInstallment Plan\nWrite Off\nBill Template"),
          dict(fieldname="older_than", label="Waiting More Than (days)", fieldtype="Int", default="0")],
         "Everything waiting for approval, by type and how long it has waited.", ref_doctype="Tariff")
 def pending_approvals(f):
@@ -1684,7 +1685,7 @@ def disco_reconciliation(f):
 
 
 # ================================================================ 21. audit log (RPT-42)
-AUDITED = ("Society", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Refund", "Bill Revision", "Bulk Adjustment", "Installment Plan", "Write Off", "Due Date Extension", "Bill Dispute", "Settlement File", "Suspense Payment", "Notification Template", "Messaging Provider", "Fee Type", "Charge Type", "Consumer Category",
+AUDITED = ("Society", "Bill Template", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Refund", "Bill Revision", "Bulk Adjustment", "Installment Plan", "Write Off", "Due Date Extension", "Bill Dispute", "Settlement File", "Suspense Payment", "Notification Template", "Messaging Provider", "Fee Type", "Charge Type", "Consumer Category",
            "Cash Counter", "Reason Code", "Ledger Account", "Journal Export Layout", "Consumer", "Property", "Connection", "Meter",
            "Reading Cycle", "Meter Reading", "Cashier Day", "KPI Definition")
 
