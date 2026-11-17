@@ -1,0 +1,256 @@
+{
+ "sections": [
+  {
+   "label": "Consumer copy",
+   "copy_label": "Consumer Copy",
+   "cut_line_before": 0,
+   "cut_text": "",
+   "new_page": 0,
+   "rows": [
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "header",
+         "options": {
+          "logo": "Left",
+          "align": "Center",
+          "title": "Service Invoice",
+          "show_copy_label": 1
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 30,
+       "blocks": [
+        {
+         "type": "text",
+         "options": {
+          "text": "{property_no}",
+          "size": 14,
+          "bold": 1,
+          "boxed": 1
+         }
+        }
+       ]
+      },
+      {
+       "width": 70,
+       "blocks": [
+        {
+         "type": "text",
+         "options": {
+          "text": "{consumer_name}",
+          "size": 14,
+          "bold": 1,
+          "boxed": 1
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "columns": 3,
+          "fields": [
+           {
+            "key": "reference_no"
+           },
+           {
+            "key": "meter_no"
+           },
+           {
+            "key": "billing_month_short"
+           },
+           {
+            "key": "issue_date"
+           },
+           {
+            "key": "due_date"
+           },
+           {
+            "key": "bill_no"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "charges",
+         "options": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 45,
+       "blocks": [
+        {
+         "type": "history",
+         "options": {
+          "months": 6,
+          "columns": [
+           "units",
+           "billed",
+           "paid_on",
+           "paid"
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 55,
+       "blocks": [
+        {
+         "type": "totals",
+         "options": {
+          "style": "List",
+          "rows": [
+           "current",
+           "arrears",
+           "within",
+           "surcharge",
+           "after"
+          ]
+         }
+        },
+        {
+         "type": "notices",
+         "options": {}
+        },
+        {
+         "type": "text",
+         "options": {
+          "text": "Amount paid: ______________\nSignature: ______________",
+          "align": "Right"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "payment",
+         "options": {
+          "heading": "",
+          "banks": "None"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Office copy",
+   "copy_label": "Office Copy",
+   "cut_line_before": 1,
+   "cut_text": "cut here",
+   "new_page": 0,
+   "rows": [
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "header",
+         "options": {
+          "logo": "Left",
+          "align": "Center",
+          "title": "Collection Department",
+          "show_name": 0,
+          "show_letterhead": 0,
+          "show_tax_ids": 0
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "columns": 3,
+          "fields": [
+           {
+            "key": "property_no"
+           },
+           {
+            "key": "consumer_name"
+           },
+           {
+            "key": "reference_no"
+           },
+           {
+            "key": "billing_month_short"
+           },
+           {
+            "key": "issue_date"
+           },
+           {
+            "key": "due_date"
+           },
+           {
+            "key": "payable_within_due"
+           },
+           {
+            "key": "surcharge"
+           },
+           {
+            "key": "payable_after_due"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "page": {
+  "paper_size": "A4",
+  "margin_top": 6,
+  "margin_side": 8,
+  "font_size": 9
+ }
+}

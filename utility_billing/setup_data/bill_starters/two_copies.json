@@ -1,0 +1,390 @@
+{
+ "sections": [
+  {
+   "label": "Customer copy",
+   "copy_label": "Customer Copy",
+   "cut_line_before": 0,
+   "cut_text": "",
+   "new_page": 0,
+   "rows": [
+    {
+     "cells": [
+      {
+       "width": 62,
+       "blocks": [
+        {
+         "type": "header",
+         "options": {
+          "logo": "Left",
+          "title": "{title}",
+          "show_copy_label": 0,
+          "show_letterhead": 0,
+          "show_tax_ids": 0
+         }
+        },
+        {
+         "type": "details",
+         "options": {
+          "boxed": 0,
+          "fields": [
+           {
+            "key": "consumer_name"
+           },
+           {
+            "key": "address"
+           },
+           {
+            "key": "mobile"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 38,
+       "blocks": [
+        {
+         "type": "copy_label",
+         "options": {
+          "align": "Right"
+         }
+        },
+        {
+         "type": "reference",
+         "options": {
+          "large": 0,
+          "dates": 0,
+          "boxed": 0
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "columns": 4,
+          "fields": [
+           {
+            "key": "meter_no"
+           },
+           {
+            "key": "reading_date"
+           },
+           {
+            "key": "plot_size"
+           },
+           {
+            "key": "billing_month_short"
+           },
+           {
+            "key": "issue_date"
+           },
+           {
+            "key": "due_date"
+           },
+           {
+            "key": "category"
+           },
+           {
+            "key": "bill_no"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 50,
+       "blocks": [
+        {
+         "type": "reading",
+         "options": {
+          "style": "List",
+          "columns": [
+           "previous",
+           "present",
+           "units"
+          ]
+         }
+        },
+        {
+         "type": "charges",
+         "options": {
+          "style": "List",
+          "heading": "",
+          "units": 0,
+          "rate": 0,
+          "subtotal": 1
+         }
+        },
+        {
+         "type": "totals",
+         "options": {
+          "style": "List",
+          "rows": [
+           "arrears",
+           "within",
+           "surcharge",
+           "after"
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 50,
+       "blocks": [
+        {
+         "type": "payment",
+         "options": {
+          "heading": "How to pay",
+          "banks": "List"
+         }
+        },
+        {
+         "type": "notices",
+         "options": {
+          "heading": "",
+          "boxed": 0
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "history",
+         "options": {
+          "split": 1,
+          "columns": [
+           "units",
+           "billed",
+           "paid_on",
+           "paid"
+          ]
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Bank Copy",
+   "copy_label": "Bank Copy",
+   "cut_line_before": 1,
+   "cut_text": "cut here",
+   "new_page": 0,
+   "rows": [
+    {
+     "cells": [
+      {
+       "width": 60,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "boxed": 0,
+          "fields": [
+           {
+            "key": "reference_no"
+           },
+           {
+            "key": "consumer_name"
+           },
+           {
+            "key": "address"
+           },
+           {
+            "key": "mobile"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 40,
+       "blocks": [
+        {
+         "type": "copy_label",
+         "options": {
+          "align": "Right"
+         }
+        },
+        {
+         "type": "reference",
+         "options": {
+          "large": 0,
+          "dates": 0,
+          "boxed": 0
+         }
+        },
+        {
+         "type": "text",
+         "options": {
+          "text": "Billing month: {billing_month_short}",
+          "bold": 1,
+          "align": "Right"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "columns": 2,
+          "fields": [
+           {
+            "key": "payable_within_due"
+           },
+           {
+            "key": "payable_after_due"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Accounts Copy",
+   "copy_label": "Accounts Copy",
+   "cut_line_before": 1,
+   "cut_text": "cut here",
+   "new_page": 0,
+   "rows": [
+    {
+     "cells": [
+      {
+       "width": 60,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "boxed": 0,
+          "fields": [
+           {
+            "key": "reference_no"
+           },
+           {
+            "key": "consumer_name"
+           },
+           {
+            "key": "address"
+           },
+           {
+            "key": "mobile"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 40,
+       "blocks": [
+        {
+         "type": "copy_label",
+         "options": {
+          "align": "Right"
+         }
+        },
+        {
+         "type": "reference",
+         "options": {
+          "large": 0,
+          "dates": 0,
+          "boxed": 0
+         }
+        },
+        {
+         "type": "text",
+         "options": {
+          "text": "Billing month: {billing_month_short}",
+          "bold": 1,
+          "align": "Right"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "columns": 2,
+          "fields": [
+           {
+            "key": "payable_within_due"
+           },
+           {
+            "key": "payable_after_due"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "text",
+         "options": {
+          "text": "This document is system generated and does not need a signature or stamp.",
+          "size": 7,
+          "align": "Left"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "page": {
+  "paper_size": "A4",
+  "margin_top": 5,
+  "margin_side": 8,
+  "font_size": 8
+ }
+}

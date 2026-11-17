@@ -1,0 +1,346 @@
+{
+ "sections": [
+  {
+   "label": "Customer copy",
+   "copy_label": "Customer Copy",
+   "cut_line_before": 0,
+   "cut_text": "",
+   "new_page": 0,
+   "rows": [
+    {
+     "cells": [
+      {
+       "width": 16,
+       "blocks": [
+        {
+         "type": "qr",
+         "options": {
+          "size": 20,
+          "align": "Left"
+         }
+        }
+       ]
+      },
+      {
+       "width": 84,
+       "blocks": [
+        {
+         "type": "header",
+         "options": {
+          "logo": "Right",
+          "align": "Center",
+          "title": "{title}",
+          "show_copy_label": 1
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "columns": 3,
+          "fields": [
+           {
+            "key": "reference_no"
+           },
+           {
+            "key": "consumer_name"
+           },
+           {
+            "key": "property_no"
+           },
+           {
+            "key": "cnic"
+           },
+           {
+            "key": "ntn"
+           },
+           {
+            "key": "category"
+           },
+           {
+            "key": "meter_no"
+           },
+           {
+            "key": "billing_month"
+           },
+           {
+            "key": "bill_no"
+           },
+           {
+            "key": "reading_date"
+           },
+           {
+            "key": "issue_date"
+           },
+           {
+            "key": "due_date"
+           },
+           {
+            "key": "sanctioned_load"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 62,
+       "blocks": [
+        {
+         "type": "payment",
+         "options": {
+          "heading": "Bank accounts (for online payment)",
+          "instructions": 0,
+          "banks": "Table"
+         }
+        }
+       ]
+      },
+      {
+       "width": 38,
+       "blocks": [
+        {
+         "type": "totals",
+         "options": {
+          "style": "List",
+          "rows": [
+           "current",
+           "arrears",
+           "within",
+           "after"
+          ]
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 40,
+       "blocks": [
+        {
+         "type": "reading",
+         "options": {
+          "columns": [
+           "previous",
+           "present",
+           "units"
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "width": 60,
+       "blocks": [
+        {
+         "type": "notices",
+         "options": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "width": 100,
+       "blocks": [
+        {
+         "type": "footer",
+         "options": {}
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Bank Copy",
+   "copy_label": "Bank Copy",
+   "cut_line_before": 1,
+   "cut_text": "cut here",
+   "new_page": 0,
+   "rows": [
+    {
+     "cells": [
+      {
+       "width": 66,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "columns": 2,
+          "fields": [
+           {
+            "key": "reference_no"
+           },
+           {
+            "key": "consumer_name"
+           },
+           {
+            "key": "property_no"
+           },
+           {
+            "key": "meter_no"
+           },
+           {
+            "key": "billing_month"
+           },
+           {
+            "key": "due_date"
+           }
+          ]
+         }
+        },
+        {
+         "type": "payment",
+         "options": {
+          "heading": "",
+          "instructions": 0,
+          "banks": "Table",
+          "boxed": 1
+         }
+        }
+       ]
+      },
+      {
+       "width": 34,
+       "blocks": [
+        {
+         "type": "copy_label",
+         "options": {
+          "align": "Center"
+         }
+        },
+        {
+         "type": "qr",
+         "options": {
+          "size": 18
+         }
+        },
+        {
+         "type": "totals",
+         "options": {
+          "style": "List",
+          "rows": [
+           "current",
+           "arrears",
+           "within",
+           "after"
+          ],
+          "show_due_date": 0
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Office Copy",
+   "copy_label": "Office Copy",
+   "cut_line_before": 1,
+   "cut_text": "cut here",
+   "new_page": 0,
+   "rows": [
+    {
+     "cells": [
+      {
+       "width": 66,
+       "blocks": [
+        {
+         "type": "details",
+         "options": {
+          "columns": 2,
+          "fields": [
+           {
+            "key": "reference_no"
+           },
+           {
+            "key": "consumer_name"
+           },
+           {
+            "key": "property_no"
+           },
+           {
+            "key": "meter_no"
+           },
+           {
+            "key": "billing_month"
+           },
+           {
+            "key": "due_date"
+           }
+          ]
+         }
+        },
+        {
+         "type": "payment",
+         "options": {
+          "heading": "",
+          "instructions": 0,
+          "banks": "Table",
+          "boxed": 1
+         }
+        }
+       ]
+      },
+      {
+       "width": 34,
+       "blocks": [
+        {
+         "type": "copy_label",
+         "options": {
+          "align": "Center"
+         }
+        },
+        {
+         "type": "qr",
+         "options": {
+          "size": 18
+         }
+        },
+        {
+         "type": "totals",
+         "options": {
+          "style": "List",
+          "rows": [
+           "current",
+           "arrears",
+           "within",
+           "after"
+          ],
+          "show_due_date": 0
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "page": {
+  "paper_size": "A4",
+  "margin_top": 6,
+  "margin_side": 8,
+  "font_size": 8
+ }
+}
