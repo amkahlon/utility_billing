@@ -2306,6 +2306,131 @@ def t_net_metering_readings(d: Desk):
 	   "October continues from September's registers")
 
 
+MIG = "utility_billing.utility_billing.doctype.migration_batch.migration_batch"
+PRM = "utility_billing.utility_billing.doctype.parallel_run_month.parallel_run_month"
+
+
+def _upload_xlsx(desk, sheets: dict, doctype, docname) -> str:
+	"""An .xlsx built like a society's export, uploaded as the form's Attach field does; returns its file_url."""
+	from openpyxl import Workbook
+
+	wb = Workbook()
+	wb.remove(wb.active)
+	for name, rows in sheets.items():
+		ws = wb.create_sheet(name)
+		for r in rows:
+			ws.append(r)
+	out = io.BytesIO()
+	wb.save(out)
+	up = desk.s.post(f"{URL}/api/method/upload_file", files={"file": (f"migration-{RUN}-{random.randint(100, 999)}.xlsx", out.getvalue())},
+	                 data={"is_private": 1, "doctype": doctype, "docname": docname})
+	if up.status_code != 200:
+		raise AssertionError(f"upload failed: HTTP {up.status_code} {up.text[:200]}")
+	return up.json()["message"]["file_url"]
+
+
+def _mig_book(bad=False):
+	acc = [f"Q{RUN}-1", f"Q{RUN}-2"]
+	conns = [["Account No", "consumer_name", "cnic", "House No", "Tariff", "Meter No", "meter_type", "plot_area", "plot_unit"],
+	         [acc[0], "QA Migrated One", "35202-7654321-1", "59-C", "RES", f"QM{RUN}-1", "", "5", "Marla"],
+	         [acc[1], "QA Migrated Two", "", "7-N", "RES", f"QM{RUN}-2", "NM", "10", "Marla"]]
+	if bad:
+		conns.append([f"Q{RUN}-3", "", "", "x", "ZZZ", f"QM{RUN}-1", "", "", ""])  # no name, bad house, unknown category, a meter twice
+	return acc, {
+		"Connections": conns,
+		"Readings": [["old_account_no", "last_reading", "last_export_reading", "reading_date"], [acc[0], "1677", "", "25/10/2026"],
+		             [acc[1], "900", "410", "25/10/2026"]],
+		"Balances": [["old_account_no", "current_bill", "arrears", "credit"], [acc[0], "5355", "1,200", ""], [acc[1], "", "", "750"]],
+		"History": [["old_account_no", "month", "units", "bill_amount", "paid_on", "paid_amount"], [acc[0], "01/09/2026", "63", "3130", "10/10/2026", "2570"],
+		            [acc[0], "01/10/2026", "70", "5355", "", ""]],
+	}
+
+
+def _list(desk, doctype, filters, fields=("name",)):
+	return desk.s.get(f"{URL}/api/resource/{doctype}", params={"filters": json.dumps(filters), "fields": json.dumps(list(fields))}).json()["data"]
+
+
+@case("QA-93", "Increment 29: a Migration Profile saved through the form keeps its house-number pattern; Fill SAP IS-U Columns; the template workbook")
+def t_migration_profile(d: Desk):
+	ao = USERS["ao"]
+	soc = d.save_doc({"doctype": "Society", "society_name": f"QA Migration Society {RUN}", "short_name": f"qm{RUN}", "enable_electricity": 1})
+	cat = d.save_doc({"doctype": "Consumer Category", "category_name": f"Residential MIG {RUN}", "utility": "Electricity"})["name"]
+	p = ao.save_doc({"doctype": "Migration Profile", "profile_name": f"QA source {RUN}", "society": soc["name"], "source_system": "QA Billing",
+	                 "date_format": "Day first (31-12-2026)", "default_utility": "Electricity",
+	                 "house_pattern": "(?P<house>\\d+)-?(?P<block>[A-Z][A-Z0-9]*)",
+	                 "columns": [{"sheet": "Connections", "source_column": "Account No", "target": "old_account_no"},
+	                             {"sheet": "Connections", "source_column": "House No", "target": "house"},
+	                             {"sheet": "Connections", "source_column": "Tariff", "target": "category"},
+	                             {"sheet": "Connections", "source_column": "Meter No", "target": "meter_no"}],
+	                 "value_maps": [{"target": "category", "source_value": "RES", "our_value": f"Residential MIG {RUN}"},
+	                                {"target": "meter_type", "source_value": "NM", "our_value": "Net Metering"}]})
+	eq(p["house_pattern"], "(?P<house>\\d+)-?(?P<block>[A-Z][A-Z0-9]*)", "the pattern survives the form's save")
+	expect_error(lambda: ao.save_doc(dict(ao.get("Migration Profile", p["name"]), house_pattern="(\\d+)")), "named house")
+	fill = "utility_billing.utility_billing.doctype.migration_profile.migration_profile.fill_sap_isu"
+	eq(ao.call(fill, name=p["name"]) > 20, True, "SAP IS-U columns added")
+	eq(ao.call(fill, name=p["name"]), 0, "added once only")
+	r = ao.s.get(f"{URL}/api/method/{MIG}.template")
+	eq((r.status_code, r.content[:2]), (200, b"PK"), "the template is an Excel workbook")
+	S["mig_soc"], S["mig_profile"] = soc["name"], p["name"]
+
+
+@case("QA-94", "Increment 29: a Migration Batch checked, loaded, undone, loaded again and approved by another person; old numbers at the counter")
+def t_migration_batch(d: Desk):
+	ao, gm, cashier = USERS["ao"], USERS["gm"], USERS["cashier"]
+	s = S["mig_soc"]
+	b = ao.save_doc({"doctype": "Migration Batch", "naming_series": "MIG-.YYYY.-.####", "society": s, "profile": S["mig_profile"],
+	                 "as_of_date": "2026-10-31", "control_accounts": "2", "control_receivable": "5805"})
+	acc, bad = _mig_book(bad=True)
+	ao.save_doc(dict(ao.get("Migration Batch", b["name"]), workbook=_upload_xlsx(ao, bad, "Migration Batch", b["name"])))
+	eq(ao.call(f"{MIG}.check", name=b["name"])["errors"] >= 3, True, "the bad workbook's errors are listed")
+	eq((ao.call(f"{MIG}.load", name=b["name"])["loaded"], _list(d, "Connection", [["society", "=", s]])), (False, []),
+	   "errors stop the load and nothing is created")
+	acc, good = _mig_book()
+	ao.save_doc(dict(ao.get("Migration Batch", b["name"]), workbook=_upload_xlsx(ao, good, "Migration Batch", b["name"])))
+	res = ao.call(f"{MIG}.check", name=b["name"])
+	b = ao.get("Migration Batch", b["name"])
+	eq((res["errors"], b["account_count"], float(b["receivable_total"]), b["accounts_difference"], float(b["receivable_difference"])),
+	   (0, 2, 5805.0, 0, 0.0), "reconciled with the control figures")
+	res = ao.call(f"{MIG}.load", name=b["name"])
+	eq((res["loaded"], res["accounts"]), (True, 2), "loaded")
+	enq = cashier.call("utility_billing.utility_billing.account.enquiry", reference_no=acc[0])
+	eq(enq["consumer_name"], "QA Migrated One", "the old account number works at the counter")
+	c = d.get("Connection", _list(d, "Connection", [["legacy_account_no", "=", acc[1]]])[0]["name"])
+	eq((float(c["meters"][0]["start_reading"]), float(c["meters"][0]["start_export_reading"])), (900.0, 410.0), "start readings from the last readings")
+	ao.call(f"{MIG}.undo", name=b["name"])
+	eq(_list(d, "Connection", [["society", "=", s]]), [], "undo removed the accounts")
+	eq(ao.call(f"{MIG}.load", name=b["name"])["loaded"], True, "loaded again")
+	b = ao.workflow(ao.get("Migration Batch", b["name"]), "Submit for Approval")
+	expect_error(lambda: ao.workflow(b, "Approve"))  # the maker can't approve
+	b = gm.workflow(b, "Approve")
+	eq((b["docstatus"], b["workflow_state"], b["load_status"]), (1, "Approved", "Loaded"), "approved by the General Manager")
+	expect_error(lambda: ao.call(f"{MIG}.undo", name=b["name"]), "draft or rejected")
+	imp = d.get("Opening Balance Import", b["opening_import"])
+	eq((imp["row_count"], imp["error_count"], float(imp["total_receivable"])), (2, 0, 5805.0), "the opening balances are ready for their approval")
+	S["mig_acc"] = acc
+
+
+@case("QA-95", "Increment 29: a Parallel Run Month records the old system's payments once and lists the accounts against our bill run")
+def t_parallel_run(d: Desk):
+	ao = USERS["ao"]
+	s, acc = S["mig_soc"], S["mig_acc"]
+	run = USERS["bo"].save_doc({"doctype": "Bill Run", "naming_series": "BRUN-.YYYY.-.####", "society": s, "utility": "Electricity",
+	                            "billing_month": "2026-11-01", "issue_date": "2026-11-05"})
+	prm = ao.save_doc({"doctype": "Parallel Run Month", "society": s, "billing_month": "2026-11-01", "bill_run": run["name"], "tolerance": "1"})
+	url = _upload_xlsx(ao, {"Payments": [["old_account_no", "paid_on", "amount", "reference"], [acc[0], "12/11/2026", "3,960", f"QTX{RUN}"],
+	                                     ["NOPE-1", "12/11/2026", "10", f"QTY{RUN}"]],
+	                        "Old Bills": [["old_account_no", "units", "current_bill", "arrears", "payable"], [acc[0], "70", "3400", "560", "3960"]]},
+	                   "Parallel Run Month", prm["name"])
+	ao.save_doc(dict(ao.get("Parallel Run Month", prm["name"]), workbook=url))
+	eq(ao.call(f"{PRM}.load_payments", name=prm["name"]), {"recorded": 1, "skipped": 1}, "one payment recorded, the unknown account skipped")
+	eq(ao.call(f"{PRM}.load_payments", name=prm["name"]), {"recorded": 1, "skipped": 1}, "loading again records nothing more")
+	receipts = _list(d, "Payment Receipt", [["channel_txn_id", "=", f"QTX{RUN}"]], ("amount", "docstatus"))
+	eq([(float(r["amount"]), r["docstatus"]) for r in receipts], [(3960.0, 1)], "the payment is posted once")
+	res = ao.call(f"{PRM}.compare", name=prm["name"])
+	prm = ao.get("Parallel Run Month", prm["name"])
+	eq((res["compared"], prm["missing_here"], prm["comparison_status"]), (1, 1, "Compared"), "not yet billed here: listed as a difference")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

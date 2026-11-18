@@ -1,0 +1,174 @@
+{
+ "actions": [],
+ "creation": "2026-11-18 19:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "profile_name",
+  "society",
+  "source_system",
+  "cb1",
+  "date_format",
+  "default_utility",
+  "default_category",
+  "house_section",
+  "house_pattern",
+  "columns_section",
+  "columns",
+  "values_section",
+  "value_maps"
+ ],
+ "fields": [
+  {
+   "fieldname": "profile_name",
+   "fieldtype": "Data",
+   "label": "Profile Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "For example: Park View, from their billing software."
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "source_system",
+   "fieldtype": "Data",
+   "label": "Source System",
+   "description": "The application the data comes from, for example SAP IS-U."
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "date_format",
+   "fieldtype": "Select",
+   "label": "Dates in the File",
+   "options": "Day first (31-12-2026)\nMonth first (12/31/2026)\nYear first (2026-12-31)",
+   "default": "Day first (31-12-2026)"
+  },
+  {
+   "fieldname": "default_utility",
+   "fieldtype": "Link",
+   "label": "Default Utility",
+   "options": "Utility Type",
+   "description": "Used where the file has no utility column."
+  },
+  {
+   "fieldname": "default_category",
+   "fieldtype": "Link",
+   "label": "Default Category",
+   "options": "Consumer Category",
+   "description": "Used where the file has no category column."
+  },
+  {
+   "fieldname": "house_section",
+   "fieldtype": "Section Break",
+   "label": "House Numbers",
+   "description": "How the source writes a house number, as a pattern with named parts: house, and optionally block and sector."
+  },
+  {
+   "fieldname": "house_pattern",
+   "fieldtype": "Data",
+   "label": "House Number Pattern",
+   "description": "Examples: (?P<house>\\d+)-?(?P<block>[A-Z][A-Z0-9]*) for 59-C or 987-M3; (?P<block>[A-Z]+)\\s*(?P<house>\\d+) for N 2308; (?P<house>\\d+)\\s+(?P<block>.+) for 2413 Tulip Overseas Block. Empty: the house column is used as it is.",
+   "ignore_xss_filter": 1
+  },
+  {
+   "fieldname": "columns_section",
+   "fieldtype": "Section Break",
+   "label": "Columns",
+   "description": "Only the columns whose names differ from our workbook's need a row. Fill SAP IS-U Columns adds SAP's standard names."
+  },
+  {
+   "fieldname": "columns",
+   "fieldtype": "Table",
+   "label": "Column Map",
+   "options": "Migration Column"
+  },
+  {
+   "fieldname": "values_section",
+   "fieldtype": "Section Break",
+   "label": "Values",
+   "description": "Codes in the source that mean one of our values, for example Res \u2192 Residential."
+  },
+  {
+   "fieldname": "value_maps",
+   "fieldtype": "Table",
+   "label": "Value Map",
+   "options": "Migration Value Map"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-18 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Migration Profile",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 1
+  },
+  {
+   "role": "Billing Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "create": 1,
+   "write": 1
+  },
+  {
+   "role": "Accounts Officer",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "create": 1,
+   "write": 1
+  },
+  {
+   "role": "Society Admin",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "General Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Billing Auditor",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "hash",
+ "title_field": "profile_name",
+ "show_title_field_in_link": 1,
+ "track_changes": 1
+}

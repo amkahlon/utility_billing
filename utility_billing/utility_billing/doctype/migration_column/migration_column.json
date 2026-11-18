@@ -1,0 +1,50 @@
+{
+ "actions": [],
+ "creation": "2026-11-18 19:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sheet",
+  "source_column",
+  "target"
+ ],
+ "fields": [
+  {
+   "fieldname": "sheet",
+   "fieldtype": "Select",
+   "label": "Sheet",
+   "options": "Connections\nReadings\nBalances\nHistory\nNetwork\nOld Bills\nPayments",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "source_column",
+   "fieldtype": "Data",
+   "label": "Column in the Source File",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "target",
+   "fieldtype": "Data",
+   "label": "Our Field",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "One of our workbook's column names, for example old_account_no or consumer_name."
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-18 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Migration Column",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1
+}

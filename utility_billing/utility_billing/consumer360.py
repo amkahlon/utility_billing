@@ -100,6 +100,12 @@ def overview(conn_name) -> dict:
 	months = frappe.db.sql("""select billing_month, sum(units) units, max(status = 'Estimated') estimated from `tabMeter Reading`
 	                          where connection = %s and status in ('Valid', 'Approved', 'Estimated') and billing_month > %s
 	                          group by billing_month order by billing_month""", (conn_name, frappe.utils.add_months(today, -12)), as_dict=True)
+	read = {getdate(m.billing_month) for m in months}
+	# months billed by the previous system before migration (increment 29) fill the chart where there's no reading here
+	months += [frappe._dict(billing_month=lb.billing_month, units=lb.units, estimated=0) for lb in frappe.get_all(
+		"Legacy Bill", filters={"connection": conn_name, "billing_month": [">", frappe.utils.add_months(today, -12)]},
+		fields=["billing_month", "units"]) if getdate(lb.billing_month) not in read]
+	months.sort(key=lambda m: getdate(m.billing_month))
 	held = flt(frappe.db.get_value("Connection", conn_name, "security_deposit"))
 	alerts = [{"tone": "amber", "text": _("Flag: {0}").format(f.name)} for f in flags.active(conn_name, today)]
 	for dt, label, cond in (("Bill Dispute", _("Bill dispute"), {"status": ["not in", ["Closed", "Resolved", "Decided", "Cancelled"]]}),

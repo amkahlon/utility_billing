@@ -1,0 +1,426 @@
+{
+ "actions": [],
+ "creation": "2026-11-18 19:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "batch_title",
+  "workflow_state",
+  "society",
+  "profile",
+  "as_of_date",
+  "cb1",
+  "workbook",
+  "load_status",
+  "opening_import",
+  "control_section",
+  "control_accounts",
+  "cb2",
+  "control_receivable",
+  "results_section",
+  "error_count",
+  "warning_count",
+  "account_count",
+  "cb3",
+  "receivable_total",
+  "accounts_difference",
+  "receivable_difference",
+  "reconciliation_section",
+  "reconciliation_html",
+  "reconciliation",
+  "problems_section",
+  "problems",
+  "records_section",
+  "records",
+  "amended_from",
+  "approval_section",
+  "requested_by",
+  "requested_on",
+  "cb_approval",
+  "approved_by",
+  "approved_on",
+  "changes_since_last_submission",
+  "rejection_reason",
+  "approval_history_section",
+  "approval_history_html",
+  "approval_log",
+  "submitted_snapshot"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "MIG-.YYYY.-.####",
+   "default": "MIG-.YYYY.-.####",
+   "hidden": 1
+  },
+  {
+   "fieldname": "batch_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "label": "Approval Status",
+   "options": "Workflow State",
+   "read_only": 1,
+   "no_copy": 1,
+   "allow_on_submit": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "profile",
+   "fieldtype": "Link",
+   "label": "Mapping Profile",
+   "options": "Migration Profile",
+   "reqd": 1
+  },
+  {
+   "fieldname": "as_of_date",
+   "fieldtype": "Date",
+   "label": "Balances As At (cut-over day)",
+   "reqd": 1,
+   "description": "The last day the previous system billed and took payments for; balances and readings are as at its end."
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "workbook",
+   "fieldtype": "Attach",
+   "label": "Workbook (Excel)",
+   "description": "One .xlsx file with the sheets Connections, Readings, Balances, History and (optional) Network. Download Template gives an empty one."
+  },
+  {
+   "fieldname": "load_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nChecked\nLoaded\nUndone",
+   "default": "Draft",
+   "read_only": 1,
+   "no_copy": 1,
+   "allow_on_submit": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "opening_import",
+   "fieldtype": "Link",
+   "label": "Opening Balances",
+   "options": "Opening Balance Import",
+   "read_only": 1,
+   "no_copy": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "control_section",
+   "fieldtype": "Section Break",
+   "label": "Control Figures from the Previous System",
+   "description": "What the previous system reports at the cut-over day; the loaded figures are reconciled against them."
+  },
+  {
+   "fieldname": "control_accounts",
+   "fieldtype": "Int",
+   "label": "Accounts"
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "control_receivable",
+   "fieldtype": "Currency",
+   "label": "Total Receivable (owed less credit)"
+  },
+  {
+   "fieldname": "results_section",
+   "fieldtype": "Section Break",
+   "label": "Results"
+  },
+  {
+   "fieldname": "error_count",
+   "fieldtype": "Int",
+   "label": "Errors",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "warning_count",
+   "fieldtype": "Int",
+   "label": "Warnings",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "account_count",
+   "fieldtype": "Int",
+   "label": "Accounts in the File",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "receivable_total",
+   "fieldtype": "Currency",
+   "label": "Receivable in the File",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "accounts_difference",
+   "fieldtype": "Int",
+   "label": "Accounts Difference",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "receivable_difference",
+   "fieldtype": "Currency",
+   "label": "Receivable Difference",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "reconciliation_section",
+   "fieldtype": "Section Break",
+   "label": "Reconciliation"
+  },
+  {
+   "fieldname": "reconciliation_html",
+   "fieldtype": "HTML",
+   "label": "Reconciliation View"
+  },
+  {
+   "fieldname": "reconciliation",
+   "fieldtype": "JSON",
+   "label": "Reconciliation Data",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "problems_section",
+   "fieldtype": "Section Break",
+   "label": "Problems",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "problems",
+   "fieldtype": "Table",
+   "label": "Problems",
+   "options": "Migration Problem",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "records_section",
+   "fieldtype": "Section Break",
+   "label": "Records Created",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "records",
+   "fieldtype": "Table",
+   "label": "Records Created",
+   "options": "Migration Record",
+   "read_only": 1,
+   "no_copy": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "Migration Batch",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "Approval"
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Submitted for Approval By",
+   "options": "User",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "requested_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "cb_approval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1,
+   "no_copy": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1,
+   "no_copy": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "changes_since_last_submission",
+   "fieldtype": "Small Text",
+   "label": "Changes Since Last Submission",
+   "read_only": 1,
+   "no_copy": 1,
+   "allow_on_submit": 1,
+   "depends_on": "eval:doc.changes_since_last_submission"
+  },
+  {
+   "fieldname": "rejection_reason",
+   "fieldtype": "Small Text",
+   "label": "Rejection Reason",
+   "read_only": 1,
+   "no_copy": 1,
+   "depends_on": "eval:doc.rejection_reason"
+  },
+  {
+   "fieldname": "approval_history_section",
+   "fieldtype": "Section Break",
+   "label": "Approval History"
+  },
+  {
+   "fieldname": "approval_history_html",
+   "fieldtype": "HTML",
+   "label": "Approval History View"
+  },
+  {
+   "fieldname": "approval_log",
+   "fieldtype": "Table",
+   "options": "Approval Log",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "submitted_snapshot",
+   "fieldtype": "JSON",
+   "label": "Submitted Snapshot",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "allow_on_submit": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-18 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Migration Batch",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1
+  },
+  {
+   "role": "Billing Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "create": 1,
+   "write": 1
+  },
+  {
+   "role": "Accounts Officer",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "create": 1,
+   "write": 1
+  },
+  {
+   "role": "General Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "write": 1,
+   "submit": 1
+  },
+  {
+   "role": "Management",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "write": 1,
+   "submit": 1
+  },
+  {
+   "role": "Society Admin",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Billing Auditor",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "naming_series:",
+ "is_submittable": 1,
+ "title_field": "batch_title",
+ "show_title_field_in_link": 1,
+ "track_changes": 1
+}

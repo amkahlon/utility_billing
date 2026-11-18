@@ -1,0 +1,49 @@
+{
+ "actions": [],
+ "creation": "2026-11-18 19:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "target",
+  "source_value",
+  "our_value"
+ ],
+ "fields": [
+  {
+   "fieldname": "target",
+   "fieldtype": "Data",
+   "label": "Our Field",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "For example category, utility, status, phase, meter_type, plot_unit, filer."
+  },
+  {
+   "fieldname": "source_value",
+   "fieldtype": "Data",
+   "label": "Source Value",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "our_value",
+   "fieldtype": "Data",
+   "label": "Our Value",
+   "reqd": 1,
+   "in_list_view": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-18 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Migration Value Map",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1
+}

@@ -1,0 +1,173 @@
+{
+ "actions": [],
+ "creation": "2026-11-18 21:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "connection",
+  "old_account_no",
+  "result",
+  "difference",
+  "explanation",
+  "cb1",
+  "old_units",
+  "our_units",
+  "old_current",
+  "our_current",
+  "old_arrears",
+  "our_arrears",
+  "cb2",
+  "old_surcharge",
+  "our_surcharge",
+  "old_payable",
+  "our_payable",
+  "old_balance",
+  "our_balance",
+  "bill"
+ ],
+ "fields": [
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Connection",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "old_account_no",
+   "fieldtype": "Data",
+   "label": "Old Account No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "result",
+   "fieldtype": "Select",
+   "label": "Result",
+   "options": "Match\nDifferent\nNot in our run\nNot in their bills",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "difference",
+   "fieldtype": "Currency",
+   "label": "Payable Difference",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "explanation",
+   "fieldtype": "Small Text",
+   "label": "Explanation",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "old_units",
+   "fieldtype": "Float",
+   "label": "Their Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "our_units",
+   "fieldtype": "Float",
+   "label": "Our Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "old_current",
+   "fieldtype": "Currency",
+   "label": "Their Current Bill",
+   "read_only": 1
+  },
+  {
+   "fieldname": "our_current",
+   "fieldtype": "Currency",
+   "label": "Our Current Bill",
+   "read_only": 1
+  },
+  {
+   "fieldname": "old_arrears",
+   "fieldtype": "Currency",
+   "label": "Their Arrears",
+   "read_only": 1
+  },
+  {
+   "fieldname": "our_arrears",
+   "fieldtype": "Currency",
+   "label": "Our Arrears",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "old_surcharge",
+   "fieldtype": "Currency",
+   "label": "Their Surcharge",
+   "read_only": 1
+  },
+  {
+   "fieldname": "our_surcharge",
+   "fieldtype": "Currency",
+   "label": "Our Surcharge",
+   "read_only": 1
+  },
+  {
+   "fieldname": "old_payable",
+   "fieldtype": "Currency",
+   "label": "Their Payable",
+   "read_only": 1
+  },
+  {
+   "fieldname": "our_payable",
+   "fieldtype": "Currency",
+   "label": "Our Payable",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "old_balance",
+   "fieldtype": "Currency",
+   "label": "Their Closing Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "our_balance",
+   "fieldtype": "Currency",
+   "label": "Our Closing Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bill",
+   "fieldtype": "Link",
+   "label": "Our Bill",
+   "options": "Utility Bill",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-18 21:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Parallel Run Row",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 0
+}
