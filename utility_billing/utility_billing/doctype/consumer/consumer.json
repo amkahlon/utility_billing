@@ -11,6 +11,7 @@
  "field_order": [
   "naming_series",
   "consumer_name",
+  "legacy_customer_id",
   "consumer_type",
   "id_type",
   "id_number",
@@ -57,6 +58,13 @@
    "in_list_view": 1,
    "label": "Name",
    "reqd": 1
+  },
+  {
+   "fieldname": "legacy_customer_id",
+   "fieldtype": "Data",
+   "label": "Old Customer ID",
+   "search_index": 1,
+   "description": "The customer's ID in the society's previous system (migration)."
   },
   {
    "default": "Individual",
@@ -238,7 +246,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 12:00:00.000000",
+ "modified": "2026-11-18 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Consumer",

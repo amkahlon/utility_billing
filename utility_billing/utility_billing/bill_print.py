@@ -57,6 +57,15 @@ def bill_history(connection, month, months, until=None):
 		            "paid_on": str(max(p.payment_date for p in paid)) if paid else None,
 		            "paid": sum(flt(p.amount) for p in paid) if paid else None})
 		end = start
+	if len(out) < months:  # the months before the first bill here, as the previous system billed them (migration, increment 29)
+		before = getdate(out[-1]["month"]) if out else getdate(month)
+		for r in frappe.get_all("Legacy Bill", filters={"connection": connection, "billing_month": ["<", before]},
+		                        fields=["billing_month", "units", "current_amount", "arrears", "bill_amount", "paid_on", "paid_amount"],
+		                        order_by="billing_month desc", limit=months - len(out)):
+			out.append({"month": str(r.billing_month), "units": flt(r.units),
+			            "billed": flt(r.bill_amount) or flt(r.current_amount) + flt(r.arrears), "current": flt(r.current_amount),
+			            "paid_on": str(r.paid_on) if r.paid_on else None, "paid": flt(r.paid_amount) if r.paid_on or flt(r.paid_amount) else None,
+			            "legacy": 1})
 	return out
 
 
@@ -97,6 +106,8 @@ def build_snapshot(bill) -> dict:
 			"sector": prop.get("sector"), "area": flt(prop.get("area")), "area_unit": prop.get("area_unit"),
 			"category": category, "sanctioned_load_kw": flt(conn.sanctioned_load_kw), "phase": conn.phase,
 			"route": conn.route,
+			# the previous system's account number, printed while the society still accepts old numbers on the issue date (increment 29)
+			"legacy_account_no": conn.get("legacy_account_no") if conn.get("legacy_account_no") and legacy_accepted(g("society"), g("issue_date")) else None,
 		},
 		"reading": dict(reading, previous_reading_date=str(reading.previous_reading_date or ""),
 		                reading_date=str(reading.reading_date or "")) if reading else None,
@@ -106,6 +117,12 @@ def build_snapshot(bill) -> dict:
 		# the month's solar rebate notice, as approved with the pool (increment 28)
 		"solar_notice": frappe.db.get_value("Solar Rebate Pool", g("solar_pool"), "notice") if g("solar_pool") else None,
 	}
+
+
+def legacy_accepted(society, on):
+	from utility_billing.utility_billing import legacy  # noqa: PLC0415
+
+	return legacy.accepted(society, on)
 
 
 def template_for(g):

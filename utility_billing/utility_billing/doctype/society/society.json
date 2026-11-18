@@ -169,6 +169,7 @@
   "opening_balance_account",
   "cb_golive",
   "go_live_date",
+  "old_numbers_until",
   "defective_section",
   "defective_billing_method",
   "defective_average_months",
@@ -1149,6 +1150,12 @@
    "description": "Set when opening balances are posted: nothing can be dated before this day."
   },
   {
+   "fieldname": "old_numbers_until",
+   "fieldtype": "Date",
+   "label": "Old Account Numbers Accepted Until",
+   "description": "Old account numbers from the previous system are searchable, accepted for payments and printed on bills up to this day. Set to six months after go-live when the opening balances post; empty before go-live (accepted)."
+  },
+  {
    "fieldname": "defective_section",
    "fieldtype": "Section Break",
    "label": "Defective meters and disconnected accounts",
@@ -1206,7 +1213,7 @@
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-18 10:00:00.000000",
+ "modified": "2026-11-18 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

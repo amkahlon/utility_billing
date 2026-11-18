@@ -171,6 +171,9 @@ def post(doc):
 		if flt(r.plan_remaining) > 0:
 			_plan(doc, r, as_of, approver)
 	frappe.db.set_value("Society", doc.society, "go_live_date", add_days(as_of, 1))
+	from utility_billing.utility_billing import legacy  # noqa: PLC0415
+
+	legacy.set_window(doc.society, add_days(as_of, 1))  # old account numbers stay usable six months (increment 29)
 	frappe.clear_document_cache("Society", doc.society)
 	periods.clear_cache()
 	doc.db_set({"posted_on": now_datetime(), "gl_journal": journal.name if journal else None, "deposit_journal": deposit_journal}, update_modified=False)

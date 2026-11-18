@@ -33,6 +33,7 @@ STARTERS = {"standard": "Standard", "two_copies": "Two tear-off copies", "compac
 FIELDS = {
 	"reference_no": ("Reference No", lambda c: c["con"].get("reference_no")),
 	"bill_no": ("Bill No", lambda c: c["bill"].name),
+	"old_account_no": ("Old account no", lambda c: c["con"].get("legacy_account_no")),
 	"consumer_name": ("Name", lambda c: c["consumer"].get("name") or c["bill"].get("consumer_name")),
 	"property": ("Property", lambda c: ", ".join(x for x in (c["con"].get("property_no"), c["con"].get("block"), c["con"].get("sector")) if x)),
 	"property_no": ("House No", lambda c: c["con"].get("property_no")),

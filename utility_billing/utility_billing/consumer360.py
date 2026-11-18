@@ -33,13 +33,15 @@ def search(text: str, limit: int = 20):
 		"""select c.name, c.consumer_name, c.mobile_no, c.id_number, k.name account, k.reference_no, k.current_meter, k.utility,
 		          k.status account_status, p.property_no house,
 		          case when k.reference_no like %(l)s then 'reference' when k.current_meter like %(l)s then 'meter'
+		               when k.legacy_account_no like %(l)s or k.legacy_collection_no like %(l)s or c.legacy_customer_id like %(l)s then 'old number'
 		               when p.property_no like %(l)s then 'house' when c.id_number like %(l)s then 'cnic'
 		               when c.mobile_no like %(l)s or c.phone like %(l)s then 'phone' else 'name' end matched
 		from `tabConsumer` c left join `tabConnection` k on k.consumer = c.name left join `tabProperty` p on p.name = k.property
 		where (c.consumer_name like %(l)s or c.id_number like %(l)s or c.mobile_no like %(l)s or c.phone like %(l)s
-		   or k.reference_no like %(l)s or k.current_meter like %(l)s or p.property_no like %(l)s)
+		   or k.reference_no like %(l)s or k.current_meter like %(l)s or p.property_no like %(l)s
+		   or k.legacy_account_no like %(l)s or k.legacy_collection_no like %(l)s or c.legacy_customer_id like %(l)s)
 		   and (%(all)s or k.society in %(mine)s)
-		order by (k.reference_no = %(t)s or k.current_meter = %(t)s or p.property_no = %(t)s) desc, c.consumer_name, k.name
+		order by (k.reference_no = %(t)s or k.current_meter = %(t)s or p.property_no = %(t)s or k.legacy_account_no = %(t)s) desc, c.consumer_name, k.name
 		limit %(n)s""", {"l": like, "t": text, "n": int(limit), "all": mine is None, "mine": mine or [""]}, as_dict=True)
 	for r in rows:
 		r["balance"] = acct.balance(r.account) if r.account else None

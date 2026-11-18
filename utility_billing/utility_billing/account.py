@@ -351,7 +351,12 @@ def connection_of(reference_no):
 	ref = (reference_no or "").strip()
 	if ref and frappe.db.exists("Connection", ref):
 		return ref
-	return frappe.db.get_value("Connection", {"reference_no": ref}, "name")
+	found = frappe.db.get_value("Connection", {"reference_no": ref}, "name")
+	if found:
+		return found
+	from utility_billing.utility_billing import legacy  # noqa: PLC0415
+
+	return legacy.connection_of(ref)  # an old account number from the previous system, while still accepted (increment 29)
 
 
 @frappe.whitelist()

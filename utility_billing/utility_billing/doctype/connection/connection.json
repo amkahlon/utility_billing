@@ -10,6 +10,8 @@
  "engine": "InnoDB",
  "field_order": [
   "reference_no",
+  "legacy_account_no",
+  "legacy_collection_no",
   "connection_title",
   "society",
   "property",
@@ -54,6 +56,21 @@
    "no_copy": 1,
    "read_only": 1,
    "unique": 1
+  },
+  {
+   "fieldname": "legacy_account_no",
+   "fieldtype": "Data",
+   "label": "Old Account No",
+   "search_index": 1,
+   "in_standard_filter": 1,
+   "description": "The account number in the society's previous system (migration). Accepted at the counter and by banks while the society accepts old numbers."
+  },
+  {
+   "fieldname": "legacy_collection_no",
+   "fieldtype": "Data",
+   "label": "Old Collection No",
+   "search_index": 1,
+   "description": "The previous system's bank collection or invoice number for this account, if it had one."
   },
   {
    "fieldname": "connection_title",
@@ -273,7 +290,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-18 16:00:00.000000",
+ "modified": "2026-11-18 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection",
