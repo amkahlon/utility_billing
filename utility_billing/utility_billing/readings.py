@@ -14,6 +14,7 @@ from utility_billing.utility_billing import routes
 from utility_billing.utility_billing import rights
 
 DONE = ("Valid", "Approved", "Estimated")
+NET_METERING = "Net Metering"  # Meter.meter_type of a bi-directional (import and export) meter
 ACTUAL_DONE = ("Valid", "Approved")
 REVIEW_ROLES = {"Billing Officer", "Billing Manager", "System Manager"}
 
@@ -33,7 +34,7 @@ def _readings(connection, filters=None, order="billing_month desc", limit=None, 
 		"Meter Reading",
 		filters={"connection": connection, **(filters or {})},
 		fields=fields or ["name", "billing_month", "units", "raw_units", "present_reading", "reading_date",
-		                  "meter", "consumption_type", "estimated_since_units", "status"],
+		                  "meter", "consumption_type", "estimated_since_units", "status", "present_export_reading"],
 		order_by=order,
 		limit=limit,
 	)
@@ -85,15 +86,18 @@ def reading_context(connection_name, month):
 	current = next((m for m in conn.meters if not m.removed_on), None)
 	if not current:
 		frappe.throw(_("Connection {0} has no installed meter.").format(connection_name))
-	meter = frappe.db.get_value("Meter", current.meter, ["multiplier", "digits"], as_dict=True)
+	meter = frappe.db.get_value("Meter", current.meter, ["multiplier", "digits", "meter_type"], as_dict=True)
 	last = last_actual(connection_name, month)
 	ctx = frappe._dict(
 		meter=current.meter, multiplier=flt(meter.multiplier) or 1, digits=meter.digits or 5,
 		previous_reading=flt(current.start_reading), previous_reading_date=current.installed_on,
 		old_meter_units=0, estimated_since_units=0,
+		# a net-metering meter's export register (increment 28): from the last actual reading, or as the meter was installed
+		net_metering=1 if meter.meter_type == NET_METERING else 0, previous_export_reading=flt(current.get("start_export_reading")),
 	)
 	if last and last.meter == current.meter:
 		ctx.previous_reading, ctx.previous_reading_date = flt(last.present_reading), last.reading_date
+		ctx.previous_export_reading = flt(last.get("present_export_reading"))
 	elif last:
 		# Meter changed since the last actual reading: bill the old meter up to its end reading.
 		old = next((m for m in conn.meters if m.meter == last.meter and m.removed_on), None)
@@ -184,14 +188,16 @@ def close_cycle(cycle: str):
 @frappe.whitelist()
 def upload_readings(cycle: str, file_url: str):
 	"""Apply readings from an Excel or CSV file (FS-RDG-04). Columns: Reference No, Present Reading,
-	Reading Date (optional, default today), Exception Code (optional), MDI (optional, kW). Every row gets the same checks
-	as office entry; rows that can't be applied are returned with the reason."""
+	Reading Date (optional, default today), Exception Code (optional), MDI (optional, kW), Export Reading (net-metering meters).
+	Every row gets the same checks as office entry; rows that can't be applied are returned with the reason."""
 	c = cycle_doc(cycle)
 	rows = _read_rows(file_url)
 	if not rows:
 		frappe.throw(_("The file has no rows."))
 	header = [cstr(h).strip().lower() for h in rows[0]]
-	col = {k: header.index(k) for k in ("reference no", "present reading", "reading date", "exception code", "mdi") if k in header}
+	if "present export reading" in header and "export reading" not in header:
+		header[header.index("present export reading")] = "export reading"
+	col = {k: header.index(k) for k in ("reference no", "present reading", "reading date", "exception code", "mdi", "export reading") if k in header}
 	if "reference no" not in col or ("present reading" not in col and "exception code" not in col):
 		frappe.throw(_("The file needs the columns Reference No and Present Reading (or Exception Code)."))
 	updated, errors = 0, []
@@ -219,6 +225,10 @@ def upload_readings(cycle: str, file_url: str):
 				r.exception_code = None
 				if val("mdi") not in (None, ""):
 					r.mdi_kw = flt(val("mdi"))  # the maximum demand shown on the meter (MDI), in kW
+				if val("export reading") not in (None, ""):
+					if not frappe.utils.cint(r.net_metering):
+						raise frappe.ValidationError(_("An export reading for a meter that isn't a net-metering meter"))
+					r.present_export_reading = flt(val("export reading"))
 			r.reading_date = getdate(val("reading date")) if val("reading date") else nowdate()
 			r.source = "Import"
 			r.save()

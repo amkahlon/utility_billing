@@ -156,6 +156,12 @@
        "width": 60,
        "blocks": [
         {
+         "type": "solar",
+         "options": {
+          "notice": 0
+         }
+        },
+        {
          "type": "notices",
          "options": {}
         }
@@ -194,7 +200,7 @@
         {
          "type": "details",
          "options": {
-          "columns": 2,
+          "columns": 3,
           "fields": [
            {
             "key": "reference_no"
@@ -240,7 +246,7 @@
         {
          "type": "qr",
          "options": {
-          "size": 14
+          "size": 12
          }
         },
         {
@@ -249,7 +255,6 @@
           "style": "List",
           "rows": [
            "current",
-           "arrears",
            "within",
            "after"
           ],
@@ -278,7 +283,7 @@
         {
          "type": "details",
          "options": {
-          "columns": 2,
+          "columns": 3,
           "fields": [
            {
             "key": "reference_no"
@@ -324,7 +329,7 @@
         {
          "type": "qr",
          "options": {
-          "size": 14
+          "size": 12
          }
         },
         {
@@ -333,7 +338,6 @@
           "style": "List",
           "rows": [
            "current",
-           "arrears",
            "within",
            "after"
           ],

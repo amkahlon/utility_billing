@@ -19,10 +19,11 @@ from utility_billing.utility_billing import account, gl, periods, plans
 from utility_billing.utility_billing.readings import month_start
 
 AMOUNTS = ("current_bill", "arrears", "surcharge", "fees", "credit", "security_deposit", "plan_remaining")
-COLUMNS = ("reference_no",) + AMOUNTS + ("plan_installments",)
+COLUMNS = ("reference_no",) + AMOUNTS + ("plan_installments", "solar_credit_units")
 ALIASES = {"reference": "reference_no", "reference number": "reference_no", "consumer number": "reference_no", "account": "reference_no",
            "current": "current_bill", "current bill": "current_bill", "deposit": "security_deposit", "security deposit": "security_deposit",
-           "plan": "plan_remaining", "installments": "plan_installments", "installments left": "plan_installments"}
+           "plan": "plan_remaining", "installments": "plan_installments", "installments left": "plan_installments",
+           "solar credit": "solar_credit_units", "solar units": "solar_credit_units", "solar credit units": "solar_credit_units"}
 BUCKETS = {"current_bill": "current", "arrears": "arrears", "surcharge": "surcharge", "fees": "fees"}
 WRITERS = {"System Manager", "Billing Manager", "Accounts Officer"}
 
@@ -49,6 +50,7 @@ def rows_from_table(table) -> list[dict]:
 		for k in AMOUNTS:
 			row[k] = _number(row.get(k))
 		row["plan_installments"] = cint(_number(row.get("plan_installments")))
+		row["solar_credit_units"] = _number(row.get("solar_credit_units"))  # net metering (increment 28): export units not yet used
 		out.append(row)
 	return out
 
@@ -124,7 +126,9 @@ def check(doc) -> int:
 				problems.append(_("the plan can't be for more than the arrears, surcharge and fees"))
 		elif cint(r.plan_installments):
 			problems.append(_("installments left without an amount still to pay"))
-		if not problems and not owes and not flt(r.credit) and not flt(r.security_deposit):
+		if flt(r.get("solar_credit_units")) < 0:
+			problems.append(_("solar credit units can't be negative"))
+		if not problems and not owes and not flt(r.credit) and not flt(r.security_deposit) and not flt(r.get("solar_credit_units")):
 			problems.append(_("nothing to bring over"))
 		r.row_status = "Error" if problems else "OK"
 		r.error = "; ".join(problems) or None
@@ -255,4 +259,4 @@ def template():
 	"""An empty file with the columns, for the society's data team."""
 	from frappe.utils.csvutils import build_csv_response  # noqa: PLC0415
 
-	build_csv_response([list(COLUMNS), ["1000000016", 22260, 1104, 0, 0, 0, 5000, 0, 0]], "opening balances template")
+	build_csv_response([list(COLUMNS), ["1000000016", 22260, 1104, 0, 0, 0, 5000, 0, 0, 0]], "opening balances template")

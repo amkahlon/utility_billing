@@ -14,7 +14,8 @@ from frappe.utils import flt, getdate
 from utility_billing.utility_billing import defective, readings
 from utility_billing.utility_billing import reading_engine as engine
 
-INPUTS = ("present_reading", "reading_date", "exception_code")
+INPUTS = ("present_reading", "reading_date", "exception_code", "present_export_reading")
+NUMBERS = ("present_reading", "present_export_reading")
 
 
 class MeterReading(Document):
@@ -73,7 +74,7 @@ class MeterReading(Document):
 		if not before:
 			return True
 		return any(
-			(flt(before.get(f)) != flt(self.get(f))) if f == "present_reading" else (before.get(f) != self.get(f))
+			(flt(before.get(f)) != flt(self.get(f))) if f in NUMBERS else (before.get(f) != self.get(f))
 			for f in INPUTS
 		)
 
@@ -114,16 +115,33 @@ class MeterReading(Document):
 		)
 		self.units, self.raw_units = flt(result.units), flt(result.raw_units)
 		self.consumption_type = "Actual"
-		self.checks = "\n".join(result.flags) or None
+		export_flags = self.evaluate_export()
+		self.checks = "\n".join([*result.flags, *export_flags]) or None
 		avg, low, high = result.expected or (0, 0, 0)
 		self.expected_average, self.expected_low, self.expected_high = flt(avg), flt(low), flt(high)
-		if result.needs_review:
+		if result.needs_review or export_flags:
 			self.status = "Approved" if self.flags.approve_as_is else "Flagged"
 		else:
 			self.status = "Valid"
 
+	def evaluate_export(self) -> list[str]:
+		"""The export (solar) register of a net-metering meter (increment 28): units exported since the last actual reading. Returns
+		what needs a reviewer's look: a register lower than before (not a roll-over), or no export reading entered."""
+		self.export_units = 0
+		if not frappe.utils.cint(self.net_metering):
+			return []
+		if not flt(self.present_export_reading) and flt(self.previous_export_reading):
+			return [_("Enter the export reading: it is empty or zero, the previous one was {0}.").format(flt(self.previous_export_reading))]
+		units, rolled, lower = engine.raw_units(self.previous_export_reading, self.present_export_reading, self.digits, self.multiplier)
+		if lower:
+			return [_("The export reading {0} is lower than the previous one ({1}).").format(flt(self.present_export_reading),
+			                                                                               flt(self.previous_export_reading))]
+		self.export_units = flt(units)
+		return [_("Export register rolled over.")] if rolled else []
+
 	def reset_result(self):
 		self.defective = 0
+		self.export_units = 0
 		self.units = self.raw_units = 0
 		self.consumption_type = None
 		self.checks = None
@@ -159,6 +177,9 @@ class MeterReading(Document):
 			if self.exception_code:
 				note = _("Not read: {0}. ").format(self.exception_code) + note
 		self.units, self.raw_units = units, 0
+		if frappe.utils.cint(self.net_metering):  # exports are never estimated: the register counts them when it is next read
+			self.export_units = 0
+			note += " " + _("Export not estimated: it is counted at the next actual reading.")
 		self.consumption_type = "Estimated"
 		self.status = "Estimated"
 		self.checks = note

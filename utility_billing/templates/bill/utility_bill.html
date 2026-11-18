@@ -124,10 +124,27 @@
 		<td>{{ qty(reading.previous_reading) }} <span class="note">{{ date(reading.previous_reading_date) }}</span></td>
 		<td>{{ qty(reading.present_reading) }} <span class="note">{{ date(reading.reading_date) }}</span></td>
 		<td class="right">{{ qty(reading.multiplier or 1) }}</td>
-		<td class="right strong">{{ qty(bill.units) }}</td>
-		<td>{{ (bill.consumption_type or reading.consumption_type or "") | e }}</td>
+		<td class="right strong">{{ qty(bill.import_units if bill.nm_method else bill.units) }}</td>
+		<td>{% if bill.nm_method %}{{ t("Import") }} · {% endif %}{{ (bill.consumption_type or reading.consumption_type or "") | e }}</td>
 	</tr>
+	{#- net metering (increment 28): the export register, and the units billed after the solar credit #}
+	{%- if bill.nm_method %}
+	<tr>
+		<td>{{ qty(reading.previous_export_reading) }}</td><td>{{ qty(reading.present_export_reading) }}</td>
+		<td class="right">{{ qty(reading.multiplier or 1) }}</td><td class="right strong">{{ qty(bill.export_units) }}</td><td>{{ t("Export (solar)") }}</td>
+	</tr>
+	<tr class="tot"><td colspan="3" class="strong">{{ t("Units billed") }}</td><td class="right strong">{{ qty(bill.units) }}</td><td class="note">{{ bill.nm_method | e }}</td></tr>
+	{%- endif %}
 </table>
+{%- if bill.nm_method %}
+<div class="note" style="margin-top: 1mm;">
+	{%- if bill.nm_method == "Buyback rate" %}{{ _("Solar: {0} exported units credited at Rs {1} = Rs {2}.").format(qty(bill.export_units), bill.buyback_rate, money(bill.buyback_credit)) }}
+	{%- else %}{{ _("Solar: {0} exported, {1} credited{2}; {3} brought forward, {4} set against imports, {5} carried forward.").format(
+		qty(bill.export_units), qty(bill.credited_units), (" (" ~ _("factor") ~ " " ~ "%.4f" | format(bill.nm_credit_factor) ~ ")") if bill.nm_method == "Society rebate pool" else "",
+		qty(bill.units_carried_in), qty(bill.units_set_off), qty(bill.units_carried_out)) }}{% endif %}
+	{%- if snap.solar_notice %}<div style="margin-top: .8mm;">{{ snap.solar_notice | e }}</div>{% endif %}
+</div>
+{%- endif %}
 </td>
 {%- if meter_photo %}
 <td style="width: 32mm; vertical-align: top; padding: 0 0 0 2mm;"><img class="meter-photo" src="{{ meter_photo }}" alt="">

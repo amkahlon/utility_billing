@@ -149,6 +149,12 @@
          }
         },
         {
+         "type": "solar",
+         "options": {
+          "notice": 0
+         }
+        },
+        {
          "type": "notices",
          "options": {}
         },

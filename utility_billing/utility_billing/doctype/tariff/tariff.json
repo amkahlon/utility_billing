@@ -21,6 +21,7 @@
   "pricing_section",
   "pricing_method",
   "flat_rate",
+  "buyback_rate",
   "cb_pricing",
   "minimum_charge",
   "minimum_applies_to",
@@ -133,6 +134,12 @@
    "fieldtype": "Currency",
    "label": "Rate per Unit",
    "mandatory_depends_on": "eval:doc.pricing_method=='Flat rate'"
+  },
+  {
+   "fieldname": "buyback_rate",
+   "fieldtype": "Currency",
+   "label": "Solar Buyback Rate (per unit)",
+   "description": "Used where the society credits solar exports at a buyback rate: exported units \u00d7 this rate."
   },
   {
    "fieldname": "cb_pricing",
@@ -299,7 +306,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-16 15:00:00.000000",
+ "modified": "2026-11-18 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Tariff",

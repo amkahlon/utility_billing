@@ -10,8 +10,10 @@
   "meter",
   "installed_on",
   "start_reading",
+  "start_export_reading",
   "removed_on",
   "end_reading",
+  "end_export_reading",
   "removal_reason",
   "unreadable"
  ],
@@ -30,6 +32,12 @@
    "label": "Start Reading"
   },
   {
+   "fieldname": "start_export_reading",
+   "fieldtype": "Float",
+   "label": "Start Export Reading",
+   "description": "Net-metering meters: the export register when installed."
+  },
+  {
    "fieldname": "removed_on",
    "fieldtype": "Date",
    "in_list_view": 1,
@@ -40,6 +48,12 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "End Reading"
+  },
+  {
+   "fieldname": "end_export_reading",
+   "fieldtype": "Float",
+   "label": "End Export Reading",
+   "description": "Net-metering meters: the export register when removed."
   },
   {
    "fieldname": "removal_reason",
@@ -65,7 +79,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-11-16 09:00:00.000000",
+ "modified": "2026-11-18 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection Meter",

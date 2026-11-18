@@ -56,6 +56,11 @@ FIELDS = {
 	"previous_reading": ("Previous reading", lambda c: c["qty"]((c.get("reading") or {}).get("previous_reading")) if c.get("reading") else ""),
 	"present_reading": ("Present reading", lambda c: c["qty"]((c.get("reading") or {}).get("present_reading")) if c.get("reading") else ""),
 	"units": ("Units", lambda c: c["qty"](c["bill"].units)),
+	"imported_units": ("Imported units", lambda c: c["qty"](c["bill"].get("import_units")) if c["bill"].get("nm_method") else ""),
+	"exported_units": ("Exported units", lambda c: c["qty"](c["bill"].get("export_units")) if c["bill"].get("nm_method") else ""),
+	"credited_units": ("Units credited", lambda c: c["qty"](c["bill"].get("credited_units")) if c["bill"].get("nm_method") else ""),
+	"solar_carried_forward": ("Solar units carried forward", lambda c: c["qty"](c["bill"].get("units_carried_out")) if c["bill"].get("nm_method") else ""),
+	"solar_notice": ("Solar rebate notice", lambda c: c["snap"].get("solar_notice") or ""),
 	"current_bill": ("Current bill", lambda c: c["money"](c["bill"].current_amount)),
 	"arrears": ("Arrears", lambda c: c["money"](c["bill"].arrears)),
 	"payable_within_due": ("Payable within due date", lambda c: c["money"](c["bill"].payable_within_due)),
@@ -118,6 +123,12 @@ BLOCKS = {
 		_opt("columns", "Show", "multi", ["previous", "present", "dates", "multiplier", "units", "type"],
 		     choices=[["previous", "Previous reading"], ["present", "Present reading"], ["dates", "Reading dates"], ["multiplier", "Multiplier"],
 		              ["units", "Units"], ["type", "Reading type"]]),
+	]},
+	"solar": {"label": "Solar / net metering", "description": "Exported units and the solar credit (net-metering accounts only).", "options": [
+		_opt("style", "Style", "select", "Summary line", choices=["Summary line", "Table"]),
+		_opt("heading", "Heading", "text", "Solar"),
+		_opt("notice", "The month's solar rebate notice", "check", 1),
+		_opt("boxed", "Boxed", "check", 0),
 	]},
 	"meter_photo": {"label": "Meter photo", "description": "The photo taken with the reading.", "options": [
 		_opt("width", "Width (mm)", "int", 30, min=15, max=90),
@@ -370,6 +381,8 @@ def render_bill(bill, settings, duplicate=0, ctx=None, designer=False) -> str:
 		from utility_billing.utility_billing import barcode  # noqa: PLC0415
 
 		ctx["barcode"] = barcode.png_data_uri(ref)
+	if bill.get("name") == SAMPLE_BILL and _has_block(layout, "solar") and not bill.get("nm_method"):
+		make_solar(bill, ctx)
 	if _has_block(layout, "meter_photo") and not ctx.get("meter_photo"):
 		if bill.get("name") == SAMPLE_BILL:  # previews: a stand-in photo, so the space the photo takes is seen
 			ctx["meter_photo"] = sample_meter_photo()
@@ -401,6 +414,21 @@ def render_bill(bill, settings, duplicate=0, ctx=None, designer=False) -> str:
 
 # ---------------------------------------------------------------- the sample bill (previews before a society has bills)
 SAMPLE_BILL = "SAMPLE-BILL"
+
+
+def make_solar(bill, ctx=None):
+	"""A sample bill as a solar consumer's on the society rebate pool: 364 units imported, 100 exported, 100 credited, 264 billed."""
+	bill.update({"nm_method": "Society rebate pool", "import_units": 364, "export_units": 300, "credited_units": 100, "nm_credit_factor": 0.3333,
+	             "units_carried_in": 0, "units_set_off": 100, "units_carried_out": 0})
+	reading = (bill.print_snapshot or {}).get("reading") or {}
+	# 364 imported, 100 of the 300 exported credited: the 264 billed units the sample's charges are worked out on
+	reading.update({"net_metering": 1, "present_reading": (reading.get("previous_reading") or 0) + 364,
+	                "previous_export_reading": 20111, "present_export_reading": 20411, "export_units": 300})
+	bill.print_snapshot["solar_notice"] = ("Solar rebate (sample): residents' meters recorded 913,289 units against 787,200 billed by the DISCO; "
+	                                       "the 126,089 units are credited to solar producers in proportion to their exports.")
+	if ctx is not None:
+		ctx["reading"] = reading
+		ctx["snap"] = bill.print_snapshot
 
 
 @functools.cache
@@ -475,6 +503,7 @@ def long_bill(society):
 	                           amount=12345, note="August 2026 units 831" if i in (1, 2) else "", line_order=i, idx=i + 1,
 	                           charge_group="Electricity" if i < 4 else "Society charges") for i, n in enumerate(names)]
 	bill.update({"installment_due": 5000, "installment_no": 3, "period_note": "Includes a pro-rata period after a meter change"})
+	make_solar(bill)  # a solar consumer's bill, the longest kind (export register, solar block and the month's notice)
 	return bill
 
 

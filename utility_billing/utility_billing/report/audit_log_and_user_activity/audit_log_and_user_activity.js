@@ -31,7 +31,7 @@ frappe.query_reports["Audit Log and User Activity"] = {
   "fieldname": "doctype",
   "label": "Document Type",
   "fieldtype": "Select",
-  "options": "\nSociety\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund\nBill Revision\nBulk Adjustment\nInstallment Plan\nWrite Off\nDue Date Extension\nBill Dispute\nSettlement File\nSuspense Payment\nNotification Template\nMessaging Provider\nFee Type\nCharge Type\nConsumer Category\nCash Counter\nReason Code\nLedger Account\nJournal Export Layout\nConsumer\nProperty\nConnection\nMeter\nReading Cycle\nMeter Reading\nCashier Day\nKPI Definition"
+  "options": "\nSociety\nBill Template\nSolar Rebate Pool\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund\nBill Revision\nBulk Adjustment\nInstallment Plan\nWrite Off\nDue Date Extension\nBill Dispute\nSettlement File\nSuspense Payment\nNotification Template\nMessaging Provider\nFee Type\nCharge Type\nConsumer Category\nCash Counter\nReason Code\nLedger Account\nJournal Export Layout\nConsumer\nProperty\nConnection\nMeter\nReading Cycle\nMeter Reading\nCashier Day\nKPI Definition"
  }
 ],
 };
