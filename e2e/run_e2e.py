@@ -2284,6 +2284,8 @@ def t_net_metering_pool(d: Desk):
 	data = d.call("frappe.desk.query_report.run", report_name="Net Metering Register", filters=json.dumps({"society": s, "month": "2026-09-01"}))
 	row = [x for x in data["result"] if isinstance(x, dict) and x.get("connection") == conn][0]
 	eq((row["credited_units"], row["units_billed"]), (281, 698), "the register")
+	solar = d.call("utility_billing.utility_billing.consumer360.view", consumer=owner, account=conn)["overview"]["bill"]["solar"]
+	eq((solar["imported"], solar["exported"], solar["credited"]), (979.0, 908.0, 281.0), "Consumer 360 shows the solar figures")
 	S["nm_society"], S["nm_conn"] = s, conn
 
 

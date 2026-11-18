@@ -94,6 +94,7 @@ def reading_context(connection_name, month):
 		old_meter_units=0, estimated_since_units=0,
 		# a net-metering meter's export register (increment 28): from the last actual reading, or as the meter was installed
 		net_metering=1 if meter.meter_type == NET_METERING else 0, previous_export_reading=flt(current.get("start_export_reading")),
+		old_meter_export_units=0,
 	)
 	if last and last.meter == current.meter:
 		ctx.previous_reading, ctx.previous_reading_date = flt(last.present_reading), last.reading_date
@@ -106,6 +107,10 @@ def reading_context(connection_name, month):
 		if old:
 			old_mult = flt(frappe.db.get_value("Meter", old.meter, "multiplier")) or 1
 			ctx.old_meter_units = max(0, (flt(old.end_reading) - flt(last.present_reading)) * old_mult)
+			# a replaced net-metering meter: what it exported after its last reading is credited with this month's exports (increment 28)
+			if flt(old.get("end_export_reading")) and frappe.db.get_value("Meter", old.meter, "meter_type") == NET_METERING:
+				ctx.old_meter_export_units = max(0, (flt(old.end_export_reading) - flt(last.get("present_export_reading"))) * old_mult)
+				ctx.net_metering = 1  # credited even if the new meter has no export register
 	ctx.estimated_since_units = estimated_since(connection_name, last.billing_month if last else None, month)
 	return ctx
 

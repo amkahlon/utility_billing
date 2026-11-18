@@ -24,6 +24,7 @@
   "expires_on",
   "supply_section",
   "sanctioned_load_kw",
+  "solar_capacity_kw",
   "last_mdi_kw",
   "last_mdi_date",
   "phase",
@@ -138,6 +139,12 @@
    "fieldname": "sanctioned_load_kw",
    "fieldtype": "Float",
    "label": "Sanctioned Load (kW)"
+  },
+  {
+   "fieldname": "solar_capacity_kw",
+   "fieldtype": "Float",
+   "label": "Solar Capacity (kW)",
+   "description": "Net-metering accounts: the installed solar capacity. Exports beyond what it could produce are flagged by revenue assurance."
   },
   {
    "default": "Single",
@@ -266,7 +273,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 12:00:00.000000",
+ "modified": "2026-11-18 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Connection",

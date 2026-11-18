@@ -302,7 +302,8 @@ def install_first_meter(sr, conn, day):
 	reading = flt(sr.new_meter_reading) or last_field_reading(sr) or 0  # the installer's reading when the form has none
 	if not sr.new_meter:
 		frappe.throw(_("Choose the meter that was installed."))
-	conn.append("meters", {"meter": sr.new_meter, "installed_on": day, "start_reading": flt(reading)})
+	conn.append("meters", {"meter": sr.new_meter, "installed_on": day, "start_reading": flt(reading),
+	                       "start_export_reading": flt(sr.get("new_meter_export_reading"))})
 	conn.status, conn.connection_date = "Active", day
 	return reading
 
@@ -381,7 +382,9 @@ def _complete(sr):
 		for r in old:
 			r.removed_on, r.end_reading, r.removal_reason = day, flt(sr.old_meter_reading), sr.meter_reason or _("Meter change {0}").format(sr.name)
 			r.unreadable = cint(sr.get("old_meter_unreadable"))  # FS-WF-08: no true-up of averaged months from an unreadable meter
-		conn.append("meters", {"meter": sr.new_meter, "installed_on": day, "start_reading": flt(sr.new_meter_reading)})
+			r.end_export_reading = flt(sr.get("old_meter_export_reading"))  # net metering: the exports since its last reading are credited
+		conn.append("meters", {"meter": sr.new_meter, "installed_on": day, "start_reading": flt(sr.new_meter_reading),
+		                       "start_export_reading": flt(sr.get("new_meter_export_reading"))})
 		conn.save(ignore_permissions=True)
 		if sr.seal_no:
 			frappe.db.set_value("Meter", sr.new_meter, "seal_no", sr.seal_no)

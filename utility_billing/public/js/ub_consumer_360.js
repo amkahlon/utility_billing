@@ -238,7 +238,11 @@ window.UtilityBillingConsumer360 = class UtilityBillingConsumer360 {
 		const billCard = b
 			? `<section class="ub-card"><h2>${__("{0} bill", [this.esc(b.month.split(" ")[0])])}${b.final ? " " + this.pill(__("Final bill"), "amber") : ""}</h2>
 				<table class="ub-tbl ub-c360-bill"><tbody>
-				<tr><td>${b.previous !== null ? __("Units: {0} − {1}", [this.n(b.present), this.n(b.previous)]) : this.esc(b.consumption_type || __("Units"))}</td><td class="num">${this.n(b.units)} kWh</td></tr>
+				<tr><td>${b.previous !== null ? __("Units: {0} − {1}", [this.n(b.present), this.n(b.previous)]) : this.esc(b.consumption_type || __("Units"))}</td><td class="num">${this.n(b.solar ? b.solar.imported : b.units)} kWh</td></tr>
+				${b.solar ? `<tr><td>${__("Solar exported")}</td><td class="num">${this.n(b.solar.exported)} kWh</td></tr>
+				<tr><td>${b.solar.method === "Buyback rate" ? __("Buyback credit") : __("Solar units credited")}</td><td class="num">${b.solar.method === "Buyback rate" ? this.rs(b.solar.buyback_credit) : this.n(b.solar.credited) + " kWh"}</td></tr>
+				<tr><td>${__("Units billed")}</td><td class="num">${this.n(b.units)} kWh</td></tr>
+				${b.solar.carried_out ? `<tr><td>${__("Solar credit carried forward")}</td><td class="num">${this.n(b.solar.carried_out)} kWh</td></tr>` : ""}` : ""}
 				${b.lines.map((l) => `<tr><td>${this.esc(l.label)}${l.note ? `<div class="sub">${this.esc(l.note)}</div>` : ""}</td><td class="num">${this.n(l.amount)}</td></tr>`).join("")}
 				${b.tax ? `<tr><td>${__("Taxes")}</td><td class="num">${this.n(b.tax)}</td></tr>` : ""}
 				<tr class="strong"><td>${__("Current month bill")}</td><td class="num">${this.n(b.current)}</td></tr>
@@ -311,7 +315,7 @@ window.UtilityBillingConsumer360 = class UtilityBillingConsumer360 {
 	tab_bills(v) {
 		return this.table([
 			{ label: __("Month"), cell: (b) => this.link("Utility Bill", b.name, moment(b.billing_month).format("MMM YYYY")) },
-			{ label: __("Units"), num: 1, cell: (b) => this.n(b.units) },
+			{ label: __("Units"), num: 1, cell: (b) => this.n(b.units) + (b.nm_method ? `<div class="sub">${__("{0} in, {1} out", [this.n(b.import_units), this.n(b.export_units)])}${b.units_carried_out ? " · " + __("{0} carried", [this.n(b.units_carried_out)]) : ""}</div>` : "") },
 			{ label: __("Bill"), num: 1, cell: (b) => this.rs(b.current_amount) },
 			{ label: __("Payable"), num: 1, cell: (b) => this.rs(b.payable_within_due) },
 			{ label: __("Due"), cell: (b) => this.d(b.due_date) },
@@ -333,7 +337,7 @@ window.UtilityBillingConsumer360 = class UtilityBillingConsumer360 {
 			{ label: __("Month"), cell: (r) => this.link("Meter Reading", r.name, moment(r.billing_month).format("MMM YYYY")) },
 			{ label: __("Read on"), cell: (r) => this.d(r.reading_date) },
 			{ label: __("Reading"), num: 1, cell: (r) => this.esc(r.present_reading) },
-			{ label: __("Units"), num: 1, cell: (r) => this.n(r.units) },
+			{ label: __("Units"), num: 1, cell: (r) => this.n(r.units) + (r.net_metering ? `<div class="sub">${__("exported {0}", [this.n(r.export_units)])}</div>` : "") },
 			{ label: __("Status"), cell: (r) => `${this.esc(__(r.status))}<div class="sub">${this.esc(r.consumption_type || "")}</div>` },
 		], this.mine(v.readings), __("No readings yet."));
 	}

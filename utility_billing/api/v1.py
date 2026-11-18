@@ -30,7 +30,11 @@ def _bill_view(b):
 	return {"bill": b.name, "billing_month": str(b.billing_month)[:7], "issue_date": str(b.issue_date) if b.issue_date else None,
 	        "due_date": str(b.extended_due_date or b.due_date) if b.due_date else None, "units": flt(b.units), "current_amount": flt(b.current_amount),
 	        "arrears": flt(b.arrears), "payable_within_due": flt(b.payable_within_due), "payable_after_due": flt(b.payable_after_due),
-	        "status": b.status}
+	        "status": b.status,
+	        # net metering (increment 28): null for an account without solar
+	        "solar": {"method": b.nm_method, "imported_units": flt(b.import_units), "exported_units": flt(b.export_units),
+	                  "credited_units": flt(b.credited_units), "units_carried_forward": flt(b.units_carried_out),
+	                  "buyback_credit": flt(b.buyback_credit)} if b.get("nm_method") else None}
 
 
 # ---------------------------------------------------------------- reading
@@ -55,7 +59,8 @@ def bills(client, reference_no, limit=12):
 	rows = frappe.get_all("Utility Bill", filters={"connection": connection, "docstatus": 1}, limit=min(max(cint(limit) or 12, 1), 36),
 	                      order_by="billing_month desc, creation desc",
 	                      fields=["name", "billing_month", "issue_date", "due_date", "extended_due_date", "units", "current_amount", "arrears",
-	                              "payable_within_due", "payable_after_due", "status"])
+	                              "payable_within_due", "payable_after_due", "status", "nm_method", "import_units", "export_units", "credited_units",
+	                              "units_carried_out", "buyback_credit"])
 	return {"reference_no": connection, "bills": [_bill_view(b) for b in rows]}
 
 
