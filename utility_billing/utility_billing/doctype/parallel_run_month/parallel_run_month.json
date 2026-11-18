@@ -1,0 +1,263 @@
+{
+ "actions": [],
+ "creation": "2026-11-18 21:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "run_title",
+  "society",
+  "billing_month",
+  "bill_run",
+  "cb1",
+  "profile",
+  "workbook",
+  "tolerance",
+  "comparison_status",
+  "summary_section",
+  "accounts_compared",
+  "accounts_matched",
+  "accounts_different",
+  "cb2",
+  "missing_here",
+  "missing_there",
+  "total_difference",
+  "cb3",
+  "payments_recorded",
+  "payments_amount",
+  "payments_skipped",
+  "rows_section",
+  "rows",
+  "payments_section",
+  "payments"
+ ],
+ "fields": [
+  {
+   "fieldname": "run_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "reqd": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "billing_month",
+   "fieldtype": "Date",
+   "label": "Month",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "bill_run",
+   "fieldtype": "Link",
+   "label": "Our Bill Run",
+   "options": "Bill Run",
+   "description": "This month's bill run here, to compare with the previous system's bills."
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "profile",
+   "fieldtype": "Link",
+   "label": "Mapping Profile",
+   "options": "Migration Profile",
+   "description": "For the column names of the Old Bills and Payments sheets."
+  },
+  {
+   "fieldname": "workbook",
+   "fieldtype": "Attach",
+   "label": "Workbook (Excel)",
+   "description": "The previous system's bills of the month (sheet Old Bills) and the payments it took (sheet Payments)."
+  },
+  {
+   "fieldname": "tolerance",
+   "fieldtype": "Currency",
+   "label": "Tolerance",
+   "default": "1",
+   "description": "Differences up to this much count as a match (rounding)."
+  },
+  {
+   "fieldname": "comparison_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nCompared\nClean",
+   "default": "Draft",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "accounts_compared",
+   "fieldtype": "Int",
+   "label": "Accounts Compared",
+   "read_only": 1
+  },
+  {
+   "fieldname": "accounts_matched",
+   "fieldtype": "Int",
+   "label": "Matched",
+   "read_only": 1
+  },
+  {
+   "fieldname": "accounts_different",
+   "fieldtype": "Int",
+   "label": "Different",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "missing_here",
+   "fieldtype": "Int",
+   "label": "Not in Our Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "missing_there",
+   "fieldtype": "Int",
+   "label": "Not in Their Bills",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_difference",
+   "fieldtype": "Currency",
+   "label": "Total Payable Difference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payments_recorded",
+   "fieldtype": "Int",
+   "label": "Payments Recorded",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payments_amount",
+   "fieldtype": "Currency",
+   "label": "Amount Recorded",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payments_skipped",
+   "fieldtype": "Int",
+   "label": "Payments Skipped",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rows_section",
+   "fieldtype": "Section Break",
+   "label": "Account by Account"
+  },
+  {
+   "fieldname": "rows",
+   "fieldtype": "Table",
+   "label": "Accounts",
+   "options": "Parallel Run Row",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payments_section",
+   "fieldtype": "Section Break",
+   "label": "Payments",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "payments",
+   "fieldtype": "Table",
+   "label": "Payments",
+   "options": "Parallel Run Payment",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-18 21:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Parallel Run Month",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 1
+  },
+  {
+   "role": "Billing Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "create": 1,
+   "write": 1
+  },
+  {
+   "role": "Accounts Officer",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "create": 1,
+   "write": 1
+  },
+  {
+   "role": "General Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Management",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Society Admin",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Billing Auditor",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "format:PRM-{society}-{billing_month}",
+ "title_field": "run_title",
+ "show_title_field_in_link": 1,
+ "track_changes": 1
+}

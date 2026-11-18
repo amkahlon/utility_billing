@@ -19,6 +19,18 @@ class Connection(Document):
 		if not self.reference_no:
 			self.reference_no = self.new_reference_no()
 
+	def validate_legacy_numbers(self):
+		"""An old account or collection number from the previous system belongs to one account only (increment 29)."""
+		for f in ("legacy_account_no", "legacy_collection_no"):
+			v = (self.get(f) or "").strip() or None
+			self.set(f, v)
+			if v:
+				other = frappe.db.sql("""select name from `tabConnection` where name != %(me)s and society = %(s)s
+				                         and (legacy_account_no = %(v)s or legacy_collection_no = %(v)s) limit 1""",
+				                      {"me": self.name or "", "s": self.society, "v": v})
+				if other:
+					frappe.throw(_("Old number {0} already belongs to account {1}.").format(v, other[0][0]))
+
 	def new_reference_no(self) -> str:
 		code = frappe.db.get_value("Utility Type", self.utility, "reference_code")
 		if not code:
@@ -28,6 +40,7 @@ class Connection(Document):
 
 	def validate(self):
 		self.validate_reference_unchanged()
+		self.validate_legacy_numbers()
 		self.validate_request_only()
 		self.validate_links()
 		self.validate_route()

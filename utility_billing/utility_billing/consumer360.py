@@ -33,13 +33,15 @@ def search(text: str, limit: int = 20):
 		"""select c.name, c.consumer_name, c.mobile_no, c.id_number, k.name account, k.reference_no, k.current_meter, k.utility,
 		          k.status account_status, p.property_no house,
 		          case when k.reference_no like %(l)s then 'reference' when k.current_meter like %(l)s then 'meter'
+		               when k.legacy_account_no like %(l)s or k.legacy_collection_no like %(l)s or c.legacy_customer_id like %(l)s then 'old number'
 		               when p.property_no like %(l)s then 'house' when c.id_number like %(l)s then 'cnic'
 		               when c.mobile_no like %(l)s or c.phone like %(l)s then 'phone' else 'name' end matched
 		from `tabConsumer` c left join `tabConnection` k on k.consumer = c.name left join `tabProperty` p on p.name = k.property
 		where (c.consumer_name like %(l)s or c.id_number like %(l)s or c.mobile_no like %(l)s or c.phone like %(l)s
-		   or k.reference_no like %(l)s or k.current_meter like %(l)s or p.property_no like %(l)s)
+		   or k.reference_no like %(l)s or k.current_meter like %(l)s or p.property_no like %(l)s
+		   or k.legacy_account_no like %(l)s or k.legacy_collection_no like %(l)s or c.legacy_customer_id like %(l)s)
 		   and (%(all)s or k.society in %(mine)s)
-		order by (k.reference_no = %(t)s or k.current_meter = %(t)s or p.property_no = %(t)s) desc, c.consumer_name, k.name
+		order by (k.reference_no = %(t)s or k.current_meter = %(t)s or p.property_no = %(t)s or k.legacy_account_no = %(t)s) desc, c.consumer_name, k.name
 		limit %(n)s""", {"l": like, "t": text, "n": int(limit), "all": mine is None, "mine": mine or [""]}, as_dict=True)
 	for r in rows:
 		r["balance"] = acct.balance(r.account) if r.account else None
@@ -98,6 +100,12 @@ def overview(conn_name) -> dict:
 	months = frappe.db.sql("""select billing_month, sum(units) units, max(status = 'Estimated') estimated from `tabMeter Reading`
 	                          where connection = %s and status in ('Valid', 'Approved', 'Estimated') and billing_month > %s
 	                          group by billing_month order by billing_month""", (conn_name, frappe.utils.add_months(today, -12)), as_dict=True)
+	read = {getdate(m.billing_month) for m in months}
+	# months billed by the previous system before migration (increment 29) fill the chart where there's no reading here
+	months += [frappe._dict(billing_month=lb.billing_month, units=lb.units, estimated=0) for lb in frappe.get_all(
+		"Legacy Bill", filters={"connection": conn_name, "billing_month": [">", frappe.utils.add_months(today, -12)]},
+		fields=["billing_month", "units"]) if getdate(lb.billing_month) not in read]
+	months.sort(key=lambda m: getdate(m.billing_month))
 	held = flt(frappe.db.get_value("Connection", conn_name, "security_deposit"))
 	alerts = [{"tone": "amber", "text": _("Flag: {0}").format(f.name)} for f in flags.active(conn_name, today)]
 	for dt, label, cond in (("Bill Dispute", _("Bill dispute"), {"status": ["not in", ["Closed", "Resolved", "Decided", "Cancelled"]]}),

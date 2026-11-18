@@ -1,0 +1,65 @@
+{
+ "actions": [],
+ "creation": "2026-11-18 19:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sheet",
+  "row_no",
+  "account",
+  "severity",
+  "problem"
+ ],
+ "fields": [
+  {
+   "fieldname": "sheet",
+   "fieldtype": "Data",
+   "label": "Sheet",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "row_no",
+   "fieldtype": "Int",
+   "label": "Row",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "account",
+   "fieldtype": "Data",
+   "label": "Account",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "severity",
+   "fieldtype": "Select",
+   "label": "Severity",
+   "options": "Error\nWarning",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "problem",
+   "fieldtype": "Small Text",
+   "label": "Problem",
+   "in_list_view": 1,
+   "columns": 5
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-18 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Migration Problem",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1
+}

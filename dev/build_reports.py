@@ -132,6 +132,8 @@ GROUPS = [
 	("Revenue Assurance", [("DocType", "RA Finding", "Findings")]),
 	("Period Control", [("DocType", "Billing Period"), ("DocType", "Year End Close"), ("DocType", "Run Snapshot"),
 	                    ("DocType", "Opening Balance Import", "Opening Balances")]),
+	# the Migration Workbench (increment 29)
+	("Migration", [("DocType", "Migration Batch"), ("DocType", "Migration Profile"), ("DocType", "Parallel Run Month"), ("DocType", "Legacy Bill", "History from the Previous System")]),
 	("Accounting", [("DocType", "GL Journal"), ("DocType", "Receivables Reconciliation"), ("DocType", "Ledger Account"),
 	                ("DocType", "Journal Export Layout"), ("DocType", "Revenue Target")]),
 	("Meters and Network", [("DocType", "Meter"), ("DocType", "Meter Store Movement"), ("Report", "Meter Stock"), ("Report", "Meter Store Movements"), ("DocType", "Grid Station"), ("DocType", "Feeder"), ("DocType", "Line Section"),
