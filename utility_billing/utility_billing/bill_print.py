@@ -38,16 +38,28 @@ def bill_history(connection, month, months, until=None):
 	"""The connection's earlier posted bills, newest first, each with what was paid against it: the
 	payments received from its issue date up to the next bill's issue date (the last one up to
 	`until`, this bill's issue date). Reversed payments don't count."""
-	rows = frappe.get_all(
-		"Utility Bill",
-		filters={"connection": connection, "docstatus": 1, "billing_month": ["<", getdate(month)]},
-		fields=["billing_month", "issue_date", "units", "current_amount", "payable_within_due"],
-		order_by="billing_month desc", limit=months,
-	)
-	payments = frappe.get_all(
-		"Payment Receipt", filters={"connection": connection, "docstatus": 1},
-		fields=["payment_date", "amount"], order_by="payment_date",
-	) if rows else []
+	from utility_billing.utility_billing import runcache  # noqa: PLC0415
+
+	# a bill run reads the history of a group of accounts together (the performance step); an account with fewer bills in the group's
+	# window than asked for, and older ones behind it, is read on its own as before
+	group = runcache.primed(connection)
+	if group and (group.month != getdate(month) or group.months != months or (
+			len(group.bills.get(connection, ())) < months and connection in group.older)):
+		group = None
+	if group:
+		rows = group.bills.get(connection, [])[:months]
+		payments = group.payments.get(connection, []) if rows else []
+	else:
+		rows = frappe.get_all(
+			"Utility Bill",
+			filters={"connection": connection, "docstatus": 1, "billing_month": ["<", getdate(month)]},
+			fields=["billing_month", "issue_date", "units", "current_amount", "payable_within_due"],
+			order_by="billing_month desc", limit=months,
+		)
+		payments = frappe.get_all(
+			"Payment Receipt", filters={"connection": connection, "docstatus": 1},
+			fields=["payment_date", "amount"], order_by="payment_date",
+		) if rows else []
 	out, end = [], getdate(until) if until else None
 	for r in rows:
 		start = getdate(r.issue_date)
@@ -59,9 +71,11 @@ def bill_history(connection, month, months, until=None):
 		end = start
 	if len(out) < months:  # the months before the first bill here, as the previous system billed them (migration, increment 29)
 		before = getdate(out[-1]["month"]) if out else getdate(month)
-		for r in frappe.get_all("Legacy Bill", filters={"connection": connection, "billing_month": ["<", before]},
-		                        fields=["billing_month", "units", "current_amount", "arrears", "bill_amount", "paid_on", "paid_amount"],
-		                        order_by="billing_month desc", limit=months - len(out)):
+		legacy = [r for r in group.legacy.get(connection, []) if getdate(r.billing_month) < before][:months - len(out)] if group else frappe.get_all(
+			"Legacy Bill", filters={"connection": connection, "billing_month": ["<", before]},
+			fields=["billing_month", "units", "current_amount", "arrears", "bill_amount", "paid_on", "paid_amount"],
+			order_by="billing_month desc", limit=months - len(out))
+		for r in legacy:
 			out.append({"month": str(r.billing_month), "units": flt(r.units),
 			            "billed": flt(r.bill_amount) or flt(r.current_amount) + flt(r.arrears), "current": flt(r.current_amount),
 			            "paid_on": str(r.paid_on) if r.paid_on else None, "paid": flt(r.paid_amount) if r.paid_on or flt(r.paid_amount) else None,
@@ -73,8 +87,10 @@ def build_snapshot(bill) -> dict:
 	"""Snapshot for a bill (a Utility Bill document or the dict build_bill returns)."""
 	g = bill.get
 	society = frappe.get_cached_doc("Society", g("society"))
-	conn = frappe.get_cached_doc("Connection", g("connection"))
 	from utility_billing.utility_billing import runcache  # noqa: PLC0415
+
+	group = runcache.primed(g("connection"))  # a bill run reads its accounts and their consumers a group at a time (the performance step)
+	conn = group.connections[g("connection")] if group else frappe.get_cached_doc("Connection", g("connection"))
 
 	prop_fields = ["property_no", "block", "sector", "area", "area_unit"]
 	props = runcache.bulk(("snapshot properties", g("society")), lambda: {  # a bill run reads them once (FS-RUN-07)
@@ -82,8 +98,8 @@ def build_snapshot(bill) -> dict:
 	prop = (props.get(conn.property) if props is not None else None) or frappe.db.get_value("Property", conn.property, prop_fields,
 	                                                                                        as_dict=True) or {}
 	# the bill's own consumer: on a final bill the outgoing holder, not the account's holder now (increment 22)
-	consumer = frappe.db.get_value("Consumer", g("consumer") or conn.consumer, ["consumer_name", "mobile_no", "address", "id_number", "tax_no"],
-	                               as_dict=True) or {}
+	consumer = (group.consumers.get(g("consumer") or conn.consumer) if group else None) or frappe.db.get_value(
+		"Consumer", g("consumer") or conn.consumer, ["consumer_name", "mobile_no", "address", "id_number", "tax_no"], as_dict=True) or {}
 	reading_fields = ["meter", "previous_reading", "previous_reading_date", "present_reading", "reading_date", "multiplier",
 	                  "consumption_type", "status", "photo", "net_metering", "previous_export_reading", "present_export_reading", "export_units"]
 	cycle = runcache.tariff(("cycle", g("bill_run")), lambda: frappe.db.get_value("Bill Run", g("bill_run"), "reading_cycle")) \

@@ -18,6 +18,12 @@ TIMEOUT = 10
 
 def subscriptions_for(event_type, society):
 	"""Enabled subscriptions that want this event, of enabled clients with the events scope that may see the society."""
+	from utility_billing.utility_billing import runcache  # noqa: PLC0415
+
+	return runcache.tariff(("subscriptions", event_type, society), lambda: _subscriptions_for(event_type, society))  # once in a bill run
+
+
+def _subscriptions_for(event_type, society):
 	out = []
 	for s in frappe.get_all("Event Subscription", filters={"enabled": 1}, fields=["name", "client", "event_types"]):
 		if event_type not in {x.strip() for x in (s.event_types or "").splitlines()}:
