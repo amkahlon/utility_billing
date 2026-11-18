@@ -153,6 +153,12 @@
          }
         },
         {
+         "type": "solar",
+         "options": {
+          "notice": 0
+         }
+        },
+        {
          "type": "meter_photo",
          "options": {
           "width": 34,

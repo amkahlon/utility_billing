@@ -2219,6 +2219,90 @@ def t_bill_designer_print(d: Desk):
 	eq(r.status_code in (401, 403), True, "a visitor can't preview")
 
 
+POOL = "utility_billing.utility_billing.doctype.solar_rebate_pool.solar_rebate_pool"
+
+
+@case("QA-91", "Increment 28, spec test case 2 over HTTP: a solar consumer on the society rebate pool, every value entered as the forms send it")
+def t_net_metering_pool(d: Desk):
+	bm, gm, bo = USERS["bm"], USERS["gm"], USERS["bo"]
+	soc = d.save_doc({"doctype": "Society", "society_name": f"QA Solar Society {RUN}", "short_name": f"qn{RUN}", "enable_electricity": 1,
+	                  "days_to_due_date": "8", "surcharge_basis": "Percentage of current bill", "surcharge_rate": "10", "rounding_rule": "Nearest rupee",
+	                  "net_metering_method": "Society rebate pool", "nm_credit_rounding": "Nearest unit (half up)", "nm_adjustment_units": "Net units"})
+	s = soc["name"]
+	eq((soc["net_metering_method"], soc["nm_credit_rounding"]), ("Society rebate pool", "Nearest unit (half up)"), "net-metering settings saved")
+	energy = d.save_doc({"doctype": "Charge Type", "charge_name": f"NM Energy {RUN}", "charge_group": "Electricity", "calculation_basis": "Per Unit",
+	                     "bill_order": "10", "bill_label": "Electricity", "rounding_rule": "Nearest rupee", "nm_units_basis": "Net units"})["name"]
+	society = d.save_doc({"doctype": "Charge Type", "charge_name": f"NM Society {RUN}", "charge_group": "Society", "calculation_basis": "Fixed",
+	                      "bill_order": "40", "bill_label": "Society charges", "rounding_rule": "Nearest rupee"})["name"]
+	d.save_doc(dict(d.get("Society", s), energy_charge_type=energy))
+	cat = d.save_doc({"doctype": "Consumer Category", "category_name": f"Domestic NM {RUN}", "utility": "Electricity"})["name"]
+	t = bm.save_doc({"doctype": "Tariff", "naming_series": "TRF-.YYYY.-.####", "society": s, "utility": "Electricity", "consumer_category": cat,
+	                 "effective_from": "2026-01-01", "pricing_method": "Flat rate", "flat_rate": "67", "minimum_charge": "0",
+	                 "charges": [{"charge_type": society, "rate": "4850"}]})
+	gm.workflow(bm.workflow(t, "Submit for Approval"), "Approve")
+	owner = d.save_doc({"doctype": "Consumer", "naming_series": "CON-.#####", "consumer_name": f"QA Solar Owner {RUN}"})["name"]
+	prop = d.save_doc({"doctype": "Property", "society": s, "property_no": "59-C", "property_type": "House", "status": "Occupied", "area": "1",
+	                   "area_unit": "Kanal"})["name"]
+	m = d.save_doc({"doctype": "Meter", "serial_no": f"QA-{RUN}-NM", "society": s, "utility": "Electricity", "meter_type": "Net Metering",
+	                "status": "In Store", "digits": "5", "multiplier": "1", "registers": "2"})["name"]
+	conn = d.save_doc({"doctype": "Connection", "society": s, "property": prop, "consumer": owner, "utility": "Electricity", "consumer_category": cat,
+	                   "status": "Active", "phase": "Single", "sanctioned_load_kw": "11",
+	                   "meters": [{"meter": m, "installed_on": "2026-07-01", "start_reading": "16538", "start_export_reading": "20111"}]})["name"]
+	cycle = bo.save_doc({"doctype": "Reading Cycle", "society": s, "utility": "Electricity", "billing_month": "2026-09-01"})["name"]
+	bo.call(f"{RDG}.create_reading_sheet", cycle=cycle)
+	rows = bo.s.get(f"{URL}/api/resource/Meter Reading", params={"filters": json.dumps([["reading_cycle", "=", cycle]]), "fields": json.dumps(["name"])}).json()["data"]
+	r = bo.get("Meter Reading", rows[0]["name"])
+	eq((r["net_metering"], float(r["previous_export_reading"])), (1, 20111.0), "the reading sheet knows the export register")
+	r = bo.save_doc(dict(r, present_reading="17517", present_export_reading="21019", reading_date="2026-09-08"))
+	eq((float(r["units"]), float(r["export_units"])), (979.0, 908.0), "imported and exported units")
+	if r["status"] == "Flagged":
+		bo.call(f"{RDG}.approve_reading", name=r["name"], note="First reading on the new meter")
+	bo.call(f"{RDG}.close_cycle", cycle=cycle)
+	run = bo.save_doc({"doctype": "Bill Run", "naming_series": "BRUN-.YYYY.-.####", "society": s, "utility": "Electricity",
+	                   "billing_month": "2026-09-01", "issue_date": "2026-10-11"})
+	bo.call(f"{BIL}.calculate_run", run=run["name"])
+	run = bo.get("Bill Run", run["name"])
+	eq((run["bill_count"], "solar rebate pool" in (run["problems"][0]["problem"] if run["problems"] else "")), (0, True),
+	   "solar accounts wait for the month's approved pool")
+	pool = bo.save_doc({"doctype": "Solar Rebate Pool", "naming_series": "SRP-.YYYY.-.#####", "society": s, "utility": "Electricity",
+	                    "billing_month": "2026-09-15", "residents_import_units": "913289", "disco_import_units": "787200",
+	                    "residents_export_units": "408159", "disco_export_units": "213600"})
+	eq((float(pool["pool_units"]), float(pool["losses_units"]), round(float(pool["credit_factor"]), 4)), (126089.0, 68470.0, 0.3089), "pool worked out")
+	pool = bo.workflow(pool, "Submit for Approval")
+	expect_error(lambda: bo.workflow(pool, "Approve"))  # the maker can't approve
+	pool = gm.workflow(pool, "Approve")
+	eq((pool["docstatus"], pool["workflow_state"]), (1, "Approved"), "pool approved by the General Manager")
+	bo.call(f"{BIL}.calculate_run", run=run["name"])
+	bills = bo.s.get(f"{URL}/api/resource/Utility Bill", params={"filters": json.dumps([["bill_run", "=", run["name"]]]), "fields": json.dumps(["name"])}).json()["data"]
+	b = bo.get("Utility Bill", bills[0]["name"])
+	eq((float(b["import_units"]), float(b["export_units"]), float(b["credited_units"]), float(b["units"])), (979.0, 908.0, 281.0, 698.0), "units")
+	eq((float(b["current_amount"]), float(b["surcharge_amount"]), float(b["payable_after_due"])), (51616.0, 5162.0, 56778.0), "test case 2 amounts")
+	run = bm.workflow(bo.workflow(bo.get("Bill Run", run["name"]), "Submit for Approval"), "Approve")
+	reader, text = get_pdf(USERS["cashier"], "download_bill", name=b["name"])
+	eq((len(reader.pages), "Export (solar)" in text, "281 credited" in text, "56,778" in text), (1, True, True, True), "the bill PDF shows the solar credit")
+	data = d.call("frappe.desk.query_report.run", report_name="Net Metering Register", filters=json.dumps({"society": s, "month": "2026-09-01"}))
+	row = [x for x in data["result"] if isinstance(x, dict) and x.get("connection") == conn][0]
+	eq((row["credited_units"], row["units_billed"]), (281, 698), "the register")
+	S["nm_society"], S["nm_conn"] = s, conn
+
+
+@case("QA-92", "Increment 28: the reading upload takes an Export Reading column; the next month continues from the last export reading")
+def t_net_metering_readings(d: Desk):
+	bo = USERS["bo"]
+	s = S["nm_society"]
+	cycle = bo.save_doc({"doctype": "Reading Cycle", "society": s, "utility": "Electricity", "billing_month": "2026-10-01"})["name"]
+	bo.call(f"{RDG}.create_reading_sheet", cycle=cycle)
+	csv = f"Reference No,Present Reading,Export Reading,Reading Date\n{S['nm_conn']},17800,21500,2026-10-08\n{S['conn']['name']},310,5,2026-10-08\n"
+	up = bo.s.post(f"{URL}/api/method/upload_file", files={"file": ("nm.csv", csv.encode())},
+	               data={"is_private": 1, "doctype": "Reading Cycle", "docname": cycle})
+	res = bo.call(f"{RDG}.upload_readings", cycle=cycle, file_url=up.json()["message"]["file_url"])
+	eq(res["updated"], 1, "the solar meter's row applied")  # the other row is another society's account: not in this cycle
+	rows = bo.s.get(f"{URL}/api/resource/Meter Reading", params={"filters": json.dumps([["reading_cycle", "=", cycle]]),
+	                                                             "fields": json.dumps(["units", "export_units", "previous_export_reading"])}).json()["data"]
+	eq((float(rows[0]["previous_export_reading"]), float(rows[0]["units"]), float(rows[0]["export_units"])), (21019.0, 283.0, 481.0),
+	   "October continues from September's registers")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

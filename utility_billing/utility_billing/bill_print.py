@@ -76,7 +76,7 @@ def build_snapshot(bill) -> dict:
 	consumer = frappe.db.get_value("Consumer", g("consumer") or conn.consumer, ["consumer_name", "mobile_no", "address", "id_number", "tax_no"],
 	                               as_dict=True) or {}
 	reading_fields = ["meter", "previous_reading", "previous_reading_date", "present_reading", "reading_date", "multiplier",
-	                  "consumption_type", "status", "photo"]
+	                  "consumption_type", "status", "photo", "net_metering", "previous_export_reading", "present_export_reading", "export_units"]
 	cycle = runcache.tariff(("cycle", g("bill_run")), lambda: frappe.db.get_value("Bill Run", g("bill_run"), "reading_cycle")) \
 		if g("bill_run") and runcache.active() else None
 	run_readings = runcache.bulk(("snapshot readings", cycle), lambda: {
@@ -103,6 +103,8 @@ def build_snapshot(bill) -> dict:
 		"history": bill_history(g("connection"), g("billing_month"), history_months(society), g("issue_date")),
 		# the society's approved Bill Template in force on the issue date (increment 27); none: the fixed layout
 		"template": template_for(g),
+		# the month's solar rebate notice, as approved with the pool (increment 28)
+		"solar_notice": frappe.db.get_value("Solar Rebate Pool", g("solar_pool"), "notice") if g("solar_pool") else None,
 	}
 
 

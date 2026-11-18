@@ -216,3 +216,32 @@ class IntegrationTestNetMetering(NetMeteringCase):
 		with self.assertRaises((frappe.PermissionError, frappe.ValidationError)):  # the maker can't approve
 			act(p, "Submit for Approval", BILLING_OFFICER)
 			act(p, "Approve", BILLING_OFFICER)
+
+	def test_bill_prints_imports_exports_and_credit(self):
+		import json  # noqa: PLC0415
+
+		from utility_billing.utility_billing import bill_designer, bill_print, mis, opening  # noqa: PLC0415
+
+		self.read("2026-09-01", 17_517, 21_019)
+		pool = self.pool()
+		run = self.post(self.make_run("2026-09-01", "2026-10-11"))
+		b = self.bill(run)
+		html = bill_print.bill_html(b.name)  # the fixed layout
+		for text in ("Export (solar)", "20,111", "21,019", "908", "281 credited", "0.3089", "Units billed", "698", "126,089"):
+			self.assertIn(text, html, text)
+		# a designed template: the reading block's export row and the solar block
+		layout = {"sections": [{"rows": [{"cells": [{"width": 100, "blocks": [{"type": "reading"}, {"type": "solar", "options": {"style": "Table"}}]}]}]}]}
+		designed = bill_designer.render_bill(b, bill_designer._settings_from({}, layout))
+		for text in ("Export (solar)", "Units credited", "281", "0.3089", "Carried forward", "126,089"):
+			self.assertIn(text, designed, text)
+		# the register report
+		data = mis.REPORTS["net_metering_register"]["fn"](frappe._dict(society=SOC, month="2026-09-01"))["data"]
+		self.assertEqual([(d["connection"], d["export_units"], d["credited_units"], d["units_billed"], d["state"]) for d in data],
+		                 [(self.conn, 908, 281, 698, "Posted")])
+		# a non-solar bill prints none of it
+		self.assertNotIn("Export (solar)", bill_designer.render_bill(bill_designer.sample_bill(SOC), bill_designer._settings_from({}, {
+			"sections": [{"rows": [{"cells": [{"width": 100, "blocks": [{"type": "reading"}]}]}]}]})))
+		# opening balances read a solar credit column
+		rows = opening.rows_from_table([["Reference No", "Arrears", "Solar Credit Units"], ["1000000016", "0", "150"]])
+		self.assertEqual(rows[0]["solar_credit_units"], 150)
+		self.assertEqual(json.loads(json.dumps(bill_print.snapshot_of(b)))["solar_notice"], pool.notice)

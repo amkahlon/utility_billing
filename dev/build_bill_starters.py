@@ -33,7 +33,7 @@ standard = {"sections": [
 		row((52, [b("details", heading="Consumer", fields=F("consumer_name", "property", "category", "sanctioned_load", "meter_no", "mobile"))]),
 		    (32, [b("reference", dates=1)]), (16, [b("qr", size=22), b("meter_photo", width=26, caption=1)])),
 		row((100, [b("reading")])),
-		row((58, [b("charges"), b("totals", style="List", rows=["arrears", "within", "surcharge", "after"])]), (42, [b("history")])),
+		row((58, [b("charges"), b("totals", style="List", rows=["arrears", "within", "surcharge", "after"])]), (42, [b("history"), b("solar", notice=0)])),
 		row((58, [b("notices"), b("footer", align="Left", footer=0)]), (42, [b("payment"), b("signatory")])),
 	], copy_label="Consumer copy"),
 	section("Office copy", [
@@ -58,7 +58,7 @@ two_copies = {"sections": [
 		                                              "billing_month_short", "issue_date", "due_date", "category", "bill_no"))])),
 		row((50, [b("charges", style="List", heading="", units=0, rate=0, subtotal=1),
 		          b("totals", style="List", rows=["arrears", "within", "surcharge", "after"])]),
-		    (50, [b("payment", heading="How to pay", banks="List"), b("meter_photo", width=34, caption=1), b("notices", heading="", boxed=0)])),
+		    (50, [b("payment", heading="How to pay", banks="List"), b("solar", notice=0), b("meter_photo", width=34, caption=1), b("notices", heading="", boxed=0)])),
 		row((100, [b("history", split=1, columns=["units", "billed", "paid_on", "paid"])])),
 	], copy_label="Customer Copy"),
 	tear_copy("Bank Copy"),
@@ -67,9 +67,9 @@ two_copies = {"sections": [
 two_copies["sections"][-1]["rows"].append(row((100, [b("text", text=GENERATED, size=7, align="Left")])))
 
 grid_copy = lambda label: section(label, [  # noqa: E731
-	row((66, [b("details", columns=2, fields=F("reference_no", "consumer_name", "property_no", "meter_no", "billing_month", "due_date")),
+	row((66, [b("details", columns=3, fields=F("reference_no", "consumer_name", "property_no", "meter_no", "billing_month", "due_date")),
 	          b("payment", heading="", instructions=0, banks="Table", boxed=1)]),
-	    (34, [b("copy_label", align="Center"), b("qr", size=14), b("totals", style="List", rows=["current", "arrears", "within", "after"], show_due_date=0)])),
+	    (34, [b("copy_label", align="Center"), b("qr", size=12), b("totals", style="List", rows=["current", "within", "after"], show_due_date=0)])),
 ], copy_label=label, cut=1, cut_text="cut here")
 
 compact_grid = {"sections": [
@@ -79,7 +79,7 @@ compact_grid = {"sections": [
 		                                              "reading_date", "issue_date", "due_date", "sanctioned_load"))])),
 		row((62, [b("payment", heading="Bank accounts (for online payment)", instructions=0, banks="Table")]),
 		    (38, [b("totals", style="List", rows=["current", "arrears", "within", "after"])])),
-		row((40, [b("reading", columns=["previous", "present", "units"]), b("meter_photo", width=24, caption=0)]), (60, [b("notices")])),
+		row((40, [b("reading", columns=["previous", "present", "units"]), b("meter_photo", width=24, caption=0)]), (60, [b("solar", notice=0), b("notices")])),
 		row((100, [b("footer")])),
 	], copy_label="Customer Copy"),
 	grid_copy("Bank Copy"),
@@ -93,7 +93,7 @@ classic_boxed = {"sections": [
 		row((100, [b("details", columns=3, fields=F("reference_no", "meter_no", "billing_month_short", "issue_date", "due_date", "bill_no"))])),
 		row((100, [b("charges")])),
 		row((45, [b("history", months=6, columns=["units", "billed", "paid_on", "paid"]), b("meter_photo", width=28, caption=1)]),
-		    (55, [b("totals", style="List", rows=["current", "arrears", "within", "surcharge", "after"]), b("notices"),
+		    (55, [b("totals", style="List", rows=["current", "arrears", "within", "surcharge", "after"]), b("solar", notice=0), b("notices"),
 		          b("text", text="Amount paid: ______________\nSignature: ______________", align="Right")])),
 		row((100, [b("payment", heading="", banks="None")])),
 	], copy_label="Consumer Copy"),

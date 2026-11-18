@@ -504,3 +504,33 @@ def theft_suspicion(f):
 	        "data": data,
 	        "summary": [{"value": len(data), "label": _("Accounts to look at"), "datatype": "Int", "indicator": "Orange"},
 	                    {"value": sum(1 for r in data if r["score"] >= 60), "label": _("Scored 60 or more"), "datatype": "Int", "indicator": "Red"}]}
+
+
+# ---------------------------------------------------------------- net metering register (increment 28; FS-BIL-13)
+@report("net_metering_register", "Net Metering Register", BILLING + ["Accounts Officer"],
+        [PERIOD[0], dict(fieldname="month", label="Billing Month", fieldtype="Date", default="@month_start")],
+        "Solar (net-metering) accounts of a month: imported, exported and credited units, units brought and carried forward, the units billed "
+        "and any buyback credit.")
+def net_metering_register(f):
+	s = society_of(f)
+	month = month_start(f.get("month") or nowdate())
+	data = sql("""select b.connection, b.consumer_name, b.name bill, b.nm_method method, b.import_units, b.export_units, b.credited_units,
+	                     b.nm_credit_factor credit_factor, b.units_carried_in, b.units_set_off, b.units_carried_out, b.units units_billed,
+	                     b.buyback_credit, b.docstatus
+	              from `tabUtility Bill` b where b.society = %(s)s and b.billing_month = %(m)s and b.docstatus < 2
+	              and ifnull(b.nm_method, '') != '' and ifnull(b.superseded_by, '') = '' order by b.connection""", {"s": s, "m": month})
+	for d in data:
+		d["state"] = _("Posted") if d.pop("docstatus") == 1 else _("Draft")
+	tot = lambda k: round(sum(flt(d[k]) for d in data), 2)  # noqa: E731
+	summary = [{"value": len(data), "label": _("Solar accounts"), "datatype": "Int", "indicator": "Blue"},
+	           {"value": tot("export_units"), "label": _("Units exported"), "datatype": "Float", "indicator": "Green"},
+	           {"value": tot("credited_units"), "label": _("Units credited"), "datatype": "Float", "indicator": "Green"},
+	           {"value": tot("units_carried_out"), "label": _("Units carried forward"), "datatype": "Float", "indicator": "Orange"},
+	           {"value": tot("buyback_credit"), "label": _("Buyback credit"), "datatype": "Currency", "indicator": "Blue"}]
+	return {"columns": [col("Account", "connection", "Link", 110, "Connection"), col("Consumer", "consumer_name", width=150),
+	                    col("Bill", "bill", "Link", 140, "Utility Bill"), col("State", "state", width=70), col("Method", "method", width=140),
+	                    col("Imported", "import_units", "Float", 90), col("Exported", "export_units", "Float", 90), col("Credited", "credited_units", "Float", 90),
+	                    col("Factor", "credit_factor", "Float", 80), col("Brought Forward", "units_carried_in", "Float", 110),
+	                    col("Set Off", "units_set_off", "Float", 80), col("Carried Forward", "units_carried_out", "Float", 110),
+	                    col("Units Billed", "units_billed", "Float", 90), col("Buyback Credit", "buyback_credit", "Currency", 110)],
+	        "data": data, "summary": summary}

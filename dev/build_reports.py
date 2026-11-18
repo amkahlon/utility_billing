@@ -115,7 +115,9 @@ GROUPS = [
 	("Consumers", [("Page", "ub-consumer-360", "Consumer 360"), ("DocType", "Consumer"), ("DocType", "Property"), ("DocType", "Connection"),
 	               ("DocType", "Security Deposit")]),
 	("Meter Readings", [("Page", "ub-readings", "Reading Dashboard"), ("Page", "ub-review", "Reading Review"), ("DocType", "Reading Cycle"), ("DocType", "Check Meter Reading"), ("DocType", "Meter Reading"), ("DocType", "Reading Route")]),
-	("Billing", [("DocType", "Bill Run"), ("DocType", "Utility Bill"), ("DocType", "Combined Bill"), ("DocType", "Tariff Adjustment"),
+	# Bill Designer and templates (increment 27); the monthly solar rebate pool (increment 28)
+	("Billing", [("DocType", "Bill Run"), ("DocType", "Utility Bill"), ("Page", "ub-bill-designer", "Bill Designer"), ("DocType", "Bill Template"),
+	             ("DocType", "Solar Rebate Pool"), ("DocType", "Combined Bill"), ("DocType", "Tariff Adjustment"),
 	             ("DocType", "Billing Account"), ("DocType", "Service Agreement")]),
 	("Payments", [("Page", "ub-cash", "Cash Counter"), ("DocType", "Cashier Day"), ("DocType", "Payment Receipt"), ("DocType", "Fee Charge"),
 	              ("DocType", "Account Adjustment"), ("DocType", "Refund"), ("DocType", "Settlement File"),

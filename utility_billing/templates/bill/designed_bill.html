@@ -161,7 +161,12 @@
 		{%- if "previous" in o.columns %}<tr><td class="k">{{ lb(o, T, "Previous reading") }}</td><td class="right">{{ qty(reading.previous_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.previous_reading_date) }}</span>{% endif %}</td></tr>{% endif %}
 		{%- if "present" in o.columns %}<tr><td class="k">{{ lb(o, T, "Present reading") }}</td><td class="right">{{ qty(reading.present_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.reading_date) }}</span>{% endif %}</td></tr>{% endif %}
 		{%- if "multiplier" in o.columns %}<tr><td class="k">{{ lb(o, T, "Multiplier") }}</td><td class="right">{{ qty(reading.multiplier or 1) }}</td></tr>{% endif %}
-		{%- if "units" in o.columns %}<tr><td class="k">{{ lb(o, T, "Units") }}</td><td class="right strong">{{ qty(bill.units) }}</td></tr>{% endif %}
+		{%- if "units" in o.columns %}<tr><td class="k">{{ lb(o, T, "Imported units" if bill.nm_method else "Units") }}</td><td class="right strong">{{ qty(bill.import_units if bill.nm_method else bill.units) }}</td></tr>{% endif %}
+		{%- if bill.nm_method %}
+		<tr><td class="k">{{ lb(o, T, "Export reading") }}</td><td class="right">{{ qty(reading.previous_export_reading) }} → {{ qty(reading.present_export_reading) }}</td></tr>
+		<tr><td class="k">{{ lb(o, T, "Exported units") }}</td><td class="right strong">{{ qty(bill.export_units) }}</td></tr>
+		<tr><td class="k">{{ lb(o, T, "Units billed") }}</td><td class="right strong">{{ qty(bill.units) }}</td></tr>
+		{%- endif %}
 		{%- if "type" in o.columns %}<tr><td class="k">{{ lb(o, T, "Reading") }}</td><td class="right">{{ (bill.consumption_type or reading.consumption_type or "") | e }}</td></tr>{% endif %}
 	</table>
 	{%- else %}
@@ -177,11 +182,54 @@
 			{%- if "previous" in o.columns %}<td>{{ qty(reading.previous_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.previous_reading_date) }}</span>{% endif %}</td>{% endif %}
 			{%- if "present" in o.columns %}<td>{{ qty(reading.present_reading) }}{% if "dates" in o.columns %} <span class="note">{{ date(reading.reading_date) }}</span>{% endif %}</td>{% endif %}
 			{%- if "multiplier" in o.columns %}<td class="right">{{ qty(reading.multiplier or 1) }}</td>{% endif %}
-			{%- if "units" in o.columns %}<td class="right strong">{{ qty(bill.units) }}</td>{% endif %}
-			{%- if "type" in o.columns %}<td>{{ (bill.consumption_type or reading.consumption_type or "") | e }}</td>{% endif %}
+			{%- if "units" in o.columns %}<td class="right strong">{{ qty(bill.import_units if bill.nm_method else bill.units) }}</td>{% endif %}
+			{%- if "type" in o.columns %}<td>{% if bill.nm_method %}{{ lb(o, T, "Import") }} · {% endif %}{{ (bill.consumption_type or reading.consumption_type or "") | e }}</td>{% endif %}
 		</tr>
+		{%- if bill.nm_method %}
+		<tr>
+			{%- if "previous" in o.columns %}<td>{{ qty(reading.previous_export_reading) }}</td>{% endif %}
+			{%- if "present" in o.columns %}<td>{{ qty(reading.present_export_reading) }}</td>{% endif %}
+			{%- if "multiplier" in o.columns %}<td class="right">{{ qty(reading.multiplier or 1) }}</td>{% endif %}
+			{%- if "units" in o.columns %}<td class="right strong">{{ qty(bill.export_units) }}</td>{% endif %}
+			{%- if "type" in o.columns %}<td>{{ lb(o, T, "Export (solar)") }}</td>{% endif %}
+		</tr>
+		{%- if "units" in o.columns %}
+		{%- set before_units = (1 if "previous" in o.columns else 0) + (1 if "present" in o.columns else 0) + (1 if "multiplier" in o.columns else 0) %}
+		<tr class="tot">{% if before_units %}<td colspan="{{ before_units }}" class="strong">{{ lb(o, T, "Units billed") }}</td>{% endif %}<td class="right strong">{{ qty(bill.units) }}</td>{% if "type" in o.columns %}<td></td>{% endif %}</tr>
+		{%- endif %}
+		{%- endif %}
 	</table>
 	{%- endif %}
+	{%- endif %}
+{%- elif kind == "solar" %}
+	{%- if bill.nm_method and o.style == "Summary line" %}
+	{#- one line: what was exported and what became of it #}
+	<div class="small{{ ' box pad' if o.boxed else '' }}">
+		{%- if o.heading %}<span class="strong"{{ ed("heading") }}>{{ T(o.heading) }}:</span> {% endif %}
+		{{- lb(o, T, "Exported units") }} {{ qty(bill.export_units) }}
+		{%- if bill.nm_method == "Buyback rate" %} · {{ lb(o, T, "Solar export credit") }} Rs {{ money(bill.buyback_credit) }} (Rs {{ bill.buyback_rate }})
+		{%- else %} · {{ lb(o, T, "Units credited") }} {{ qty(bill.credited_units) }}{% if bill.nm_method == "Society rebate pool" %} ({{ "%.4f" | format(bill.nm_credit_factor or 0) }}){% endif %}
+		{%- if bill.units_carried_in %} · {{ lb(o, T, "Brought forward") }} {{ qty(bill.units_carried_in) }}{% endif %}
+		{%- if bill.units_carried_out %} · {{ lb(o, T, "Carried forward") }} {{ qty(bill.units_carried_out) }}{% endif %}{% endif %}
+		{%- if o.notice and snap.solar_notice %}<div class="note" style="margin-top: .6mm;">{{ snap.solar_notice | e }}</div>{% endif %}
+	</div>
+	{%- elif bill.nm_method %}
+	<div class="{{ 'box' if o.boxed else '' }}">
+		{%- if o.heading %}<div class="box-h"{{ ed("heading") }}>{{ T(o.heading) }}</div>{% endif %}
+		<table class="kv">
+			<tr><td class="k">{{ lb(o, T, "Exported units") }}</td><td class="right">{{ qty(bill.export_units) }}</td></tr>
+			{%- if bill.nm_method == "Buyback rate" %}
+			<tr><td class="k">{{ lb(o, T, "Buyback rate") }}</td><td class="right">Rs {{ bill.buyback_rate }}</td></tr>
+			<tr><td class="k">{{ lb(o, T, "Solar export credit") }}</td><td class="right strong">Rs {{ money(bill.buyback_credit) }}</td></tr>
+			{%- else %}
+			<tr><td class="k">{{ lb(o, T, "Units credited") }}{% if bill.nm_method == "Society rebate pool" %} <span class="note">({{ "%.4f" | format(bill.nm_credit_factor or 0) }})</span>{% endif %}</td><td class="right">{{ qty(bill.credited_units) }}</td></tr>
+			<tr><td class="k">{{ lb(o, T, "Brought forward") }}</td><td class="right">{{ qty(bill.units_carried_in) }}</td></tr>
+			<tr><td class="k">{{ lb(o, T, "Set against imports") }}</td><td class="right">{{ qty(bill.units_set_off) }}</td></tr>
+			<tr><td class="k">{{ lb(o, T, "Carried forward") }}</td><td class="right strong">{{ qty(bill.units_carried_out) }}</td></tr>
+			{%- endif %}
+		</table>
+		{%- if o.notice and snap.solar_notice %}<div class="note pad">{{ snap.solar_notice | e }}</div>{% endif %}
+	</div>
 	{%- endif %}
 {%- elif kind == "meter_photo" %}
 	{%- if meter_photo %}<img class="meter-photo" src="{{ meter_photo }}" style="width: {{ o.width }}mm; height: {{ (o.width * 2 / 3) | round(1) }}mm;" alt="">
