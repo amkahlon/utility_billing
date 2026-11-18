@@ -130,13 +130,14 @@ class MeterReading(Document):
 		self.export_units = 0
 		if not frappe.utils.cint(self.net_metering):
 			return []
+		old = flt(self.old_meter_export_units)  # exported on a replaced meter after its last reading
 		if not flt(self.present_export_reading) and flt(self.previous_export_reading):
 			return [_("Enter the export reading: it is empty or zero, the previous one was {0}.").format(flt(self.previous_export_reading))]
 		units, rolled, lower = engine.raw_units(self.previous_export_reading, self.present_export_reading, self.digits, self.multiplier)
 		if lower:
 			return [_("The export reading {0} is lower than the previous one ({1}).").format(flt(self.present_export_reading),
 			                                                                               flt(self.previous_export_reading))]
-		self.export_units = flt(units)
+		self.export_units = flt(units) + old
 		return [_("Export register rolled over.")] if rolled else []
 
 	def reset_result(self):

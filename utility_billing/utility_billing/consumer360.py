@@ -150,7 +150,11 @@ def overview(conn_name) -> dict:
 		         "current": flt(bill.current_amount), "arrears": flt(bill.arrears), "within_due": flt(bill.payable_within_due),
 		         "surcharge": flt(bill.surcharge_amount), "after_due": flt(bill.payable_after_due), "tax": flt(bill.tax_amount),
 		         "installment": flt(bill.installment_due), "due_date": str(bill.extended_due_date or bill.due_date), "final": cint(bill.final_bill),
-		         "note": bill.period_note} if bill else None,
+		         "note": bill.period_note,
+		         # net metering (increment 28): what was exported and what became of it
+		         "solar": {"method": bill.nm_method, "imported": flt(bill.import_units), "exported": flt(bill.export_units), "credited": flt(bill.credited_units),
+		                   "factor": flt(bill.nm_credit_factor), "carried_in": flt(bill.units_carried_in), "set_off": flt(bill.units_set_off),
+		                   "carried_out": flt(bill.units_carried_out), "buyback_credit": flt(bill.buyback_credit)} if bill.get("nm_method") else None} if bill else None,
 		"meter": {"serial_no": meter.serial_no, "status": meter.status, "multiplier": flt(meter.multiplier) or 1, "type": meter.meter_type,
 		          "installed": k.current_meter} if meter else None,
 		"network": {"feeder": frappe.db.get_value("Feeder", k.feeder, "feeder_name") if k.feeder else None,
@@ -183,14 +187,16 @@ def view(consumer: str, account: str | None = None):
 		                 "owes": flt(acct.balance(k.name)), "flags": [f.name for f in flags.active(k.name, today)]})
 	bills = frappe.get_all("Utility Bill", filters={"connection": ["in", names], "docstatus": 1},
 	                       fields=["name", "connection", "billing_month", "issue_date", "due_date", "units", "current_amount", "payable_within_due",
-	                               "status", "surcharge_status", "delivery_status"], order_by="issue_date desc", limit=24)
+	                               "status", "surcharge_status", "delivery_status", "nm_method", "import_units", "export_units", "units_carried_out"],
+	                       order_by="issue_date desc", limit=24)
 	payments = frappe.get_all("Payment Receipt", filters={"connection": ["in", names], "docstatus": 1},
 	                          fields=["name", "connection", "payment_date", "amount", "mode", "payment_channel"], order_by="payment_date desc", limit=24)
 	ledger = frappe.get_all("Customer Ledger Entry", filters={"connection": ["in", names]},
 	                        fields=["name", "connection", "posting_date", "entry_type", "voucher_type", "voucher_no", "amount", "balance"],
 	                        order_by="posting_date desc, seq desc", limit=40)
 	readings = frappe.get_all("Meter Reading", filters={"connection": ["in", names]},
-	                          fields=["name", "connection", "billing_month", "reading_date", "present_reading", "units", "status", "consumption_type"],
+	                          fields=["name", "connection", "billing_month", "reading_date", "present_reading", "units", "status", "consumption_type",
+	                                  "net_metering", "present_export_reading", "export_units"],
 	                          order_by="billing_month desc", limit=24)
 	deposits = frappe.get_all("Security Deposit", filters={"connection": ["in", names], "docstatus": 1},
 	                          fields=["name", "connection", "deposit_type", "amount", "posting_date"], order_by="posting_date desc", limit=20)

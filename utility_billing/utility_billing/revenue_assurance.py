@@ -122,7 +122,8 @@ def settings(society) -> frappe._dict:
 
 
 def _bills(society, month):
-	return frappe.db.sql("""select b.name, b.connection, b.units, b.current_amount, b.consumer_category, b.consumption_type,
+	return frappe.db.sql("""select b.name, b.connection, case when ifnull(b.nm_method, '') != '' then b.import_units else b.units end units,
+	                               b.current_amount, b.consumer_category, b.consumption_type,
 	                               p.area, p.plot_size_class, c.current_meter
 	                        from `tabUtility Bill` b left join `tabProperty` p on p.name = b.property join `tabConnection` c on c.name = b.connection
 	                        where b.society = %s and b.billing_month = %s and b.docstatus = 1 and ifnull(b.superseded_by, '') = ''""",
@@ -133,7 +134,8 @@ def _history(society, month, months):
 	"""{connection: [units of each earlier month, newest first]} over the history months."""
 	start = add_months(month, -months)
 	out = defaultdict(dict)
-	for r in frappe.db.sql("""select connection, billing_month, sum(units) units from `tabUtility Bill`
+	for r in frappe.db.sql("""select connection, billing_month,
+	                          sum(case when ifnull(nm_method, '') != '' then import_units else units end) units from `tabUtility Bill`
 	                          where society = %s and docstatus = 1 and ifnull(superseded_by, '') = '' and billing_month >= %s and billing_month < %s
 	                          group by connection, billing_month""", (society, start, month), as_dict=True):
 		out[r.connection][getdate(r.billing_month)] = flt(r.units)
@@ -327,8 +329,63 @@ def check_reversals(society, month, s):
 		           evidence={"role": role, "count": counts[(role, user)], "total": totals[(role, user)]}, key_extra=role)
 
 
+SOLAR_HOURS_PER_DAY = 6  # generous: Pakistan averages about 5 peak sun hours a day
+CREDIT_GROWING_MONTHS = 12
+
+
+def credit_growing(carried, months=CREDIT_GROWING_MONTHS) -> bool:
+	"""`carried`: solar units carried forward by each bill, newest first. True when each of the last `months` bills carried more than
+	the one before it."""
+	return len(carried) >= months + 1 and all(carried[i] > carried[i + 1] for i in range(months))
+
+
+def check_solar(society, month, s):
+	"""RA-11 (increment 28): an export reading on a meter that isn't a net-metering meter; exports beyond what the account's solar
+	capacity (or, without one, its sanctioned load) could produce in the month; solar credit carried forward and growing for 12 months."""
+	from frappe.utils import get_last_day  # noqa: PLC0415
+
+	days = getdate(get_last_day(month)).day
+	for r in frappe.db.sql("""select r.name, r.connection, r.meter, r.export_units, r.present_export_reading, m.meter_type
+	                          from `tabMeter Reading` r join `tabMeter` m on m.name = r.meter
+	                          where r.society = %s and r.billing_month = %s and r.docstatus < 2
+	                          and (ifnull(r.present_export_reading, 0) > 0 or ifnull(r.export_units, 0) > 0)
+	                          and ifnull(m.meter_type, '') != 'Net Metering'""", (society, month), as_dict=True):
+		yield dict(check="RA-11 Solar export anomaly", subject_type="Meter", subject=r.meter, connection=r.connection, score=90, amount=0,
+		           details=_("Reading {0} has an export reading of {1} on meter {2}, which is not a net-metering meter ({3}).").format(
+		               r.name, f"{flt(r.present_export_reading):,.0f}", r.meter, r.meter_type or _("no type")),
+		           evidence={"reading": r.name, "export_units": flt(r.export_units), "meter_type": r.meter_type}, key_extra="type")
+	for b in frappe.db.sql("""select b.connection, b.export_units, b.import_units, b.current_amount, c.solar_capacity_kw, c.sanctioned_load_kw
+	                          from `tabUtility Bill` b join `tabConnection` c on c.name = b.connection
+	                          where b.society = %s and b.billing_month = %s and b.docstatus = 1 and ifnull(b.superseded_by, '') = ''
+	                          and ifnull(b.nm_method, '') != ''""", (society, month), as_dict=True):
+		kw = flt(b.solar_capacity_kw) or flt(b.sanctioned_load_kw)
+		most = kw * SOLAR_HOURS_PER_DAY * days
+		if kw and flt(b.export_units) > most:
+			yield dict(check="RA-11 Solar export anomaly", subject_type="Connection", subject=b.connection, connection=b.connection, score=70, amount=0,
+			           details=_("Exported {0} units; {1} kW of {2} could produce at most about {3} in the month.").format(
+			               f"{flt(b.export_units):,.0f}", f"{kw:g}", _("solar capacity") if flt(b.solar_capacity_kw) else _("sanctioned load"),
+			               f"{most:,.0f}"),
+			           evidence={"export_units": flt(b.export_units), "capacity_kw": kw, "max_units": most}, key_extra="capacity")
+	rows = frappe.db.sql("""select connection, billing_month, units_carried_out from `tabUtility Bill`
+	                        where society = %s and docstatus = 1 and ifnull(superseded_by, '') = '' and ifnull(nm_method, '') != ''
+	                        and billing_month <= %s and billing_month > %s order by connection, billing_month desc""",
+	                     (society, month, add_months(month, -CREDIT_GROWING_MONTHS - 1)), as_dict=True)
+	by = defaultdict(list)
+	for r in rows:
+		by[r.connection].append(r)
+	for conn, bills in by.items():
+		if getdate(bills[0].billing_month) != getdate(month):
+			continue
+		carried = [flt(b.units_carried_out) for b in bills[:CREDIT_GROWING_MONTHS + 1]]  # newest first
+		if credit_growing(carried):
+			yield dict(check="RA-11 Solar export anomaly", subject_type="Connection", subject=conn, connection=conn, score=50, amount=0,
+			           details=_("Solar credit carried forward has grown every month for {0} months, to {1} units: exports keep exceeding use. "
+			                     "Check the meter and the solar installation.").format(CREDIT_GROWING_MONTHS, f"{carried[0]:,.0f}"),
+			           evidence={"carried_forward": carried}, key_extra="growing")
+
+
 CHECKS = (check_drop_and_outliers, check_reading_multiplier, check_unbilled, check_meter_records, check_tariff_load, check_estimates,
-          check_network, check_reversals)
+          check_network, check_reversals, check_solar)
 
 
 # ---------------------------------------------------------------- run

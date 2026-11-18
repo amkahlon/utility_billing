@@ -32,7 +32,9 @@
   "meter_section",
   "new_meter",
   "new_meter_reading",
+  "new_meter_export_reading",
   "old_meter_reading",
+  "old_meter_export_reading",
   "old_meter_unreadable",
   "cb4",
   "seal_no",
@@ -259,11 +261,25 @@
    "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Split account'"
   },
   {
+   "fieldname": "new_meter_export_reading",
+   "fieldtype": "Float",
+   "label": "New Meter's First Export Reading",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Split account'",
+   "description": "Net-metering (solar) meters only: the export register when installed."
+  },
+  {
    "fieldname": "old_meter_reading",
    "fieldtype": "Float",
    "label": "Old Meter's Last Reading",
    "depends_on": "eval:doc.kind=='Meter change' || doc.kind=='Disconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Reconnection' || doc.kind=='Merge accounts'",
    "description": "For a disconnection, the reading when the supply was cut; for a reconnection, the reading when it was restored."
+  },
+  {
+   "fieldname": "old_meter_export_reading",
+   "fieldtype": "Float",
+   "label": "Old Meter's Last Export Reading",
+   "depends_on": "eval:doc.kind=='Meter change'",
+   "description": "Net-metering (solar) meters only: the export register when removed. The units exported since its last reading are credited on the next bill."
   },
   {
    "fieldname": "old_meter_unreadable",
@@ -518,7 +534,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 18:00:00.000000",
+ "modified": "2026-11-18 15:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Service Request",

@@ -123,6 +123,8 @@ class Connection(Document):
 						r.meter
 					)
 				)
+			if r.removed_on and flt(r.get("end_export_reading")) and flt(r.end_export_reading) < flt(r.get("start_export_reading")):
+				frappe.throw(_("Meter {0}: End Export Reading is below Start Export Reading.").format(r.meter))
 			if not r.removed_on and i != len(rows) - 1:
 				frappe.throw(_("Meter {0} is still open. Only the latest meter can be without Removed On.").format(r.meter))
 			if i > 0 and rows[i - 1].removed_on and getdate(r.installed_on) < getdate(rows[i - 1].removed_on):

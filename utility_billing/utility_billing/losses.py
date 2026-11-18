@@ -64,12 +64,25 @@ def levels(society):
 
 def disco_bill(society, month):
 	return frappe.db.get_value("DISCO Bill", {"society": society, "billing_month": mis.month_start(month)},
-	                           ["name", "units_kwh", "energy_amount", "fpa_amount", "qta_amount", "other_amount", "total_amount", "bill_no"],
-	                           as_dict=True)
+	                           ["name", "units_kwh", "export_units_kwh", "energy_amount", "fpa_amount", "qta_amount", "other_amount", "total_amount",
+	                            "bill_no"], as_dict=True)
+
+
+# Net metering (increment 28): a solar bill's `units` are the units billed after the solar credit, not what the consumer took from the
+# network. The energy balance is: energy in = DISCO import − the society's export to the DISCO + residents' solar exports (fed into the
+# society's network); energy delivered = residents' metered imports (spec test case 2: 787,200 − 213,600 + 408,159 − 913,289 = 68,470 lost).
+DELIVERED = "sum(case when ifnull(b.nm_method, '') != '' then b.import_units else b.units end)"
+EXPORTED = "sum(case when ifnull(b.nm_method, '') != '' then b.export_units else 0 end)"
 
 
 def billed_units(society, month):
-	return flt(frappe.db.sql("""select sum(units) from `tabUtility Bill` where society = %s and docstatus = 1 and billing_month = %s""",
+	"""Units delivered to residents in the month's posted bills (imports, for solar accounts)."""
+	return flt(frappe.db.sql(f"""select {DELIVERED} from `tabUtility Bill` b where b.society = %s and b.docstatus = 1 and b.billing_month = %s""",
+	                         (society, mis.month_start(month)))[0][0])
+
+
+def solar_exports(society, month):
+	return flt(frappe.db.sql(f"""select {EXPORTED} from `tabUtility Bill` b where b.society = %s and b.docstatus = 1 and b.billing_month = %s""",
 	                         (society, mis.month_start(month)))[0][0])
 
 
@@ -78,11 +91,14 @@ def society_loss(society, month) -> dict | None:
 	bill = disco_bill(society, month)
 	if not bill or flt(bill.units_kwh) <= 0:
 		return None
-	input_kwh, source = flt(bill.units_kwh), _("DISCO bill")
+	solar = solar_exports(society, month)
+	input_kwh = flt(bill.units_kwh) - flt(bill.get("export_units_kwh")) + solar
+	source = _("DISCO bill") if not solar and not flt(bill.get("export_units_kwh")) else _("DISCO bill and solar exports")
 	billed = billed_units(society, month)
 	watch, high = levels(society)
-	return {"input_kwh": input_kwh, "billed_kwh": billed, "loss_kwh": round(input_kwh - billed, 2), "loss_pct": loss_pct(input_kwh, billed),
-	        "status": status_of(input_kwh, billed, watch, high), "source": source, "disco_bill": bill.name if bill else None}
+	return {"input_kwh": round(input_kwh, 2), "billed_kwh": billed, "loss_kwh": round(input_kwh - billed, 2), "loss_pct": loss_pct(input_kwh, billed),
+	        "status": status_of(input_kwh, billed, watch, high), "source": source, "disco_bill": bill.name if bill else None,
+	        "disco_import_kwh": flt(bill.units_kwh), "disco_export_kwh": flt(bill.get("export_units_kwh")), "solar_export_kwh": solar}
 
 
 def network_losses(society, month, by="Feeder") -> list[dict]:
@@ -99,13 +115,15 @@ def network_losses(society, month, by="Feeder") -> list[dict]:
 	                 {"s": society, "m": month, "tx": 1 if by == "Transformer" else 0}):
 		inputs.setdefault(r.item, flt(r.kwh))
 	billed = {(r.item or ""): r for r in mis.sql(
-		f"""select c.{key} item, count(*) connections, sum(b.units) kwh from `tabUtility Bill` b join `tabConnection` c on c.name = b.connection
+		f"""select c.{key} item, count(*) connections, {DELIVERED} kwh, {EXPORTED} solar from `tabUtility Bill` b
+		join `tabConnection` c on c.name = b.connection
 		where b.society = %(s)s and b.docstatus = 1 and b.billing_month = %(m)s group by c.{key}""", {"s": society, "m": month})}
 	table, name_field = ("Feeder", "feeder_name") if by == "Feeder" else ("Transformer", "transformer_code")
 	rows = []
 	for item in list(dict.fromkeys(list(inputs) + [k for k in billed if k])) + ([""] if "" in billed else []):
 		b = billed.get(item)
-		inp, kwh = inputs.get(item, 0.0), flt(b.kwh) if b else 0.0
+		# solar fed in by the consumers on this feeder or transformer comes into it too
+		inp, kwh = inputs.get(item, 0.0) + (flt(b.solar) if b and item in inputs else 0.0), flt(b.kwh) if b else 0.0
 		label = frappe.db.get_value(table, item, name_field) if item else _("(no {0})").format(_(by).lower())
 		status = status_of(inp, kwh, watch, high)
 		rows.append({"item": item, "name": label or item, "connections": cint(b.connections) if b else 0, "input_kwh": inp, "billed_kwh": kwh,

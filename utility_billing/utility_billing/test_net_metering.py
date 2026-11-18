@@ -34,6 +34,13 @@ class UnitTestNetMeter(UnitTestCase):
 		r = netmeter.compute(netmeter.BUYBACK, 979, 908, carried_in=50, buyback_rate=19.32)
 		self.assertEqual((r.billed_units, r.buyback_credit, r.carried_out), (979, Decimal("17542.56"), 50))
 
+	def test_credit_growing_for_a_year(self):
+		from utility_billing.utility_billing import revenue_assurance as ra  # noqa: PLC0415
+
+		self.assertTrue(ra.credit_growing(list(range(13, 0, -1))))  # 13 bills, each carrying more than the one before
+		self.assertFalse(ra.credit_growing(list(range(12, 0, -1))))  # only 11 increases
+		self.assertFalse(ra.credit_growing([13, 12, 11, 11, 9, 8, 7, 6, 5, 4, 3, 2, 1]))  # one month it didn't grow
+
 	def test_rounding_rules(self):
 		self.assertEqual([netmeter.round_units(Decimal("280.5"), rule) for rule in (netmeter.HALF_UP, netmeter.DOWN, netmeter.UP)], [281, 280, 281])
 		self.assertEqual(netmeter.round_units(Decimal("280.4949"), netmeter.NO_ROUNDING), Decimal("280.49"))
@@ -245,3 +252,59 @@ class IntegrationTestNetMetering(NetMeteringCase):
 		rows = opening.rows_from_table([["Reference No", "Arrears", "Solar Credit Units"], ["1000000016", "0", "150"]])
 		self.assertEqual(rows[0]["solar_credit_units"], 150)
 		self.assertEqual(json.loads(json.dumps(bill_print.snapshot_of(b)))["solar_notice"], pool.notice)
+
+	def test_meter_change_credits_the_old_meters_last_exports(self):
+		"""The defect found after the first merge: units a replaced solar meter exported after its last reading were never credited."""
+		self.method(netmeter.NET)
+		self.read("2026-09-01", 17_517, 21_019)
+		conn = frappe.get_doc("Connection", self.conn)
+		new = frappe.get_doc({"doctype": "Meter", "serial_no": "TST-NM-NEW", "society": SOC, "utility": "Electricity", "meter_type": "Net Metering",
+		                      "registers": 2}).insert().name
+		conn.meters[0].update({"removed_on": "2026-09-20", "end_reading": 17_600, "end_export_reading": 21_200})  # 83 imported, 181 exported since
+		conn.append("meters", {"meter": new, "installed_on": "2026-09-20", "start_reading": 0, "start_export_reading": 0})
+		conn.save()
+		r = self.read("2026-10-01", 100, 250)
+		self.assertEqual((r.meter, r.old_meter_units, r.old_meter_export_units), (new, 83, 181))
+		self.assertEqual((r.units, r.export_units), (183, 431))  # 83 + 100 imported, 181 + 250 exported
+		b = self.bill(self.make_run("2026-10-01", "2026-11-11"))
+		self.assertEqual((b.import_units, b.export_units, b.units, b.units_carried_out), (183, 431, 0, 248))
+		conn.reload()
+		conn.meters[1].update({"removed_on": "2026-10-20", "end_export_reading": -1})
+		conn.meters[1].end_export_reading = 0.5
+		conn.meters[1].start_export_reading = 5
+		with self.assertRaises(frappe.ValidationError):  # an end export reading below the start
+			conn.save()
+
+	def test_losses_ra_consumer_360_and_api_know_solar(self):
+		from utility_billing.api import v1  # noqa: PLC0415
+		from utility_billing.utility_billing import consumer360, losses  # noqa: PLC0415
+		from utility_billing.utility_billing import revenue_assurance as ra  # noqa: PLC0415
+
+		self.method(netmeter.NET)
+		self.read("2026-09-01", 17_517, 21_019)  # 979 imported, 908 exported
+		b = self.bill(self.post(self.make_run("2026-09-01", "2026-10-11")))
+		self.assertEqual(b.units, 71)
+		# line losses: energy in = DISCO import − export to the DISCO + residents' solar; delivered = residents' imports, not the 71 billed
+		frappe.get_doc({"doctype": "DISCO Bill", "society": SOC, "billing_month": "2026-09-01", "units_kwh": 900, "export_units_kwh": 700,
+		                "bill_no": "D-NM-09"}).insert()
+		loss = losses.society_loss(SOC, "2026-09-01")
+		self.assertEqual((loss["input_kwh"], loss["billed_kwh"], loss["loss_kwh"], loss["solar_export_kwh"]), (1108, 979, 129, 908))
+		# revenue assurance: exports beyond the solar capacity, and an export reading on a meter that isn't net metering
+		frappe.db.set_value("Connection", self.conn, "solar_capacity_kw", 2)  # 2 kW × 6 h × 30 days = 360 units at most
+		ra.run_checks(SOC, "2026-09-01")
+		found = frappe.get_all("RA Finding", filters={"society": SOC, "check_type": "RA-11 Solar export anomaly"}, fields=["subject_type", "details"])
+		self.assertEqual([f.subject_type for f in found], ["Connection"])
+		self.assertIn("at most about 360", found[0].details)
+		frappe.db.set_value("Meter", frappe.db.get_value("Connection", self.conn, "current_meter"), "meter_type", "Three Phase")
+		ra.run_checks(SOC, "2026-09-01")
+		self.assertEqual(frappe.db.count("RA Finding", {"society": SOC, "check_type": "RA-11 Solar export anomaly", "subject_type": "Meter"}), 1)
+		# Consumer 360 and the billing API
+		consumer = frappe.db.get_value("Connection", self.conn, "consumer")
+		v = consumer360.view(consumer, self.conn)
+		solar = v["overview"]["bill"]["solar"]
+		self.assertEqual((solar["imported"], solar["exported"], solar["credited"], solar["carried_out"]), (979, 908, 908, 0))
+		row = frappe.get_all("Utility Bill", filters={"name": b.name}, fields=["*"])[0]
+		self.assertEqual(v1._bill_view(row)["solar"], {"method": netmeter.NET, "imported_units": 979, "exported_units": 908, "credited_units": 908,
+		                                               "units_carried_forward": 0, "buyback_credit": 0})
+		row.nm_method = None
+		self.assertIsNone(v1._bill_view(row)["solar"])
