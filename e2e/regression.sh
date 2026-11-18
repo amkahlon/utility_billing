@@ -47,6 +47,16 @@ for run in $(seq 1 "$RUNS"); do
   tail -1 "$HOME/e2e-run$run.log"
 done
 
+# Browser tests of the main screens (real Chromium, Playwright in ~/e2e-venv: server/wsl-10-browser-tests.sh installs it).
+if [ -x "$HOME/e2e-venv/bin/python" ]; then
+  echo "== browser tests on qa.localhost:8001"
+  "$HOME/e2e-venv/bin/python" apps/utility_billing/e2e/run_browser.py > "$HOME/browser-run.log" 2>&1 || status=1
+  grep -E "^FAIL" "$HOME/browser-run.log" | cut -c1-300
+  tail -1 "$HOME/browser-run.log"
+else
+  echo "== browser tests SKIPPED: ~/e2e-venv is missing (run server/wsl-10-browser-tests.sh)"; status=1
+fi
+
 echo "== stopping QA server"
 kill "$(cat "$PIDFILE")" 2>/dev/null; rm -f "$PIDFILE"
 
