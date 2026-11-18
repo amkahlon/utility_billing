@@ -16,6 +16,7 @@
   "security_deposit",
   "plan_remaining",
   "plan_installments",
+  "solar_credit_units",
   "row_status",
   "error",
   "ledger_entry"
@@ -97,6 +98,12 @@
    "label": "Installment Plan: Installments Left"
   },
   {
+   "fieldname": "solar_credit_units",
+   "fieldtype": "Float",
+   "label": "Solar Credit Units Carried Forward",
+   "description": "Net-metering accounts: exported units not yet set against imports."
+  },
+  {
    "fieldname": "row_status",
    "fieldtype": "Select",
    "label": "Check",
@@ -123,7 +130,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 23:00:00.000000",
+ "modified": "2026-11-18 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Opening Balance Row",

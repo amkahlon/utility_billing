@@ -55,6 +55,11 @@
   "cb_charges",
   "charges_fpa",
   "charges_qta",
+  "net_metering_section",
+  "net_metering_method",
+  "nm_credit_rounding",
+  "cb_net_metering",
+  "nm_adjustment_units",
   "surcharge_section",
   "surcharge_basis",
   "surcharge_rate",
@@ -546,6 +551,41 @@
    "fieldname": "charges_qta",
    "fieldtype": "Check",
    "label": "Charges QTA"
+  },
+  {
+   "fieldname": "net_metering_section",
+   "fieldtype": "Section Break",
+   "label": "Net Metering (Solar)",
+   "collapsible": 1,
+   "description": "How solar consumers' exported units are credited (FS-CFG-23, FS-BIL-13). Applies to connections whose meter is a Net Metering meter."
+  },
+  {
+   "fieldname": "net_metering_method",
+   "fieldtype": "Select",
+   "label": "Net Metering Method",
+   "options": "Net units\nBuyback rate\nSociety rebate pool",
+   "default": "Net units",
+   "description": "Net units: imports less exports, the rest carried forward. Buyback rate: imports billed in full, exports credited at the tariff's buyback rate. Society rebate pool: each month the society's rebate pool (residents' imports less the DISCO's import) is shared among solar consumers in proportion to their exports."
+  },
+  {
+   "fieldname": "nm_credit_rounding",
+   "fieldtype": "Select",
+   "label": "Rounding of Credited Units",
+   "options": "Nearest unit (half up)\nRound down\nRound up\nNo rounding",
+   "default": "Nearest unit (half up)",
+   "depends_on": "eval:doc.net_metering_method=='Society rebate pool'"
+  },
+  {
+   "fieldname": "cb_net_metering",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "nm_adjustment_units",
+   "fieldtype": "Select",
+   "label": "FPA and QTA on Solar Accounts",
+   "options": "Net units\nImported units",
+   "default": "Net units",
+   "description": "The units of the reference month that FPA and QTA are charged on for a net-metering account."
   },
   {
    "fieldname": "bill_layout_section",
@@ -1046,7 +1086,7 @@
    "fieldtype": "Percent",
    "label": "Drop: Below % of Similar Accounts",
    "default": "50",
-   "description": "…and below this share of the median of similar accounts (same category and plot size)."
+   "description": "\u2026and below this share of the median of similar accounts (same category and plot size)."
   },
   {
    "fieldname": "ra_history_months",
@@ -1120,7 +1160,7 @@
    "fieldtype": "Select",
    "label": "Defective-Meter Billing",
    "default": "Average of last N months",
-   "options": "Average of last N months\nSame month last year\nLoad × load factor × hours\nMinimum charge only"
+   "options": "Average of last N months\nSame month last year\nLoad \u00d7 load factor \u00d7 hours\nMinimum charge only"
   },
   {
    "fieldname": "defective_average_months",
@@ -1144,14 +1184,14 @@
    "fieldtype": "Percent",
    "label": "Load Factor",
    "default": "30",
-   "depends_on": "eval:doc.defective_billing_method=='Load × load factor × hours'"
+   "depends_on": "eval:doc.defective_billing_method=='Load \u00d7 load factor \u00d7 hours'"
   },
   {
    "fieldname": "defective_hours",
    "fieldtype": "Int",
    "label": "Hours in a Month",
    "default": "720",
-   "depends_on": "eval:doc.defective_billing_method=='Load × load factor × hours'"
+   "depends_on": "eval:doc.defective_billing_method=='Load \u00d7 load factor \u00d7 hours'"
   },
   {
    "fieldname": "disconnected_fixed_charges",
@@ -1166,7 +1206,7 @@
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 18:00:00.000000",
+ "modified": "2026-11-18 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

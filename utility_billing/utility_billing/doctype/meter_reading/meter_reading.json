@@ -23,6 +23,10 @@
   "previous_reading",
   "previous_reading_date",
   "present_reading",
+  "net_metering",
+  "previous_export_reading",
+  "present_export_reading",
+  "export_units",
   "mdi_kw",
   "reading_date",
   "cb2",
@@ -154,6 +158,34 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Present Reading"
+  },
+  {
+   "fieldname": "net_metering",
+   "fieldtype": "Check",
+   "label": "Net Metering",
+   "read_only": 1,
+   "description": "The meter has an export register (solar)."
+  },
+  {
+   "fieldname": "previous_export_reading",
+   "fieldtype": "Float",
+   "label": "Previous Export Reading",
+   "read_only": 1,
+   "depends_on": "eval:doc.net_metering"
+  },
+  {
+   "fieldname": "present_export_reading",
+   "fieldtype": "Float",
+   "label": "Present Export Reading",
+   "depends_on": "eval:doc.net_metering",
+   "description": "The export (solar) register on the same meter."
+  },
+  {
+   "fieldname": "export_units",
+   "fieldtype": "Float",
+   "label": "Export Units",
+   "read_only": 1,
+   "depends_on": "eval:doc.net_metering"
   },
   {
    "fieldname": "reading_date",
@@ -346,7 +378,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 09:00:00.000000",
+ "modified": "2026-11-18 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Meter Reading",

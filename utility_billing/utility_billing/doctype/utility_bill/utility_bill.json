@@ -25,6 +25,17 @@
   "consumption_section",
   "meter_reading",
   "units",
+  "nm_method",
+  "import_units",
+  "export_units",
+  "credited_units",
+  "nm_credit_factor",
+  "units_carried_in",
+  "units_set_off",
+  "units_carried_out",
+  "buyback_rate",
+  "buyback_credit",
+  "solar_pool",
   "consumption_type",
   "final_bill",
   "period_note",
@@ -184,6 +195,84 @@
    "fieldtype": "Float",
    "label": "Units",
    "read_only": 1
+  },
+  {
+   "fieldname": "nm_method",
+   "fieldtype": "Data",
+   "label": "Net Metering Method",
+   "read_only": 1
+  },
+  {
+   "fieldname": "import_units",
+   "fieldtype": "Float",
+   "label": "Imported Units",
+   "read_only": 1,
+   "depends_on": "eval:doc.nm_method"
+  },
+  {
+   "fieldname": "export_units",
+   "fieldtype": "Float",
+   "label": "Exported Units",
+   "read_only": 1,
+   "depends_on": "eval:doc.nm_method"
+  },
+  {
+   "fieldname": "credited_units",
+   "fieldtype": "Float",
+   "label": "Export Units Credited",
+   "read_only": 1,
+   "depends_on": "eval:doc.nm_method"
+  },
+  {
+   "fieldname": "nm_credit_factor",
+   "fieldtype": "Float",
+   "label": "Credit Factor",
+   "precision": "6",
+   "read_only": 1,
+   "depends_on": "eval:doc.nm_method"
+  },
+  {
+   "fieldname": "units_carried_in",
+   "fieldtype": "Float",
+   "label": "Solar Units Brought Forward",
+   "read_only": 1,
+   "depends_on": "eval:doc.nm_method"
+  },
+  {
+   "fieldname": "units_set_off",
+   "fieldtype": "Float",
+   "label": "Solar Units Set Against Imports",
+   "read_only": 1,
+   "depends_on": "eval:doc.nm_method"
+  },
+  {
+   "fieldname": "units_carried_out",
+   "fieldtype": "Float",
+   "label": "Solar Units Carried Forward",
+   "read_only": 1,
+   "depends_on": "eval:doc.nm_method"
+  },
+  {
+   "fieldname": "buyback_rate",
+   "fieldtype": "Currency",
+   "label": "Buyback Rate",
+   "read_only": 1,
+   "depends_on": "eval:doc.nm_method"
+  },
+  {
+   "fieldname": "buyback_credit",
+   "fieldtype": "Currency",
+   "label": "Buyback Credit",
+   "read_only": 1,
+   "depends_on": "eval:doc.nm_method"
+  },
+  {
+   "fieldname": "solar_pool",
+   "fieldtype": "Link",
+   "options": "Solar Rebate Pool",
+   "label": "Solar Rebate Pool",
+   "read_only": 1,
+   "depends_on": "eval:doc.nm_method"
   },
   {
    "fieldname": "consumption_type",
@@ -499,7 +588,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-16 09:00:00.000000",
+ "modified": "2026-11-18 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Bill",

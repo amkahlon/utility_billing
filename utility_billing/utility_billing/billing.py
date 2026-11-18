@@ -2,6 +2,7 @@
 """Bills and bill runs (FS-BIL-01, 03-06, 09-10, 14-15; FS-RUN-01-05). Calculations are in
 bill_engine.py; this module gathers the inputs from the database and stores the results."""
 
+import dataclasses
 import json
 from decimal import Decimal
 
@@ -12,7 +13,7 @@ from frappe.utils import add_months, flt, getdate, now_datetime
 from utility_billing.utility_billing import bill_engine as engine
 from utility_billing.utility_billing import flags, holders, periods, plans, prorata, snapshots, split_engine, tax_engine
 from utility_billing.utility_billing import account, bill_print
-from utility_billing.utility_billing import readings, runcache
+from utility_billing.utility_billing import netmeter, readings, runcache
 from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff as _applicable_tariff
 
 
@@ -233,7 +234,7 @@ def build_bill(run, connection, override=None) -> dict:
 	if held:
 		raise BillProblem(_("Bill on hold: flag {0}. Remove it to bill this account.").format(held))
 	reading_fields = ["name", "status", "units", "consumption_type", "previous_reading_date", "reading_date", "defective", "previous_reading",
-	                  "multiplier"]
+	                  "multiplier", "net_metering", "export_units"]
 	cycle_rows = runcache.bulk(("readings", run.reading_cycle), lambda: {
 		r.connection: r for r in frappe.get_all("Meter Reading", filters={"reading_cycle": run.reading_cycle}, fields=[*reading_fields, "connection"])})
 	reading = cycle_rows.get(connection) if cycle_rows is not None else frappe.db.get_value(
@@ -260,6 +261,23 @@ def build_bill(run, connection, override=None) -> dict:
 		raise BillProblem(_("No approved tariff for {0} in {1}.").format(category, month_label(month)))
 	tariff = frappe.get_cached_doc("Tariff", tariff_name)
 
+	# Net metering (increment 28): exported units are credited by the society's method before the bill is worked out; `units` becomes the
+	# units billed, and the imported units are kept for the charges set to use them. Not applied to one side of a holder change.
+	nm = pool = None
+	import_units = units
+	if metered and frappe.utils.cint(reading.get("net_metering")) and not part:
+		method = society.get("net_metering_method") or netmeter.NET
+		if method == netmeter.POOL:
+			pool = netmeter.approved_pool(run.society, run.utility, month)
+			if not pool:
+				raise BillProblem(_("Approve the solar rebate pool of {0} before billing solar accounts.").format(month_label(month)))
+		nm = netmeter.compute(method, units, reading.get("export_units"), netmeter.carried_in(connection, month),
+		                      pool_units=pool.pool_units if pool else None, pool_exports=pool.residents_export_units if pool else None,
+		                      rounding=society.get("nm_credit_rounding") or netmeter.HALF_UP, buyback_rate=tariff.get("buyback_rate"))
+		if method == netmeter.BUYBACK and not flt(tariff.get("buyback_rate")):
+			raise BillProblem(_("Tariff {0} has no solar buyback rate.").format(tariff.name))
+		units = flt(nm.billed_units)
+
 	energy = None
 	if metered:
 		if not society.energy_charge_type:
@@ -270,6 +288,10 @@ def build_bill(run, connection, override=None) -> dict:
 	prop = (props or {}).get(conn.property) or frappe.db.get_value("Property", conn.property, ["plot_size_class", "area"], as_dict=True) or {}
 	plot_class = prop.get("plot_size_class")
 	charges = tariff_charges(tariff, plot_class)
+	if nm:  # per-unit charges set to "Imported units" are worked out on everything the account imported
+		charges = [dataclasses.replace(c, units=engine.D(import_units))
+		           if c.basis == engine.PER_UNIT and frappe.get_cached_value("Charge Type", c.charge_type, "nm_units_basis") == netmeter.IMPORTED
+		           else c for c in charges]
 
 	adjustments = []
 	for adj_type, used in (("FPA", society.charges_fpa), ("QTA", society.charges_qta)):
@@ -278,7 +300,8 @@ def build_bill(run, connection, override=None) -> dict:
 		adj = approved_adjustment(run.society, run.utility, month, adj_type)
 		if not adj:
 			raise BillProblem(_("No approved {0} for {1}.").format(adj_type, month_label(month)))
-		ref_units = readings.get_billable_units(connection, adj.reference_month)
+		ref_units = (netmeter.reference_units(connection, adj.reference_month, society.get("nm_adjustment_units") or netmeter.NET) if nm
+		             else readings.get_billable_units(connection, adj.reference_month))
 		exempt = None
 		if category in {e.consumer_category for e in adj.exempt_categories}:
 			exempt = _("{0} category").format(frappe.db.get_value("Consumer Category", category, "category_name"))
@@ -333,6 +356,10 @@ def build_bill(run, connection, override=None) -> dict:
 		bill_rounding=society.rounding_rule or engine.NEAREST,
 		taxes=taxes_for(run.society, month, category, consumer, utility=run.utility), fraction=fraction, fraction_note=fraction_note,
 		installment=engine.D(installment) if installment else None, segments=segments,
+		extra_lines=[engine.Line("", _("Solar export credit"), energy.group if energy else "Electricity", (energy.order if energy else 10) + 1,
+		                         engine.FIXED, nm.export_units, nm.buyback_rate, -engine.rnd(nm.buyback_credit, society.rounding_rule or engine.NEAREST),
+		                         _("{0} exported units × {1}").format(engine.fmt(nm.export_units), engine.fmt(nm.buyback_rate)))]
+		if nm and nm.buyback_credit else (),
 	)
 	consumption_type = reading.consumption_type
 	if frappe.utils.cint(reading.get("defective")):
@@ -360,6 +387,11 @@ def build_bill(run, connection, override=None) -> dict:
 		"payable_within_due": flt(result.payable_within_due), "surcharge_amount": flt(result.surcharge),
 		"payable_after_due": flt(result.payable_after_due), "outstanding_amount": 0,
 	}
+	if nm:
+		bill.update({"nm_method": nm.method, "import_units": flt(nm.import_units), "export_units": flt(nm.export_units),
+		             "credited_units": flt(nm.credited_units), "nm_credit_factor": flt(nm.credit_factor) if nm.credit_factor is not None else 0,
+		             "units_carried_in": flt(nm.carried_in), "units_set_off": flt(nm.set_off), "units_carried_out": flt(nm.carried_out),
+		             "buyback_rate": flt(nm.buyback_rate), "buyback_credit": flt(nm.buyback_credit), "solar_pool": pool.name if pool else None})
 	if override.get("revises"):
 		bill["revises"], bill["revision_no"] = override["revises"], override.get("revision_no") or 2
 	bill["print_snapshot"] = json.dumps(bill_print.build_snapshot(bill))

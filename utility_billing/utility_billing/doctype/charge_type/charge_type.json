@@ -12,6 +12,7 @@
   "charge_code",
   "charge_group",
   "calculation_basis",
+  "nm_units_basis",
   "cb1",
   "bill_label",
   "bill_order",
@@ -50,6 +51,15 @@
    "label": "Calculation Basis",
    "options": "Per Unit\nFixed\nPer Area\nOne-off\nPercentage of Charges\nSlab\nBy Plot Size",
    "reqd": 1
+  },
+  {
+   "fieldname": "nm_units_basis",
+   "fieldtype": "Select",
+   "label": "Units for Net-Metering Accounts",
+   "options": "Net units\nImported units",
+   "default": "Net units",
+   "depends_on": "eval:doc.calculation_basis=='Per Unit'",
+   "description": "On a solar (net-metering) account, a per-unit charge is worked out on the net units billed or on all imported units."
   },
   {
    "fieldname": "cb1",
@@ -96,7 +106,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 14:00:00.000000",
+ "modified": "2026-11-18 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Charge Type",

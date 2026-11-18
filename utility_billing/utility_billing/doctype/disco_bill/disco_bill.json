@@ -21,6 +21,7 @@
   "bill_copy",
   "supply_section",
   "units_kwh",
+  "export_units_kwh",
   "cb2",
   "total_amount",
   "amounts_section",
@@ -115,6 +116,12 @@
    "reqd": 1
   },
   {
+   "fieldname": "export_units_kwh",
+   "fieldtype": "Float",
+   "label": "Units Exported to the DISCO (kWh)",
+   "description": "Net-metering societies: the units the DISCO credited the society for (solar exported back to the grid)."
+  },
+  {
    "fieldname": "cb2",
    "fieldtype": "Column Break"
   },
@@ -175,7 +182,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 09:51:35.594177",
+ "modified": "2026-11-18 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "DISCO Bill",

@@ -58,6 +58,7 @@ class Charge:
 	rounding: str = NEAREST
 	basis: str = FIXED
 	rate: Decimal = Decimal(0)
+	units: Decimal | None = None  # a per-unit charge on other units than the bill's (net metering: all imported units, increment 28)
 
 
 @dataclass
@@ -113,6 +114,7 @@ def calculate(
 	fraction_note: str = "",
 	installment: Decimal | None = None,
 	segments: Iterable[dict] | None = None,
+	extra_lines: Iterable[Line] = (),
 ) -> BillResult:
 	"""`tariff`: {"method", "flat_rate", "slabs", "minimum_charge", "minimum_applies_to"} (the minimum is on the energy charge,
 	or with "Whole current bill" on the bill before tax); `surcharge`: {"basis",
@@ -122,11 +124,13 @@ def calculate(
 	`segments`: when a tariff changes in the middle of the reading period (FS-CFG-05, FS-BIL-02), a list of
 	{"units", "tariff", "charges", "fraction", "note"}, one per tariff in force; the energy and the tariff's own charges are worked
 	out for each on its share of the units and of the days, and `units`, `tariff`, `charges` and `fraction` are not used.
+	`extra_lines`: lines worked out elsewhere and already rounded, added before the minimum bill and taxes (the solar buyback credit).
 	"""
 	frac_all = D(fraction) if fraction is not None else Decimal(1)
 	lines: list[Line] = []
 	segs = [dict(s) for s in segments] if segments else [
 		{"units": units, "tariff": tariff, "charges": charges, "fraction": frac_all, "note": fraction_note}]
+	total_units = sum((D(s["units"]) for s in segs), Decimal(0))
 
 	for seg in segs:
 		u, trf, frac, seg_note = D(seg["units"]), seg["tariff"], D(seg["fraction"]), seg.get("note") or ""
@@ -147,10 +151,12 @@ def calculate(
 
 		seg_charges = list(seg["charges"])
 		split_note = seg_note if len(segs) > 1 else fraction_note
-		# 2. Per-unit add-ons
+		# 2. Per-unit add-ons (a charge with its own units, e.g. all imported units of a solar account, takes this segment's share of them)
 		for c in (c for c in seg_charges if c.basis == PER_UNIT):
-			lines.append(Line(c.charge_type, c.label, c.group, c.order, PER_UNIT, u, D(c.rate), rnd(u * D(c.rate), c.rounding),
-			                  f"{fmt(u)} × {fmt(c.rate)}" + (f"; {seg_note}" if len(segs) > 1 and seg_note else "")))
+			cu = u if c.units is None else (D(c.units) * u / total_units if len(segs) > 1 and total_units else D(c.units))
+			lines.append(Line(c.charge_type, c.label, c.group, c.order, PER_UNIT, cu, D(c.rate), rnd(cu * D(c.rate), c.rounding),
+			                  f"{fmt(cu)} × {fmt(c.rate)}" + (" imported units" if c.units is not None else "")
+			                  + (f"; {seg_note}" if len(segs) > 1 and seg_note else "")))
 		# 4. Fixed, one-off and per-area charges
 		for c in (c for c in seg_charges if c.basis in (FIXED, ONE_OFF)):
 			part = frac if c.basis == FIXED else (Decimal(1) if len(segs) == 1 or seg is segs[0] else Decimal(0))  # one-off: once
@@ -179,6 +185,7 @@ def calculate(
 		lines.append(Line(c.charge_type, c.label, c.group, c.order, PER_UNIT, D(a.units), D(a.rate),
 		                  rnd(D(a.units) * D(a.rate), c.rounding), f"{a.reference} units {fmt(a.units)} × {fmt(a.rate)}"))
 
+	lines.extend(extra_lines)
 	current = sum((l.amount for l in lines), Decimal(0))
 	# 6. Minimum on the whole bill, when the tariff says so (user decision 2026-11-16: the minimum is set on the tariff only, applying to the
 	# energy charge or to the whole current bill before tax). With a tariff change in the month, the highest such minimum applies.
