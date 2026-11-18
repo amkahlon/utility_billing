@@ -453,6 +453,7 @@ def _calculate_bills(run):
 			for part in bulk.in_chunks(drafts, 1000):
 				for table in BILL_TABLES:
 					frappe.db.sql(f"delete from `tab{table}` where {'name' if table == 'Utility Bill' else 'parent'} in %s", (part,))
+			bulk.release_names("Utility Bill", drafts)  # the recalculated bills take the same numbers again
 		else:
 			for name in drafts:
 				frappe.delete_doc("Utility Bill", name, force=True, ignore_permissions=True)

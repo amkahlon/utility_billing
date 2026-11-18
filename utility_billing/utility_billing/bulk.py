@@ -25,11 +25,8 @@ def plain(*doctypes) -> bool:
 	return True
 
 
-def reserve_names(doctype, count) -> list:
-	"""The next `count` numbers of the doctype's naming series, taken in one step (the series row stays locked to the commit, as when
-	documents are numbered one by one)."""
-	if not count:
-		return []
+def _series(doctype):
+	"""(the series key in tabSeries, digits, the name with a marker where the number goes) of the doctype's naming series today."""
 	df = frappe.get_meta(doctype).get_field("naming_series")
 	series = (df.default or (df.options or "").split("\n")[0]).strip()
 	seen = {}
@@ -39,6 +36,39 @@ def reserve_names(doctype, count) -> list:
 		return "\x00"
 
 	template = parse_naming_series(series.split("."), number_generator=marker)
+	return seen["key"], seen["digits"], template
+
+
+def release_names(doctype, names):
+	"""Give back the numbers of deleted documents that are the last ones of the series, so the documents that replace them take the
+	same numbers and the series has no gap (deleting documents one by one does the same, through Frappe)."""
+	key, _digits, template = _series(doctype)
+	head, _sep, tail = template.partition("\x00")
+	numbers = set()
+	for n in names:
+		if n.startswith(head) and (not tail or n.endswith(tail)):
+			middle = n[len(head):len(n) - len(tail)] if tail else n[len(head):]
+			if middle.isdigit():
+				numbers.add(int(middle))
+	if not numbers:
+		return
+	current = frappe.db.sql("select `current` from `tabSeries` where name = %s for update", key)
+	if not current or current[0][0] is None:
+		return
+	value = start = cint(current[0][0])
+	while value in numbers:
+		value -= 1
+	if value != start:
+		frappe.db.sql("update `tabSeries` set `current` = %s where name = %s", (value, key))
+
+
+def reserve_names(doctype, count) -> list:
+	"""The next `count` numbers of the doctype's naming series, taken in one step (the series row stays locked to the commit, as when
+	documents are numbered one by one)."""
+	if not count:
+		return []
+	key, digits, template = _series(doctype)
+	seen = {"key": key, "digits": digits}
 	current = frappe.db.sql("select `current` from `tabSeries` where name = %s for update", seen["key"])
 	if current and current[0][0] is not None:
 		start = cint(current[0][0])

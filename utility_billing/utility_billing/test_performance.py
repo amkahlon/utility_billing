@@ -140,11 +140,18 @@ class IntegrationTestBillRunInGroups(BillingCase):
 		self.read_month("2026-10-01", 3905)
 		self.fpa("2026-10-01", 1.30)
 		run = self.october(post=False)
-		first = set(frappe.get_all("Utility Bill", filters={"bill_run": run.name}, pluck="name"))
+		first = {b.connection: b.name for b in frappe.get_all("Utility Bill", filters={"bill_run": run.name}, fields=["name", "connection"])}
+		lines = frappe.db.count("Bill Line", {"parent": ["in", list(first.values())]})
 		billing.calculate_run(run.name)
-		second = set(frappe.get_all("Utility Bill", filters={"bill_run": run.name}, pluck="name"))
-		self.assertEqual((len(first), len(second), first & second), (5, 5, set()))
-		self.assertFalse(frappe.db.sql("select name from `tabBill Line` where parent in %s", (list(first),)))
+		second = {b.connection: b.name for b in frappe.get_all("Utility Bill", filters={"bill_run": run.name}, fields=["name", "connection"])}
+		# the same five bills with the same numbers (the series has no gap after a recalculation), and no line left behind or doubled
+		self.assertEqual((len(first), second), (5, first))
+		self.assertEqual(frappe.db.count("Bill Line", {"parent": ["in", list(first.values())]}), lines)
+		# when other bills were numbered in between, the numbers move on instead
+		frappe.db.sql("update `tabSeries` set `current` = `current` + 1 where name = %s", bulk._series("Utility Bill")[0])
+		billing.calculate_run(run.name)
+		third = set(frappe.get_all("Utility Bill", filters={"bill_run": run.name}, pluck="name"))
+		self.assertEqual((len(third), third & set(first.values())), (5, set()))
 
 	def test_a_held_account_is_left_out_and_reported(self):
 		self.september()
