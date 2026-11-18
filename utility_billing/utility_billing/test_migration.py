@@ -67,6 +67,12 @@ class UnitTestMigrationMapping(UnitTestCase):
 		self.assertEqual([x["severity"] for x in problems], ["Warning", "Error", "Error"])  # Notes unused; abc; the bad date
 		self.assertIn("Notes", problems[0]["problem"])
 
+	def test_mobile_numbers_in_the_usual_forms_pass(self):
+		for ok in ("03004917056", "0300-4917056", "3004917056", "+92 300 4917056"):
+			self.assertTrue(migration.phone_ok(ok), ok)
+		for bad in ("12345", "042-35761234", "0300491705"):
+			self.assertFalse(migration.phone_ok(bad), bad)
+
 	def test_dates_follow_the_profile_order(self):
 		self.assertEqual(migration.parse_date("03/04/2026", prof(dayfirst=True)), datetime.date(2026, 4, 3))
 		self.assertEqual(migration.parse_date("03/04/2026", prof(dayfirst=False)), datetime.date(2026, 3, 4))
@@ -141,7 +147,7 @@ class IntegrationTestMigration(IntegrationTestCase):
 		c = book["Connections"]
 		c.append(["MIG-1001", "", "Duplicate", "", "", "61-C", "", "RES", 5, "TST-MIG-M9", "", 5, "Marla"])
 		c.append(["MIG-1004", "", "", "", "", "62-C", "", "XYZ", 5, "TST-MIG-M1", "", 5, "Marla"])
-		c.append(["MIG-1005", "C-5", "Other Name", "3520212345671", "", "Plot", "", "RES", 5, "", "", 5, "Marla"])
+		c.append(["MIG-1005", "C-5", "Other Name", "3520212345671", "12345", "Plot", "", "RES", 5, "", "", 5, "Marla"])
 		book["Readings"].append(["MIG-1003", "", 950, "", "05-11-2026"])
 		book["Readings"][3][3] = ""  # the net-metering meter without its export reading
 		book["Balances"].append(["MIG-9999", 10, 0, 0, 0, 0, 0])
@@ -156,7 +162,10 @@ class IntegrationTestMigration(IntegrationTestCase):
 		                 "No account in the Connections sheet for this balance", "either owes or is in credit", "Nov 2026 is after the cut-over day"):
 			self.assertIn(expected, text)
 		self.assertEqual(errors, b.error_count)
-		self.assertIn("belongs to different names", "\n".join(p.problem for p in b.problems if p.severity == "Warning"))
+		warnings = "\n".join(p.problem for p in b.problems if p.severity == "Warning")
+		self.assertIn("belongs to different names", warnings)
+		self.assertIn("Mobile number 12345 doesn't look like one", warnings)
+		self.assertNotIn("03004917056", warnings)
 		self.assertEqual(b.load_status, "Checked")
 		self.assertEqual(frappe.db.count("Connection"), before)
 		self.assertFalse(migration.load(b))  # errors stop the load
@@ -197,6 +206,14 @@ class IntegrationTestMigration(IntegrationTestCase):
 		legacy.set_window(SOC, add_days(nowdate(), -200))  # went live 200 days ago: the six months are over
 		self.assertIsNone(account.connection_of("MIG-1001"))
 		self.assertEqual(account.connection_of(c1), c1)  # our own number always works
+
+	def test_the_bill_prints_the_old_number_while_it_is_accepted(self):
+		self.loaded()
+		c1 = self.conn("MIG-1001")
+		bill = frappe._dict(society=SOC, connection=c1, billing_month="2026-11-01", issue_date="2026-11-05", consumer_name="Pervaiz Hussain")
+		self.assertEqual(bill_print.build_snapshot(bill)["connection"]["legacy_account_no"], "MIG-1001")
+		legacy.set_window(SOC, "2026-01-01")  # accepted until 1 July 2026: a November bill no longer shows it
+		self.assertIsNone(bill_print.build_snapshot(bill)["connection"]["legacy_account_no"])
 
 	def test_the_first_bill_shows_the_months_from_the_previous_system(self):
 		self.loaded()

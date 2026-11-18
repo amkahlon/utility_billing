@@ -114,6 +114,12 @@ def split_house(row, prof):
 	return house, block, sector
 
 
+def phone_ok(text) -> bool:
+	"""A Pakistani mobile number: 03XXXXXXXXX, 3XXXXXXXXX (Excel drops the 0) or 923XXXXXXXXX, with any spacing or dashes."""
+	d = re.sub(r"\D", "", str(text or ""))
+	return (len(d) == 11 and d.startswith("03")) or (len(d) == 10 and d.startswith("3")) or (len(d) == 12 and d.startswith("923"))
+
+
 def property_no(house, block):
 	return f"{block}-{house}" if block else house
 
@@ -277,6 +283,11 @@ def analyse(batch) -> frappe._dict:
 			else:
 				r.cnic = f"{digits[:5]}-{digits[5:12]}-{digits[12]}"
 				cnic_names[r.cnic].add(_key(r.consumer_name))
+		if r.mobile:
+			r.mobile = str(int(r.mobile)) if isinstance(r.mobile, float) and r.mobile.is_integer() else str(r.mobile).strip()
+			if not phone_ok(r.mobile):
+				err("Connections", r, _("Mobile number {0} doesn't look like one (03XX-XXXXXXX or +92 3XX XXXXXXX); it is kept as it is.").format(
+					r.mobile), severity="Warning")
 		if r.feeder and str(r.feeder) not in feeders and not frappe.db.exists("Feeder", f"{batch.society}-{r.feeder}"):
 			err("Connections", r, _("Feeder {0} is neither in the Network sheet nor in the system.").format(r.feeder))
 		if r.transformer and str(r.transformer) not in transformers and not frappe.db.exists("Transformer", f"{batch.society}-{r.transformer}"):
