@@ -59,6 +59,30 @@ def lock(connection):
 	frappe.db.sql("select name from `tabConnection` where name = %s for update", connection)
 
 
+def entry_fields(connection, conn, last, before, after, deltas, entry_type, voucher_type, voucher_no, posting_date, remarks=None, reverses=None):
+	"""The fields of one ledger entry: `conn` the account's consumer, name and society, `last` its last entry, `before` and `after` the
+	balances around this entry."""
+	return {
+		"doctype": "Customer Ledger Entry", "connection": connection, "consumer": conn.consumer,
+		"consumer_name": conn.consumer_name, "society": conn.society, "posting_date": posting_date,
+		"posted_on": now_datetime(), "period": posting_date.strftime("%Y-%m"), "seq": cint(last.seq if last else 0) + 1,
+		"entry_type": entry_type, "voucher_type": voucher_type, "voucher_no": voucher_no,
+		"amount": flt(engine.total(after) - engine.total(before)), "reverses": reverses, "remarks": remarks,
+		"balance": flt(engine.total(after)),
+		**{f"d_{b}": flt(deltas.get(b)) for b in engine.ALL},
+		**{f: flt(after[b]) for b, f in FIELDS.items()},
+	}
+
+
+def bill_entry_fields(bill, conn, last, order) -> dict:
+	"""The ledger entry of a posted bill, as post_bill writes it, for a bill run that writes its entries a group at a time (the
+	performance step). The run has locked the account, read `last` and checked the period."""
+	before = balances_of(last)
+	deltas = engine.bill(before, bill.current_amount, order)
+	return entry_fields(bill.connection, conn, last, before, engine.apply(before, deltas), deltas, "Bill", "Utility Bill", bill.name,
+	                    getdate(bill.issue_date), _("Bill for {0}").format(getdate(bill.billing_month).strftime("%B %Y")))
+
+
 def post(connection, entry_type, deltas, voucher_type, voucher_no, posting_date=None, remarks=None, reverses=None, last=False):
 	"""Write one ledger entry. Callers lock the account first. `last`: the account's last entry when the caller has just read it
 	(None for an account with no entries yet)."""
@@ -68,16 +92,8 @@ def post(connection, entry_type, deltas, voucher_type, voucher_no, posting_date=
 	after = engine.apply(before, deltas)
 	posting_date = getdate(posting_date or nowdate())
 	periods.assert_open(conn.society, posting_date, entry_type)  # a closed month is locked (FS-ACC-10)
-	entry = frappe.get_doc({
-		"doctype": "Customer Ledger Entry", "connection": connection, "consumer": conn.consumer,
-		"consumer_name": conn.consumer_name, "society": conn.society, "posting_date": posting_date,
-		"posted_on": now_datetime(), "period": posting_date.strftime("%Y-%m"), "seq": cint(last.seq if last else 0) + 1,
-		"entry_type": entry_type, "voucher_type": voucher_type, "voucher_no": voucher_no,
-		"amount": flt(engine.total(after) - engine.total(before)), "reverses": reverses, "remarks": remarks,
-		"balance": flt(engine.total(after)),
-		**{f"d_{b}": flt(deltas.get(b)) for b in engine.ALL},
-		**{f: flt(after[b]) for b, f in FIELDS.items()},
-	})
+	entry = frappe.get_doc(entry_fields(connection, conn, last, before, after, deltas, entry_type, voucher_type, voucher_no, posting_date,
+	                                    remarks, reverses))
 	entry.flags.from_account = True
 	entry.insert(ignore_permissions=True)
 	if reverses:

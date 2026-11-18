@@ -90,9 +90,11 @@ def after_run_posted(run):
 	"""A posted run brings its services' bills into the combined bills of the billing accounts they belong to."""
 	month = getdate(run.billing_month).replace(day=1)
 	done = set()
-	for conn in frappe.get_all("Utility Bill", filters={"bill_run": run.name, "docstatus": 1}, pluck="connection"):
-		ba = account_of_connection(conn)
-		if ba and ba not in done:
+	# one statement for the run (the performance step), not one per bill
+	for ba in frappe.db.sql("""select distinct b.name from `tabUtility Bill` u join `tabBilling Account Connection` c on c.connection = u.connection
+	                           join `tabBilling Account` b on b.name = c.parent
+	                           where u.bill_run = %s and u.docstatus = 1 and b.status = 'Active' order by b.name""", run.name, pluck=True):
+		if ba not in done:
 			done.add(ba)
 			refresh(ba, month)
 

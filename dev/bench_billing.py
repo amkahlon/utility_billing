@@ -14,15 +14,40 @@ import frappe
 SOC, MONTH, ISSUE = "BENCH", "2026-07-01", "2026-08-01"
 
 
+def counted(label, fn, *a, **kw):
+	"""--queries: the statements a step runs, grouped by their shape, most frequent first."""
+	import re
+	from collections import Counter
+
+	seen, real = Counter(), frappe.db.sql
+
+	def sql(query, *args, **kwargs):
+		seen[re.sub(r"\s+", " ", re.sub(r"'[^']*'|\b\d+(\.\d+)?\b", "?", str(query)))[:150]] += 1
+		return real(query, *args, **kwargs)
+
+	frappe.db.sql = sql
+	try:
+		return fn(*a, **kw)
+	finally:
+		frappe.db.sql = real
+		print(f"---- queries of {label}: {sum(seen.values())}", flush=True)
+		for q, n in seen.most_common(45):
+			print(f"{n:7d}  {q}", flush=True)
+
+
 def timed(label, fn, *a, **kw):
 	t = time.time()
-	if "--profile" in sys.argv and label.startswith(("calculate", "post")):
+	if "--queries" in sys.argv and label.startswith(("calculate", "post")):
+		out = counted(label, fn, *a, **kw)
+		secs = time.time() - t
+	elif "--profile" in sys.argv and label.startswith(("calculate", "post")):
 		import cProfile
 		import pstats
 
 		prof = cProfile.Profile()
 		out = prof.runcall(fn, *a, **kw)
 		secs = time.time() - t
+		prof.dump_stats(f"/tmp/ub-{label.split()[0]}.prof")
 		print(f"---- profile of {label}", flush=True)
 		pstats.Stats(prof).sort_stats("cumulative").print_stats(r"utility_billing|frappe/model/(document|base_document|naming)|database", 45)
 		pstats.Stats(prof).sort_stats("cumulative").print_callers(r"database.py:\d+\(get_value\)")
@@ -163,6 +188,10 @@ if __name__ == "__main__":
 	frappe.flags.mute_emails = True
 	frappe.flags.post_in_foreground = True  # the posting is what is timed, so it runs here, not in a worker
 	frappe.flags.post_batch = 500  # as the background posting commits (bill_run.post_in_background)
+	if "--purge-only" in sys.argv:
+		purge()
+		frappe.destroy()
+		sys.exit(0)
 	try:
 		if "--rerun" in sys.argv:
 			drop_runs()
