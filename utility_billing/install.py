@@ -196,7 +196,17 @@ def ensure_roles_and_workflows():
 		if not frappe.db.exists("Role", row["name"]):
 			doc = {k: v for k, v in row.items() if k not in ("modified", "docstatus")}
 			frappe.get_doc(doc).insert(ignore_permissions=True)
-	for row in json.load(open(os.path.join(folder, "workflows.json"))):
+	workflows = json.load(open(os.path.join(folder, "workflows.json")))
+	# On a new site this runs before the app's fixtures are loaded, so the states and actions the workflows name aren't there yet
+	# (found by the first CI run, 2026-11-18: the install failed on a fresh site). The fixtures fill in their styles afterwards.
+	for row in workflows:
+		for state in {r.get(k) for t, keys in (("states", ("state",)), ("transitions", ("state", "next_state"))) for r in row.get(t) or [] for k in keys}:
+			if state and not frappe.db.exists("Workflow State", state):
+				frappe.get_doc({"doctype": "Workflow State", "workflow_state_name": state}).insert(ignore_permissions=True)
+		for action in {r.get("action") for r in row.get("transitions") or []}:
+			if action and not frappe.db.exists("Workflow Action Master", action):
+				frappe.get_doc({"doctype": "Workflow Action Master", "workflow_action_name": action}).insert(ignore_permissions=True)
+	for row in workflows:
 		if not frappe.db.exists("Workflow", row["name"]):
 			doc = {k: v for k, v in row.items() if k not in ("modified", "docstatus")}
 			for table in ("states", "transitions"):

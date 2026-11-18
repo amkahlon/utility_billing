@@ -120,6 +120,13 @@ jobs:
           tail -1 "$HOME/e2e.log"
           exit "${status:-0}"
 
+      - name: Browser tests of the main screens (real Chromium)
+        working-directory: /home/runner/frappe-bench
+        run: |
+          pip install -q playwright
+          playwright install --with-deps chromium > "$HOME/playwright-install.log" 2>&1 || { tail -20 "$HOME/playwright-install.log"; exit 1; }
+          python apps/utility_billing/e2e/run_browser.py
+
       - name: Keep the logs when something failed
         if: failure()
         uses: actions/upload-artifact@v4
@@ -130,5 +137,6 @@ jobs:
             /home/runner/e2e.log
             /home/runner/serve.log
             /home/runner/worker.log
+            /home/runner/browser-shots/
           if-no-files-found: ignore
           retention-days: 7
