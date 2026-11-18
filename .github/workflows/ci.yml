@@ -98,6 +98,14 @@ jobs:
           bench --site "$SITE" execute utility_billing.qa_support.mark_setup_complete
           bench --site "$SITE" list-apps
 
+      - name: Start the web server and a worker (PDFs fetch the site's own assets; large runs post in the background)
+        working-directory: /home/runner/frappe-bench
+        run: |
+          nohup bench worker --queue short,default,long > "$HOME/worker.log" 2>&1 &
+          nohup bench --site "$SITE" serve --port 8000 --noreload > "$HOME/serve.log" 2>&1 &
+          for _ in $(seq 1 60); do curl -s -o /dev/null -H "Host: $SITE" http://127.0.0.1:8000/api/method/ping && break; sleep 1; done
+          curl -s -H "Host: $SITE" http://127.0.0.1:8000/api/method/ping
+
       - name: Unit and integration tests
         working-directory: /home/runner/frappe-bench
         run: |
@@ -106,16 +114,13 @@ jobs:
           # every "Ran" must be followed by OK (the same rule as e2e/regression.sh)
           ran=$(grep -c '^Ran ' "$HOME/tests.log" || true); ok=$(grep -c '^OK' "$HOME/tests.log" || true)
           if [ "$ran" -eq 0 ] || [ "$ran" -ne "$ok" ] || grep -qE "^FAILED|^ERROR" "$HOME/tests.log"; then
-            echo "::error::unit or integration tests failed"; grep -E "^(ERROR|FAIL):" -A40 "$HOME/tests.log" | head -300; exit 1
+            echo "::error::unit or integration tests failed"; grep -E "^ ?(ERROR|FAIL) " -A30 "$HOME/tests.log" | grep -vE "^s+(File \"/home/runner/frappe-bench/(env|apps/frappe)|[a-z_]+ = )" | head -200; exit 1
           fi
 
       - name: End-to-end over HTTP
         working-directory: /home/runner/frappe-bench
         run: |
-          nohup bench worker --queue short,default,long > "$HOME/worker.log" 2>&1 &
-          nohup bench --site "$SITE" serve --port 8001 --noreload > "$HOME/serve.log" 2>&1 &
-          for _ in $(seq 1 60); do curl -s -o /dev/null -H "Host: $SITE" http://127.0.0.1:8001/api/method/ping && break; sleep 1; done
-          E2E_URL=http://127.0.0.1:8001 env/bin/python apps/utility_billing/e2e/run_e2e.py > "$HOME/e2e.log" 2>&1 || status=$?
+          E2E_URL=http://127.0.0.1:8000 env/bin/python apps/utility_billing/e2e/run_e2e.py > "$HOME/e2e.log" 2>&1 || status=$?
           grep -E "^FAIL" "$HOME/e2e.log" | cut -c1-400 || true
           tail -1 "$HOME/e2e.log"
           exit "${status:-0}"
@@ -125,7 +130,7 @@ jobs:
         run: |
           pip install -q playwright
           playwright install --with-deps chromium > "$HOME/playwright-install.log" 2>&1 || { tail -20 "$HOME/playwright-install.log"; exit 1; }
-          python apps/utility_billing/e2e/run_browser.py
+          E2E_BROWSER_URL=http://qa.localhost:8000 python apps/utility_billing/e2e/run_browser.py
 
       - name: Keep the logs when something failed
         if: failure()

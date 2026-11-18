@@ -10,6 +10,7 @@ dynamic = ["version"]
 dependencies = [
     # "frappe~=16.0.0" # Installed and managed by bench.
     "anthropic>=2.8,<3",  # AI analytics through the Claude API (increment 24; off unless a society switches it on)
+    "pypng>=0.20220715.0",  # QR codes on bills (pyqrcode writes PNG through it). ERPNext happens to install it; a site without ERPNext needs it too (found by CI, 2026-11-18)
 ]
 
 [build-system]
