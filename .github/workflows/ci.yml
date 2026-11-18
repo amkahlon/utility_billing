@@ -83,6 +83,7 @@ jobs:
           bench set-config -g redis_cache redis://127.0.0.1:13000
           bench set-config -g redis_queue redis://127.0.0.1:11000
           bench set-config -g redis_socketio redis://127.0.0.1:13000
+          bench set-config -gp webserver_port 8000
 
       - name: Install the app on a new site
         working-directory: /home/runner/frappe-bench
@@ -95,6 +96,9 @@ jobs:
           bench --site "$SITE" set-config allow_tests 1
           bench --site "$SITE" set-config -p throttle_user_limit 5000
           bench --site "$SITE" set-config developer_mode 0
+          # the address PDFs fetch the site's own scripts from: the server this job starts on port 8000
+          bench --site "$SITE" set-config host_name "http://$SITE:8000"
+          echo "127.0.0.1 $SITE" | sudo tee -a /etc/hosts > /dev/null
           bench --site "$SITE" execute utility_billing.qa_support.mark_setup_complete
           bench --site "$SITE" list-apps
 
@@ -114,7 +118,7 @@ jobs:
           # every "Ran" must be followed by OK (the same rule as e2e/regression.sh)
           ran=$(grep -c '^Ran ' "$HOME/tests.log" || true); ok=$(grep -c '^OK' "$HOME/tests.log" || true)
           if [ "$ran" -eq 0 ] || [ "$ran" -ne "$ok" ] || grep -qE "^FAILED|^ERROR" "$HOME/tests.log"; then
-            echo "::error::unit or integration tests failed"; grep -E "^ ?(ERROR|FAIL) " -A30 "$HOME/tests.log" | grep -vE "^s+(File \"/home/runner/frappe-bench/(env|apps/frappe)|[a-z_]+ = )" | head -200; exit 1
+            echo "::error::unit or integration tests failed"; grep -E "^ ?(ERROR|FAIL) " -A30 "$HOME/tests.log" | grep -vE "^[[:space:]]+(File \"/home/runner/frappe-bench/(env|apps/frappe)|[a-z_]+ = )" | head -200; exit 1
           fi
 
       - name: End-to-end over HTTP
