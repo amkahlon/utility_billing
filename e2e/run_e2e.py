@@ -2227,7 +2227,8 @@ def t_net_metering_pool(d: Desk):
 	bm, gm, bo = USERS["bm"], USERS["gm"], USERS["bo"]
 	soc = d.save_doc({"doctype": "Society", "society_name": f"QA Solar Society {RUN}", "short_name": f"qn{RUN}", "enable_electricity": 1,
 	                  "days_to_due_date": "8", "surcharge_basis": "Percentage of current bill", "surcharge_rate": "10", "rounding_rule": "Nearest rupee",
-	                  "net_metering_method": "Society rebate pool", "nm_credit_rounding": "Nearest unit (half up)", "nm_adjustment_units": "Net units"})
+	                  "net_metering_method": "Society rebate pool", "nm_credit_rounding": "Nearest unit (half up)", "nm_adjustment_units": "Net units",
+	                  "charges_fpa": 0, "charges_qta": 0})  # test case 2: this society bills no FPA or QTA
 	s = soc["name"]
 	eq((soc["net_metering_method"], soc["nm_credit_rounding"]), ("Society rebate pool", "Nearest unit (half up)"), "net-metering settings saved")
 	energy = d.save_doc({"doctype": "Charge Type", "charge_name": f"NM Energy {RUN}", "charge_group": "Electricity", "calculation_basis": "Per Unit",
