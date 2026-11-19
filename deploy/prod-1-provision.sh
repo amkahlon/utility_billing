@@ -54,7 +54,9 @@ chmod 755 /home/$FUSER
 # Frappe 16 needs Python 3.14; Ubuntu 24.04 ships 3.12. uv installs 3.14 and the bench CLI for the frappe user without touching
 # the system Python (as on the development laptop, server/wsl-3-bench-erpnext.sh). Until 2026-11-18 this script used the system
 # Python through pipx, which would have failed at bench init.
-B="sudo -u $FUSER -H env PATH=/home/$FUSER/.local/bin:/usr/bin:/bin"
+# a clean environment for the frappe user: whatever the admin's shell carries (XDG_CONFIG_HOME, a Python path …) must not leak in
+# (found by the rehearsal, 2026-11-19: uv tried to write its settings into the calling user's home)
+B="sudo -u $FUSER -H env -i HOME=/home/$FUSER USER=$FUSER LOGNAME=$FUSER LANG=C.UTF-8 PATH=/home/$FUSER/.local/bin:/usr/local/bin:/usr/bin:/bin"
 $B bash -c "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh"
 $B bash -c 'uv python install 3.14 && (uv tool install --python "$(uv python find 3.14)" frappe-bench || uv tool upgrade frappe-bench)'
 if [ ! -d "$BENCH" ]; then
