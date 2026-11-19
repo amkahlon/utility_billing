@@ -40,6 +40,8 @@
 	.ubd .grid th.right, .ubd .grid td.right { text-align: right; }
 	.ubd .grid tr.grp td { background: #f6f8fa; font-weight: 700; font-size: {{ base_size - 1 }}pt; color: #3b4650; }
 	.ubd .tot td { padding: 1.1mm 1.5mm; border-top: 1px solid #c9d1d8; }
+	.ubd tr.sub td { font-weight: 700; border-top: 1px solid #c9d1d8; border-bottom: 1px solid #c9d1d8; padding: 0.8mm 1.5mm; }
+	.ubd tr.sub td.right { text-align: right; }
 	.ubd .pay td { padding: 1.6mm 2mm; font-size: {{ base_size + 1.5 }}pt; font-weight: 700; }
 	.ubd .pay td.right { white-space: nowrap; width: 30mm; }
 	.ubd .pay .sub2 { display: block; font-weight: 400; font-size: {{ base_size - 1.5 }}pt; }
@@ -243,10 +245,26 @@
 		{%- elif o.heading %}
 		<tr class="big"><td{{ ed("heading") }} colspan="{{ 1 + (1 if o.units else 0) + (1 if o.rate else 0) + 1 }}">{{ T(o.heading) }}</td></tr>
 		{%- endif %}
+		{%- set span = 1 + (1 if o.units else 0) + (1 if o.rate else 0) %}
+		{%- if o.group_totals %}
+		{#- FS-BIL-18: the charges under their groups, each with its total #}
+		{%- for g in charge_groups %}
+		<tr class="grp"><td colspan="{{ span + 1 }}">{{ g.group | e }}</td></tr>
+		{%- for l in g.lines %}
+		<tr>
+			<td>{{ l.label | e }}{% if l.note %}<div class="note">{{ l.note | e }}</div>{% endif %}</td>
+			{%- if o.units %}<td class="right">{{ l.quantity }}</td>{% endif %}
+			{%- if o.rate %}<td class="right">{{ l.rate }}</td>{% endif %}
+			<td class="right">{{ l.amount }}</td>
+		</tr>
+		{%- endfor %}
+		<tr class="sub"><td colspan="{{ span }}">{{ _("Total {0}").format(g.group) | e }}</td><td class="right">{{ g.subtotal }}</td></tr>
+		{%- endfor %}
+		{%- else %}
 		{%- set ns = namespace(group=None) %}
 		{%- for l in lines %}
 		{%- if o.group and l.group and l.group != ns.group %}{% set ns.group = l.group %}
-		<tr class="grp"><td colspan="{{ 2 + (1 if o.units else 0) + (1 if o.rate else 0) }}">{{ l.group | e }}</td></tr>
+		<tr class="grp"><td colspan="{{ span + 1 }}">{{ l.group | e }}</td></tr>
 		{%- endif %}
 		<tr>
 			<td>{{ l.label | e }}{% if l.note %}<div class="note">{{ l.note | e }}</div>{% endif %}</td>
@@ -255,6 +273,7 @@
 			<td class="right">{{ l.amount }}</td>
 		</tr>
 		{%- endfor %}
+		{%- endif %}
 		{%- if o.subtotal %}
 		<tr class="tot {{ 'big' if o.style != 'Table' else '' }}"><td colspan="{{ 1 + (1 if o.units else 0) + (1 if o.rate else 0) }}" class="strong">{{ lb(o, T, "Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>
 		{%- endif %}

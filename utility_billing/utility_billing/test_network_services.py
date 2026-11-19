@@ -213,6 +213,42 @@ class IntegrationTestServiceRequests(BillingCase):
 		                 [("TST-BIL-M1", "2026-11-04", 2500), (new, None, 0)])
 		self.assertEqual(frappe.db.get_value("Meter", new, ["status", "seal_no"]), ("Installed", "S-99"))
 
+	def test_a_net_metering_connection_from_application_to_net_billing(self):
+		"""FS-WF-34 (increment 30): application, documents, approval, the net meter installed; the next reading is a net-metering one."""
+		ordinary = frappe.get_doc({"doctype": "Meter", "serial_no": "TST-BIL-M7", "society": SOC, "utility": "Electricity"}).insert().name
+		net = frappe.get_doc({"doctype": "Meter", "serial_no": "TST-BIL-NM1", "society": SOC, "utility": "Electricity",
+		                      "meter_type": "Net Metering", "registers": 2}).insert().name
+		sr = self.request("NETMETER", new_meter=ordinary, old_meter_reading=2600, new_meter_reading=12, new_meter_export_reading=3,
+		                  seal_no="S-NM", effective_date="2026-11-06")
+		self.assertEqual([(s.step_name, s.step_kind) for s in sr.steps], [
+			("Application received", "Office"), ("Documents checked", "Document check"), ("Approval", "Approval"),
+			("Net meter installed and first readings", "Field")])
+		self.step(sr)  # application received
+		with self.assertRaises(frappe.ValidationError) as cm:  # the solar system's details and the CNIC copy come first
+			self.step(sr)
+		self.assertIn("Attach first", str(cm.exception))
+		self.attach_all(sr)
+		self.step(sr)
+		self.step(sr)  # approval, by the Billing Manager
+		with self.assertRaises(frappe.ValidationError) as cm:  # an ordinary meter can't be the net meter
+			self.step(sr)
+		self.assertIn("isn't a net-metering meter", str(cm.exception))
+		frappe.db.set_value("Service Request", sr.name, "new_meter", net)
+		self.finish(sr)
+		self.assertEqual(sr.status, "Completed")
+		rows = frappe.get_doc("Connection", self.conn).meters
+		self.assertEqual([(r.meter, str(r.removed_on) if r.removed_on else None, r.end_reading, r.start_reading, r.start_export_reading) for r in rows],
+		                 [("TST-BIL-M1", "2026-11-06", 2600, 1999, 0), (net, None, 0, 12, 3)])
+		self.assertEqual(frappe.db.get_value("Meter", net, ["status", "seal_no"]), ("Installed", "S-NM"))
+		self.assertIn("Net billing", sr.result_note or "")
+		# the month's reading is now a net-metering one, continuing from the registers as installed
+		ctx = readings.reading_context(self.conn, "2026-11-01")
+		self.assertEqual((ctx.meter, ctx.net_metering, ctx.previous_reading, ctx.previous_export_reading), (net, 1, 12, 3))
+		# and a second application for the same account is refused
+		with self.assertRaises(frappe.ValidationError) as cm:
+			self.request("NETMETER")
+		self.assertIn("already has a net-metering meter", str(cm.exception))
+
 	def test_category_and_load_change(self):
 		cat2 = frappe.get_doc({"doctype": "Consumer Category", "category_name": "TST Commercial", "utility": "Electricity"}).insert().name
 		sr = self.request("CAT", new_category=cat2, effective_date="2026-11-01")

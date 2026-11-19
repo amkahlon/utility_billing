@@ -172,7 +172,7 @@
    "fieldname": "effective_date",
    "fieldtype": "Date",
    "label": "Effective Date",
-   "description": "When the change takes effect (connection date, disconnection date, new category \u2026)."
+   "description": "When the change takes effect (connection date, disconnection date, new category …)."
   },
   {
    "fieldname": "due_by",
@@ -245,47 +245,47 @@
    "fieldname": "meter_section",
    "fieldtype": "Section Break",
    "label": "Meter",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Disconnection' || doc.kind=='Reconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Meter test' || doc.kind=='Split account' || doc.kind=='Merge accounts'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Net-metering connection' || doc.kind=='Disconnection' || doc.kind=='Reconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Meter test' || doc.kind=='Split account' || doc.kind=='Merge accounts'"
   },
   {
    "fieldname": "new_meter",
    "fieldtype": "Link",
    "label": "New Meter",
    "options": "Meter",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Split account'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Net-metering connection' || doc.kind=='Split account'"
   },
   {
    "fieldname": "new_meter_reading",
    "fieldtype": "Float",
    "label": "New Meter's First Reading",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Split account'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Net-metering connection' || doc.kind=='Split account'"
   },
   {
    "fieldname": "new_meter_export_reading",
    "fieldtype": "Float",
    "label": "New Meter's First Export Reading",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Split account'",
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Net-metering connection' || doc.kind=='Split account'",
    "description": "Net-metering (solar) meters only: the export register when installed."
   },
   {
    "fieldname": "old_meter_reading",
    "fieldtype": "Float",
    "label": "Old Meter's Last Reading",
-   "depends_on": "eval:doc.kind=='Meter change' || doc.kind=='Disconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Reconnection' || doc.kind=='Merge accounts'",
+   "depends_on": "eval:doc.kind=='Meter change' || doc.kind=='Net-metering connection' || doc.kind=='Disconnection' || doc.kind=='Permanent disconnection' || doc.kind=='Reconnection' || doc.kind=='Merge accounts'",
    "description": "For a disconnection, the reading when the supply was cut; for a reconnection, the reading when it was restored."
   },
   {
    "fieldname": "old_meter_export_reading",
    "fieldtype": "Float",
    "label": "Old Meter's Last Export Reading",
-   "depends_on": "eval:doc.kind=='Meter change'",
+   "depends_on": "eval:doc.kind=='Meter change' || doc.kind=='Net-metering connection'",
    "description": "Net-metering (solar) meters only: the export register when removed. The units exported since its last reading are credited on the next bill."
   },
   {
    "fieldname": "old_meter_unreadable",
    "fieldtype": "Check",
    "label": "Old Meter Can't Be Read",
-   "depends_on": "eval:doc.kind=='Meter change'",
+   "depends_on": "eval:doc.kind=='Meter change' || doc.kind=='Net-metering connection'",
    "description": "Tick when the removed meter shows no usable reading: the months billed on averages stand."
   },
   {
@@ -296,13 +296,13 @@
    "fieldname": "seal_no",
    "fieldtype": "Data",
    "label": "Seal No",
-   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Split account'"
+   "depends_on": "eval:doc.kind=='New connection' || doc.kind=='Temporary connection' || doc.kind=='Meter change' || doc.kind=='Net-metering connection' || doc.kind=='Split account'"
   },
   {
    "fieldname": "meter_reason",
    "fieldtype": "Data",
    "label": "Reason",
-   "depends_on": "eval:doc.kind=='Meter change'"
+   "depends_on": "eval:doc.kind=='Meter change' || doc.kind=='Net-metering connection'"
   },
   {
    "fieldname": "disconnection_reason",

@@ -82,8 +82,12 @@ class ServiceRequest(Document):
 		k = self.kind
 		if k == sr_mod.RECON and status != "Disconnected":
 			frappe.throw(_("Only a disconnected account can be reconnected (this one is {0}).").format(_(status)))
-		if k in (sr_mod.DISC, sr_mod.METER, sr_mod.CAT, sr_mod.LOAD, sr_mod.MERGE, sr_mod.SPLIT) and status != "Active":
+		if k in (sr_mod.DISC, sr_mod.METER, sr_mod.NETMETER, sr_mod.CAT, sr_mod.LOAD, sr_mod.MERGE, sr_mod.SPLIT) and status != "Active":
 			frappe.throw(_("Account {0} is {1}, not active.").format(self.connection, _(status)))
+		if k == sr_mod.NETMETER:  # FS-WF-34: an account already on a net-metering meter has nothing to apply for
+			meter = frappe.db.get_value("Connection", self.connection, "current_meter")
+			if meter and frappe.db.get_value("Meter", meter, "meter_type") == "Net Metering":
+				frappe.throw(_("Account {0} already has a net-metering meter ({1}).").format(self.connection, meter))
 		if k == sr_mod.CLOSE and status == "Closed":
 			frappe.throw(_("Account {0} is already closed.").format(self.connection))
 		other = frappe.db.get_value("Service Request", {"connection": self.connection, "kind": k, "status": ["in", ["Open", "In Progress"]],

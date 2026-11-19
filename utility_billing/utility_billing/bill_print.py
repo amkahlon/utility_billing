@@ -99,7 +99,7 @@ def build_snapshot(bill) -> dict:
 	                                                                                        as_dict=True) or {}
 	# the bill's own consumer: on a final bill the outgoing holder, not the account's holder now (increment 22)
 	consumer = (group.consumers.get(g("consumer") or conn.consumer) if group else None) or frappe.db.get_value(
-		"Consumer", g("consumer") or conn.consumer, ["consumer_name", "mobile_no", "address", "id_number", "tax_no"], as_dict=True) or {}
+		"Consumer", g("consumer") or conn.consumer, ["consumer_name", "mobile_no", "address", "id_number", "tax_no", "tax_status"], as_dict=True) or {}
 	reading_fields = ["meter", "previous_reading", "previous_reading_date", "present_reading", "reading_date", "multiplier",
 	                  "consumption_type", "status", "photo", "net_metering", "previous_export_reading", "present_export_reading", "export_units"]
 	cycle = runcache.tariff(("cycle", g("bill_run")), lambda: frappe.db.get_value("Bill Run", g("bill_run"), "reading_cycle")) \
@@ -116,12 +116,13 @@ def build_snapshot(bill) -> dict:
 		"captured_on": str(now_datetime()),
 		"society": society_snapshot(society, g("issue_date")),
 		"consumer": {"name": consumer.get("consumer_name") or g("consumer_name"), "mobile": consumer.get("mobile_no"),
-		             "address": consumer.get("address"), "id_number": consumer.get("id_number"), "tax_no": consumer.get("tax_no")},
+		             "address": consumer.get("address"), "id_number": consumer.get("id_number"), "tax_no": consumer.get("tax_no"),
+		             "tax_status": consumer.get("tax_status")},
 		"connection": {
 			"reference_no": conn.reference_no, "property_no": prop.get("property_no"), "block": prop.get("block"),
 			"sector": prop.get("sector"), "area": flt(prop.get("area")), "area_unit": prop.get("area_unit"),
 			"category": category, "sanctioned_load_kw": flt(conn.sanctioned_load_kw), "phase": conn.phase,
-			"route": conn.route,
+			"route": conn.route, "connection_date": str(conn.get("connection_date") or "") or None,
 			# the previous system's account number, printed while the society still accepts old numbers on the issue date (increment 29)
 			"legacy_account_no": conn.get("legacy_account_no") if conn.get("legacy_account_no") and legacy_accepted(g("society"), g("issue_date")) else None,
 		},
@@ -168,6 +169,7 @@ def society_snapshot(society, on=None) -> dict:
 		           "channel": b.biller_channel, "biller_code": b.biller_code}
 		          for b in society.bank_accounts if b.print_on_bill],
 		"office_copy": bool(cint(society.print_office_copy)),
+		"group_subtotals": bool(cint(society.get("bill_group_subtotals"))),  # increment 30 (FS-BIL-18)
 		"show_qr": bool(cint(society.show_qr_code)),
 		# increment 21 (gap 12, FS-LOC): barcode and QR each on or off, what the QR holds, a second language
 		"show_barcode": bool(cint(society.get("show_barcode"))),
@@ -325,6 +327,20 @@ def rtl_text(text):
 	return Markup("".join(out))
 
 
+def charge_groups(lines) -> list:
+	"""The bill's lines gathered under their charge groups, in the order the groups first appear, each with its subtotal
+	(FS-BIL-18; the Valancia sample bill of 2026-11-19: electricity, society charges, government charges). A line of zero stays in
+	its group, so a group can total zero."""
+	groups = {}
+	for l in lines:
+		g = groups.setdefault(l["group"] or _("Other"), {"group": l["group"] or _("Other"), "lines": [], "total": 0.0})
+		g["lines"].append(l)
+		g["total"] += flt(l["amount_raw"])
+	for g in groups.values():
+		g["subtotal"] = money(g["total"])
+	return list(groups.values())
+
+
 def bill_context(bill, duplicate=0) -> dict:
 	snap = snapshot_of(bill)
 	soc = snap["society"]
@@ -337,10 +353,11 @@ def bill_context(bill, duplicate=0) -> dict:
 	return {
 		"bill": bill, "snap": snap, "soc": soc, "con": snap["connection"], "consumer": snap["consumer"],
 		"reading": snap.get("reading"), "history": snap.get("history") or [],
-		"lines": [{"label": l.label, "quantity": qty(l.quantity) if l.basis in MEASURED else "",
-		           "rate": rate(l.rate) if l.basis in MEASURED else "", "amount": money(l.amount), "note": l.note,
-		           "group": l.get("charge_group") or ""}
-		          for l in lines],
+		"lines": (shown := [{"label": l.label, "quantity": qty(l.quantity) if l.basis in MEASURED else "",
+		                     "rate": rate(l.rate) if l.basis in MEASURED else "", "amount": money(l.amount), "note": l.note,
+		                     "group": l.get("charge_group") or "", "amount_raw": flt(l.amount)}
+		                    for l in lines]),
+		"charge_groups": charge_groups(shown),  # FS-BIL-18: the lines under their groups, each with its total
 		"title": _(TITLES.get(bill.utility, f"{bill.utility} Bill" if bill.utility else "Utility Bill")),
 		"month": month_name(bill.billing_month), "issue_date": date(bill.issue_date), "due_date": date(bill.due_date),
 		"logo": logo_data_uri(soc.get("logo")),

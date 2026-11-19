@@ -27,6 +27,9 @@
 	.ub .grid td { padding: .9mm 1.5mm; border-bottom: 1px solid #edf0f2; }
 	.ub .grid th.right, .ub .grid td.right { text-align: right; }
 	.ub .tot td { padding: 1.1mm 1.5mm; border-top: 1px solid #c9d1d8; }
+	.ub .grid tr.grp td, .ub .tlist tr.grp td { background: #f6f8fa; font-weight: 700; font-size: 7.5pt; color: #3b4650; }
+	.ub tr.sub td { font-weight: 700; border-top: 1px solid #c9d1d8; border-bottom: 1px solid #c9d1d8; padding: 0.8mm 1.5mm; }
+	.ub tr.sub td.right { text-align: right; }
 	.ub .pay td { padding: 1.6mm 2mm; font-size: 10.5pt; font-weight: 700; }
 	.ub .pay td.right { white-space: nowrap; width: 30mm; }
 	.ub .pay .sub2 { display: block; font-weight: 400; font-size: 7.5pt; }
@@ -159,12 +162,26 @@
 	<td style="width: 58%;">
 		<table class="grid box">
 			<tr><th>{{ t("Charges") }}</th><th class="right">{{ t("Units") }}</th><th class="right">{{ t("Rate") }}</th><th class="right">{{ t("Amount (Rs)") }}</th></tr>
+			{%- if soc.group_subtotals %}
+			{#- FS-BIL-18: the charges under their groups, each with its total #}
+			{%- for g in charge_groups %}
+			<tr class="grp"><td colspan="4">{{ _(g.group) | e }}</td></tr>
+			{%- for l in g.lines %}
+			<tr>
+				<td>{{ l.label | e }}{% if l.note %}<div class="note">{{ l.note | e }}</div>{% endif %}</td>
+				<td class="right">{{ l.quantity }}</td><td class="right">{{ l.rate }}</td><td class="right">{{ l.amount }}</td>
+			</tr>
+			{%- endfor %}
+			<tr class="sub"><td colspan="3">{{ _("Total {0}").format(_(g.group)) | e }}</td><td class="right">{{ g.subtotal }}</td></tr>
+			{%- endfor %}
+			{%- else %}
 			{%- for l in lines %}
 			<tr>
 				<td>{{ l.label | e }}{% if l.note %}<div class="note">{{ l.note | e }}</div>{% endif %}</td>
 				<td class="right">{{ l.quantity }}</td><td class="right">{{ l.rate }}</td><td class="right">{{ l.amount }}</td>
 			</tr>
 			{%- endfor %}
+			{%- endif %}
 			<tr class="tot"><td colspan="3" class="strong">{{ t("Current bill") }}</td><td class="right strong">{{ money(bill.current_amount) }}</td></tr>
 			{%- if bill.installment_due %}
 			<tr><td colspan="3">{{ _("Arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
