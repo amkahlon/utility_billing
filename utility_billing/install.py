@@ -229,6 +229,10 @@ INDEXES = (
 	("Installment Plan", ("connection",)), ("Former Occupant Balance", ("connection",)), ("Message Log", ("connection",)),
 	("Account Adjustment", ("connection",)), ("Check Meter Reading", ("meter", "billing_month")),
 	("Unique Key", ("key_group", "key_value")), ("Unique Key", ("ref_doctype", "ref_name")),
+	# the performance step, part 2 (2026-11-19): each was read once for every account loaded or meter installed, with no index, so a
+	# migration of 20,000 accounts slowed down as it went
+	("Connection Meter", ("meter",)), ("Meter", ("current_connection",)), ("Consumer", ("id_number",)),
+	("Connection", ("consumer",)), ("Connection", ("property",)), ("Legacy Bill", ("migration_batch",)),
 )
 
 
