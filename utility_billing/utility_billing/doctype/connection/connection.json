@@ -43,7 +43,8 @@
   "changes_section",
   "changes",
   "merged_into",
-  "split_from"
+  "split_from",
+  "migration_batch"
  ],
  "fields": [
   {
@@ -285,6 +286,16 @@
    "label": "Split From",
    "options": "Connection",
    "read_only": 1
+  },
+  {
+   "fieldname": "migration_batch",
+   "fieldtype": "Link",
+   "label": "Migration Batch",
+   "options": "Migration Batch",
+   "read_only": 1,
+   "no_copy": 1,
+   "search_index": 1,
+   "description": "Set when the record was created by a migration from the previous system."
   }
  ],
  "grid_page_length": 50,

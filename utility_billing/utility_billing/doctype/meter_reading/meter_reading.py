@@ -11,7 +11,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate
 
-from utility_billing.utility_billing import defective, readings
+from utility_billing.utility_billing import defective, readcache, readings
 from utility_billing.utility_billing import reading_engine as engine
 
 INPUTS = ("present_reading", "reading_date", "exception_code", "present_export_reading")
@@ -20,14 +20,13 @@ NUMBERS = ("present_reading", "present_export_reading")
 
 class MeterReading(Document):
 	def validate(self):
-		cycle = frappe.db.get_value(
-			"Reading Cycle", self.reading_cycle, ["society", "utility", "billing_month", "status"], as_dict=True
-		)
+		cycle = readcache.cycle_info(self.reading_cycle)  # a cycle's bulk work has it at hand
 		if cycle.status == "Closed":
 			frappe.throw(_("Reading cycle {0} is closed; its readings can't change.").format(self.reading_cycle))
 		self.society, self.billing_month = cycle.society, cycle.billing_month
 		self.check_connection(cycle)
-		self.check_unique()
+		if not self.flags.in_bulk:  # bulk work takes each account's one reading of the cycle
+			self.check_unique()
 		if self.is_new() or not self.meter:
 			self.load_context()
 		self.evaluate()
@@ -37,7 +36,7 @@ class MeterReading(Document):
 		"""The maximum demand (MDI) read from the meter: never negative; above the sanctioned load it is noted for a load extension."""
 		if flt(self.mdi_kw) < 0:
 			frappe.throw(_("The maximum demand can't be negative."))
-		sanctioned = flt(frappe.db.get_value("Connection", self.connection, "sanctioned_load_kw"))
+		sanctioned = flt((readcache.connection_info(self.connection) or {}).get("sanctioned_load_kw"))
 		prefix = _("Maximum demand")
 		lines = [x for x in (self.checks or "").split("\n") if x and not x.startswith(prefix)]  # an earlier note is replaced
 		if flt(self.mdi_kw) and sanctioned and flt(self.mdi_kw) > sanctioned:
@@ -47,13 +46,13 @@ class MeterReading(Document):
 	def on_update(self):
 		"""Keep the connection's connected load (last MDI read) up to date."""
 		if flt(self.mdi_kw) and self.reading_date:
-			last = frappe.db.get_value("Connection", self.connection, "last_mdi_date")
+			last = (readcache.connection_info(self.connection) or {}).get("last_mdi_date")
 			if not last or getdate(self.reading_date) >= getdate(last):
 				frappe.db.set_value("Connection", self.connection, {"last_mdi_kw": flt(self.mdi_kw), "last_mdi_date": self.reading_date},
 				                    update_modified=False)
 
 	def check_connection(self, cycle):
-		conn = frappe.db.get_value("Connection", self.connection, ["society", "utility"], as_dict=True)
+		conn = readcache.connection_info(self.connection)
 		if not conn or conn.society != cycle.society or conn.utility != cycle.utility:
 			frappe.throw(_("Connection {0} isn't a {1} connection of {2}.").format(self.connection, cycle.utility, cycle.society))
 
@@ -99,9 +98,7 @@ class MeterReading(Document):
 			return
 		if getdate(self.reading_date) < getdate(self.previous_reading_date or self.reading_date):
 			frappe.throw(_("Reading Date can't be before the previous reading date."))
-		society = frappe.db.get_value(
-			"Society", self.society, ["reading_tolerance_percent", "estimation_method"], as_dict=True
-		)
+		society = readcache.society_info(self.society)
 		result = engine.evaluate(
 			self.previous_reading,
 			self.present_reading,

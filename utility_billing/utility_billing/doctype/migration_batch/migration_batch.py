@@ -13,13 +13,15 @@ from utility_billing.utility_billing import approval, migration
 
 DEFAULT_APPROVER = "General Manager"
 EDITABLE = (None, "", approval.DRAFT, approval.REJECTED)
+LOCKED = ("Loaded", "Loading", "Load failed", "Undoing")  # the workbook can't be replaced, nor the batch deleted
+BUSY = ("Loading", "Undoing")
 
 
 class MigrationBatch(Document):
 	def validate(self):
 		if frappe.db.get_value("Migration Profile", self.profile, "society") != self.society:
 			frappe.throw(_("Profile {0} belongs to another society.").format(self.profile))
-		if self.load_status == "Loaded" and self.has_value_changed("workbook") and not self.is_new():
+		if self.load_status in LOCKED and self.has_value_changed("workbook") and not self.is_new():
 			frappe.throw(_("Undo the load before attaching another workbook."))
 		self.batch_title = f"{self.society} · {_('as at')} {frappe.utils.formatdate(self.as_of_date)}"
 		approval.validate_transition(self)
@@ -42,7 +44,7 @@ class MigrationBatch(Document):
 		frappe.throw(_("An approved migration isn't cancelled. Correct accounts one by one."))
 
 	def on_trash(self):
-		if self.load_status == "Loaded":
+		if self.load_status in LOCKED or migration.loaded_accounts(self):
 			frappe.throw(_("Undo the load before deleting the batch."))
 
 
@@ -51,6 +53,8 @@ def _editable(name):
 	doc.check_permission("write")
 	if doc.docstatus != 0 or doc.workflow_state not in EDITABLE:
 		frappe.throw(_("Only a draft or rejected batch can be checked, loaded or undone."))
+	if doc.load_status in BUSY:
+		frappe.throw(_("The batch is still working in the background ({0}). Wait for it to finish.").format(doc.load_progress or doc.load_status))
 	if not doc.workbook:
 		frappe.throw(_("Attach the workbook first."))
 	return doc
@@ -59,7 +63,7 @@ def _editable(name):
 @frappe.whitelist(methods=["POST"])
 def check(name: str) -> dict:
 	doc = _editable(name)
-	if doc.load_status == "Loaded":
+	if doc.load_status in LOCKED:
 		frappe.throw(_("The batch is loaded. Undo it to check another workbook."))
 	migration.check(doc)
 	doc.save()
@@ -68,19 +72,33 @@ def check(name: str) -> dict:
 
 @frappe.whitelist(methods=["POST"])
 def load(name: str) -> dict:
+	"""Load now when the workbook is small; a large one loads in the background, with its progress shown on the batch."""
 	doc = _editable(name)
+	if doc.load_status == "Load failed":
+		frappe.throw(_("The last load stopped part-way. Undo it, fix what stopped it, then load again."))
+	if migration.is_large(doc) and not frappe.flags.in_test:
+		doc.load_status, doc.load_progress, doc.load_error = "Loading", _("Waiting to start"), None
+		doc.save()
+		frappe.enqueue(migration.load_in_background, queue="long", timeout=6 * 3600, batch=doc.name, enqueue_after_commit=True)
+		return {"queued": True}
 	ok = migration.load(doc)
 	doc.save()
 	return {"loaded": ok, "errors": doc.error_count, "warnings": doc.warning_count, "accounts": doc.account_count,
-	        "records": len(doc.records)}
+	        "records": sum(r.record_count or 0 for r in doc.records)}
 
 
 @frappe.whitelist(methods=["POST"])
 def undo(name: str) -> dict:
 	doc = _editable(name)
-	if doc.load_status != "Loaded":
+	if doc.load_status not in ("Loaded", "Load failed"):
 		frappe.throw(_("The batch isn't loaded."))
-	n = len(doc.records)
+	n = migration.summarise(doc)
+	if migration.loaded_accounts(doc) > migration.BACKGROUND_OVER and not frappe.flags.in_test:
+		migration.check_undoable(doc)  # refuse now, not in the background, when the accounts are in use
+		doc.load_status, doc.load_progress = "Undoing", _("Waiting to start")
+		doc.save()
+		frappe.enqueue(migration.undo_in_background, queue="long", timeout=6 * 3600, batch=doc.name, enqueue_after_commit=True)
+		return {"queued": True}
 	migration.undo(doc)
 	doc.save()
 	return {"removed": n}

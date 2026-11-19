@@ -5,7 +5,8 @@
  "engine": "InnoDB",
  "field_order": [
   "record_type",
-  "record_name"
+  "record_name",
+  "record_count"
  ],
  "fields": [
   {
@@ -19,6 +20,13 @@
    "fieldtype": "Dynamic Link",
    "label": "Record",
    "options": "record_type",
+   "in_list_view": 1,
+   "reqd": 0
+  },
+  {
+   "fieldname": "record_count",
+   "fieldtype": "Int",
+   "label": "Records",
    "in_list_view": 1
   }
  ],

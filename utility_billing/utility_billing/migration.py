@@ -96,7 +96,12 @@ def parse_date(v, prof):
 		return v
 	from dateutil import parser  # noqa: PLC0415
 
-	return parser.parse(str(v).strip(), dayfirst=prof.dayfirst, yearfirst=prof.yearfirst).date()
+	text = str(v).strip()
+	if re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}([ T].*)?", text):
+		# a date written year first with dashes is year-month-day whatever the profile says: read day first, 2026-09-01 became
+		# 9 January, silently (found by the bulk benchmark, 2026-11-19; the template workbook writes its examples this way)
+		return parser.parse(text, dayfirst=False, yearfirst=True).date()
+	return parser.parse(text, dayfirst=prof.dayfirst, yearfirst=prof.yearfirst).date()
 
 
 def split_house(row, prof):
@@ -221,6 +226,12 @@ def analyse(batch) -> frappe._dict:
 	# accounts
 	accounts, cnic_names = {}, defaultdict(set)
 	seen_meters = Counter(str(r.meter_no) for r in data["Connections"] if r.meter_no)
+	# looked up once for the file, not once a row (the performance step: 20,000 accounts)
+	utilities = set(frappe.get_all("Utility Type", pluck="name"))
+	categories = {}
+	existing_meters = set()
+	for k in range(0, len(seen_meters), 1000):
+		existing_meters.update(frappe.get_all("Meter", filters={"name": ["in", list(seen_meters)[k:k + 1000]]}, pluck="name"))
 	existing = set(frappe.get_all("Connection", filters={"society": batch.society, "legacy_account_no": ["is", "set"]}, pluck="legacy_account_no"))
 	for r in data["Connections"]:
 		ref = str(r.old_account_no or "").strip()
@@ -235,10 +246,13 @@ def analyse(batch) -> frappe._dict:
 		if not r.consumer_name:
 			err("Connections", r, _("The consumer's name is missing."))
 		r.utility = mapped(prof, "utility", r.utility) or prof.utility
-		if not r.utility or not frappe.db.exists("Utility Type", r.utility):
+		if not r.utility or r.utility not in utilities:
 			err("Connections", r, _("Utility {0} isn't one of ours. Map it in the profile or set a default utility.").format(r.utility or _("(none)")))
 		raw_category = r.category
-		r.category = _category(mapped(prof, "category", r.category), r.utility) or prof.category
+		key = (mapped(prof, "category", r.category), r.utility)
+		if key not in categories:
+			categories[key] = _category(*key)
+		r.category = categories[key] or prof.category
 		if not r.category:
 			err("Connections", r, _("Category {0} isn't one of ours for {1}. Map it in the profile.").format(raw_category or _("(none)"), r.utility))
 		r.status = mapped(prof, "status", r.status) or "Active"
@@ -262,7 +276,7 @@ def analyse(batch) -> frappe._dict:
 			err("Connections", r, _("House number {0} doesn't match the profile's pattern.").format(r.house or _("(none)")))
 		else:
 			r.house, r.block, r.sector = parts
-		metered = cint(frappe.get_cached_value("Utility Type", r.utility, "is_metered")) if r.utility and frappe.db.exists("Utility Type", r.utility) else 1
+		metered = cint(frappe.get_cached_value("Utility Type", r.utility, "is_metered")) if r.utility and r.utility in utilities else 1
 		r.meter_type = mapped(prof, "meter_type", r.meter_type) or "Single Phase"
 		if metered:
 			if not r.meter_no:
@@ -270,7 +284,7 @@ def analyse(batch) -> frappe._dict:
 			else:
 				if seen_meters[str(r.meter_no)] > 1:
 					err("Connections", r, _("Meter {0} is on more than one account in the file.").format(r.meter_no))
-				if frappe.db.exists("Meter", str(r.meter_no)):
+				if str(r.meter_no) in existing_meters:
 					err("Connections", r, _("Meter {0} is already in the system.").format(r.meter_no))
 			if r.meter_type not in ("Single Phase", "Three Phase", "TOU", "Net Metering", "Prepaid", "Bulk / Check Meter"):
 				err("Connections", r, _("Meter type {0} isn't one of ours.").format(r.meter_type))
@@ -374,36 +388,105 @@ def _store_results(batch, a):
 
 
 # ---------------------------------------------------------------- load
-def _record(batch, doc):
-	batch.append("records", {"record_type": doc.doctype, "record_name": doc.name})
+# The performance step, part 2 (2026-11-19): a society of 20,000 accounts must load. The accounts are created 500 at a time; a large
+# workbook loads in a background job that commits after each group and shows its progress, because half an hour of work can't run
+# inside one web request. Every record the batch creates carries the batch (its `migration_batch` field): that is how the load is
+# counted and undone, instead of a log row per record on the batch (14 rows an account made the batch's form unusable).
+STAMPED = ("Feeder", "Transformer", "Meter", "Property", "Consumer", "Connection")
+CHUNK = 500
+BACKGROUND_OVER = 300  # accounts: above this the load and the undo run in the background
 
 
-def _consumer(batch, r):
+def _new(batch, fields):
+	"""Insert one record of the batch, carrying the batch. (The link checks stay on: they also fill the fields a record takes from
+	its links, such as the consumer's name on the account.)"""
+	fields["migration_batch"] = batch.name
+	return frappe.get_doc(fields).insert(ignore_permissions=True)
+
+
+def _consumer(batch, r, seen):
+	keys = [k for k in (("id", str(r.old_customer_id)) if r.old_customer_id else None, ("cnic", r.cnic) if r.cnic else None) if k]
+	for k in keys:
+		if k in seen:
+			return seen[k]
+	name = None
 	if r.old_customer_id:
 		name = frappe.db.get_value("Consumer", {"legacy_customer_id": str(r.old_customer_id)})
-		if name:
-			return name
-	if r.cnic:
+	if not name and r.cnic:
 		name = frappe.db.get_value("Consumer", {"id_type": "CNIC", "id_number": r.cnic})
-		if name:
-			return name
-	c = frappe.get_doc({"doctype": "Consumer", "consumer_name": r.consumer_name, "consumer_type": "Individual",
-	                    "legacy_customer_id": str(r.old_customer_id) if r.old_customer_id else None, "mobile_no": r.mobile or None,
-	                    "address": r.address or None, "id_type": "CNIC" if r.cnic else None, "id_number": r.cnic or None,
-	                    "tax_no": r.ntn or None, "tax_status": r.filer or None}).insert(ignore_permissions=True)
-	_record(batch, c)
-	return c.name
+	if not name:
+		name = _new(batch, {"doctype": "Consumer", "consumer_name": r.consumer_name, "consumer_type": "Individual",
+		                    "legacy_customer_id": str(r.old_customer_id) if r.old_customer_id else None, "mobile_no": r.mobile or None,
+		                    "address": r.address or None, "id_type": "CNIC" if r.cnic else None, "id_number": r.cnic or None,
+		                    "tax_no": r.ntn or None, "tax_status": r.filer or None}).name
+	for k in keys:
+		seen[k] = name
+	return name
 
 
-def _property(batch, r):
+def _property(batch, r, seen):
 	no = property_no(r.house, r.block)
 	name = f"{batch.society}-{no}"
-	if frappe.db.exists("Property", name):
-		return name
-	p = frappe.get_doc({"doctype": "Property", "society": batch.society, "property_no": no, "block": r.block or None, "sector": r.sector or None,
-	                    "property_type": r.property_type, "status": "Occupied", "area": flt(r.plot_area) or None, "area_unit": r.plot_unit}).insert(ignore_permissions=True)
-	_record(batch, p)
-	return p.name
+	if name not in seen:
+		if not frappe.db.exists("Property", name):
+			_new(batch, {"doctype": "Property", "society": batch.society, "property_no": no, "block": r.block or None, "sector": r.sector or None,
+			             "property_type": r.property_type, "status": "Occupied", "area": flt(r.plot_area) or None, "area_unit": r.plot_unit})
+		seen.add(name)
+	return name
+
+
+def _new_account(batch, ref, r, consumers, properties):
+	reading = r.get("reading") or frappe._dict()
+	meters = []
+	if r.metered:
+		m = _new(batch, {"doctype": "Meter", "serial_no": str(r.meter_no), "society": batch.society, "utility": r.utility,
+		                 "meter_type": r.meter_type, "make": r.meter_make or None, "status": "In Store",
+		                 "multiplier": flt(r.multiplier) or 1, "digits": cint(r.digits) or 5,
+		                 "registers": 2 if r.meter_type == "Net Metering" else 1})
+		meters = [{"meter": m.name, "installed_on": reading.reading_date or r.connection_date or batch.as_of_date,
+		           "start_reading": flt(reading.last_reading),
+		           "start_export_reading": flt(reading.last_export_reading) if r.meter_type == "Net Metering" else 0}]
+	return _new(batch, {"doctype": "Connection", "society": batch.society, "property": _property(batch, r, properties),
+	                    "consumer": _consumer(batch, r, consumers), "utility": r.utility, "consumer_category": r.category, "status": r.status,
+	                    "connection_date": r.connection_date, "sanctioned_load_kw": flt(r.sanctioned_load_kw) or None, "phase": r.phase,
+	                    "feeder": f"{batch.society}-{r.feeder}" if r.feeder else None,
+	                    "transformer": f"{batch.society}-{r.transformer}" if r.transformer else None, "route": r.route or None,
+	                    "legacy_account_no": ref, "legacy_collection_no": str(r.old_collection_no) if r.old_collection_no else None,
+	                    "meters": meters}).name
+
+
+def _progress(batch, text):
+	"""Background loads say where they are, and keep what is done so far."""
+	frappe.db.set_value("Migration Batch", batch.name, "load_progress", text, update_modified=False)
+	frappe.db.commit()
+
+
+def _legacy_bills(batch, history, made):
+	"""The months billed by the previous system, written a few hundred rows a statement: there can be 12 for every account. analyse()
+	has checked that each account has a month once; the consumer name and society are the account's, as Legacy Bill's own check sets."""
+	from utility_billing.utility_billing import bulk  # noqa: PLC0415
+
+	names = dict(frappe.db.sql("select name, consumer_name from `tabConnection` where migration_batch = %s", batch.name))
+	stamp, user = frappe.utils.now(), frappe.session.user
+	rows = [{"name": frappe.generate_hash(length=10), "owner": user, "creation": stamp, "modified": stamp, "modified_by": user, "docstatus": 0, "idx": 0,
+	         "connection": made[str(h.old_account_no)], "consumer_name": names.get(made[str(h.old_account_no)]), "society": batch.society,
+	         "billing_month": h.month, "units": flt(h.units), "current_amount": flt(h.current_amount), "arrears": flt(h.arrears),
+	         "adjustment": flt(h.adjustment), "surcharge": flt(h.surcharge), "bill_amount": flt(h.bill_amount), "paid_on": h.paid_on,
+	         "paid_amount": flt(h.paid_amount), "balance": flt(h.balance), "migration_batch": batch.name} for h in history]
+	bulk.insert_rows("Legacy Bill", rows)
+
+
+def summarise(batch):
+	"""What the batch created, counted from the records that carry it."""
+	rows = []
+	for dt in (*STAMPED, "Legacy Bill"):
+		n = frappe.db.count(dt, {"migration_batch": batch.name})
+		if n:
+			rows.append({"record_type": dt, "record_count": n})
+	if batch.opening_import:
+		rows.append({"record_type": "Opening Balance Import", "record_name": batch.opening_import, "record_count": 1})
+	batch.set("records", rows)
+	return sum(r["record_count"] for r in rows)
 
 
 def check(batch) -> int:
@@ -413,10 +496,19 @@ def check(batch) -> int:
 	return batch.error_count
 
 
-def load(batch) -> bool:
-	"""Check again and, with no errors, create everything. False (with the problems on the batch) if there are errors."""
+def is_large(batch) -> bool:
+	"""Whether the workbook has more accounts than a web request should load."""
+	return len(read_workbook(batch.workbook).get("Connections") or []) - 1 > BACKGROUND_OVER
+
+
+def load(batch, commit=False) -> bool:
+	"""Check again and, with no errors, create everything. False (with the problems on the batch) if there are errors.
+	`commit` (a background load): each group of accounts is kept as it is done, with the progress shown on the batch; a load that
+	stops part-way is then removed with Undo Load. Without it everything is one transaction, as for a small workbook."""
 	if batch.load_status == "Loaded":
 		frappe.throw(_("This batch is already loaded."))
+	if frappe.db.count("Connection", {"migration_batch": batch.name}):
+		frappe.throw(_("An earlier load of this batch stopped part-way. Undo it first."))
 	a = analyse(batch)
 	_store_results(batch, a)
 	if batch.error_count:
@@ -426,80 +518,106 @@ def load(batch) -> bool:
 	try:
 		for r in a.network:  # feeders first, then their transformers
 			if r.kind == "Feeder" and not frappe.db.exists("Feeder", f"{batch.society}-{r.code}"):
-				_record(batch, frappe.get_doc({"doctype": "Feeder", "society": batch.society, "feeder_code": str(r.code),
-				                               "feeder_name": r.name or str(r.code)}).insert(ignore_permissions=True))
+				_new(batch, {"doctype": "Feeder", "society": batch.society, "feeder_code": str(r.code), "feeder_name": r.name or str(r.code)})
 		for r in a.network:
 			if r.kind == "Transformer" and not frappe.db.exists("Transformer", f"{batch.society}-{r.code}"):
-				_record(batch, frappe.get_doc({"doctype": "Transformer", "society": batch.society, "transformer_code": str(r.code),
-				                               "feeder": f"{batch.society}-{r.feeder}", "kva_rating": flt(r.kva) or None}).insert(ignore_permissions=True))
-		made = {}
-		for ref, r in a.accounts.items():
-			reading = r.get("reading") or frappe._dict()
-			meters = []
-			if r.metered:
-				m = frappe.get_doc({"doctype": "Meter", "serial_no": str(r.meter_no), "society": batch.society, "utility": r.utility,
-				                    "meter_type": r.meter_type, "make": r.meter_make or None, "status": "In Store",
-				                    "multiplier": flt(r.multiplier) or 1, "digits": cint(r.digits) or 5,
-				                    "registers": 2 if r.meter_type == "Net Metering" else 1}).insert(ignore_permissions=True)
-				_record(batch, m)
-				meters = [{"meter": m.name, "installed_on": reading.reading_date or r.connection_date or batch.as_of_date,
-				           "start_reading": flt(reading.last_reading),
-				           "start_export_reading": flt(reading.last_export_reading) if r.meter_type == "Net Metering" else 0}]
-			c = frappe.get_doc({"doctype": "Connection", "society": batch.society, "property": _property(batch, r), "consumer": _consumer(batch, r),
-			                    "utility": r.utility, "consumer_category": r.category, "status": r.status, "connection_date": r.connection_date,
-			                    "sanctioned_load_kw": flt(r.sanctioned_load_kw) or None, "phase": r.phase,
-			                    "feeder": f"{batch.society}-{r.feeder}" if r.feeder else None,
-			                    "transformer": f"{batch.society}-{r.transformer}" if r.transformer else None, "route": r.route or None,
-			                    "legacy_account_no": ref, "legacy_collection_no": str(r.old_collection_no) if r.old_collection_no else None,
-			                    "meters": meters}).insert(ignore_permissions=True)
-			_record(batch, c)
-			made[ref] = c.name
-		for h in a.history:
-			lb = frappe.get_doc({"doctype": "Legacy Bill", "connection": made[str(h.old_account_no)], "billing_month": h.month, "units": flt(h.units),
-			                     "current_amount": flt(h.current_amount), "arrears": flt(h.arrears), "adjustment": flt(h.adjustment),
-			                     "surcharge": flt(h.surcharge), "bill_amount": flt(h.bill_amount), "paid_on": h.paid_on, "paid_amount": flt(h.paid_amount),
-			                     "balance": flt(h.balance), "migration_batch": batch.name}).insert(ignore_permissions=True)
-			_record(batch, lb)
+				_new(batch, {"doctype": "Transformer", "society": batch.society, "transformer_code": str(r.code),
+				             "feeder": f"{batch.society}-{r.feeder}", "kva_rating": flt(r.kva) or None})
+		made, consumers, properties = {}, {}, set()
+		refs = list(a.accounts.items())
+		for k in range(0, len(refs), CHUNK):
+			for ref, r in refs[k:k + CHUNK]:
+				made[ref] = _new_account(batch, ref, r, consumers, properties)
+			if commit:
+				_progress(batch, _("{0} of {1} accounts").format(min(k + CHUNK, len(refs)), len(refs)))
+		for k in range(0, len(a.history), 5000):
+			_legacy_bills(batch, a.history[k:k + 5000], made)
+			if commit:
+				_progress(batch, _("History: {0} of {1} months").format(min(k + 5000, len(a.history)), len(a.history)))
 		if a.balances:
+			if commit:
+				_progress(batch, _("Opening balances"))
 			rows = [{"reference_no": made[ref], "current_bill": flt(b.current_bill), "arrears": flt(b.arrears), "surcharge": flt(b.surcharge),
 			         "fees": flt(b.fees), "credit": flt(b.credit), "security_deposit": flt(b.security_deposit), "plan_remaining": flt(b.plan_remaining),
 			         "plan_installments": cint(b.plan_installments), "solar_credit_units": flt(b.solar_credit_units)} for ref, b in a.balances.items()]
 			imp = frappe.get_doc({"doctype": "Opening Balance Import", "society": batch.society, "as_of_date": batch.as_of_date, "rows": rows}).insert(ignore_permissions=True)
 			batch.opening_import = imp.name
-			_record(batch, imp)
 	finally:
 		frappe.flags.in_migration = False
-	batch.load_status = "Loaded"
+	batch.load_status, batch.load_progress, batch.load_error = "Loaded", None, None
+	summarise(batch)
 	return True
 
 
+def load_in_background(batch: str):
+	"""The background job of a large load. A failure leaves what was loaded so far, marked "Load failed", for Undo Load."""
+	doc = frappe.get_doc("Migration Batch", batch)
+	if doc.load_status != "Loading":
+		return
+	try:
+		load(doc, commit=True)
+		doc.save(ignore_permissions=True)
+		frappe.db.commit()
+	except Exception:
+		frappe.db.rollback()
+		frappe.db.set_value("Migration Batch", batch, {"load_status": "Load failed", "load_error": frappe.get_traceback()[-1500:]})
+		frappe.db.commit()
+		raise
+
+
 # ---------------------------------------------------------------- undo
-UNDO_ORDER = ("Opening Balance Import", "Legacy Bill", "Connection", "Meter", "Consumer", "Property", "Transformer", "Feeder")
+UNDO_ORDER = ("Connection", "Meter", "Consumer", "Property", "Transformer", "Feeder")
 
 
-def undo(batch):
-	"""Remove what the batch created, as long as nothing has happened on those accounts since."""
-	made = defaultdict(list)
-	for r in batch.records:
-		made[r.record_type].append(r.record_name)
-	conns = made.get("Connection") or [""]
+def loaded_accounts(batch) -> int:
+	return frappe.db.count("Connection", {"migration_batch": batch.name})
+
+
+def check_undoable(batch):
 	for dt in ("Meter Reading", "Utility Bill", "Payment Receipt", "Customer Ledger Entry", "Service Request"):
-		used = frappe.db.get_value(dt, {"connection": ["in", conns]})
+		used = frappe.db.sql(f"""select t.name from `tab{dt}` t join `tabConnection` c on c.name = t.connection
+		                         where c.migration_batch = %s limit 1""", batch.name)
 		if used:
-			frappe.throw(_("The loaded accounts already have a {0} ({1}): the batch can't be undone.").format(_(dt), used))
-	if batch.opening_import and frappe.db.get_value("Opening Balance Import", batch.opening_import, "docstatus") != 0:
+			frappe.throw(_("The loaded accounts already have a {0} ({1}): the batch can't be undone.").format(_(dt), used[0][0]))
+	if batch.opening_import and frappe.db.get_value("Opening Balance Import", batch.opening_import, "docstatus") not in (0, None):
 		frappe.throw(_("The opening balances {0} are posted: the batch can't be undone.").format(batch.opening_import))
+
+
+def undo(batch, commit=False):
+	"""Remove what the batch created, as long as nothing has happened on those accounts since."""
+	check_undoable(batch)
 	frappe.flags.in_migration_undo = True
 	try:
+		if batch.opening_import and frappe.db.exists("Opening Balance Import", batch.opening_import):
+			frappe.delete_doc("Opening Balance Import", batch.opening_import, force=True, ignore_permissions=True)
+		frappe.db.delete("Legacy Bill", {"migration_batch": batch.name})
 		for dt in UNDO_ORDER:
-			for name in reversed(made.get(dt, [])):
-				if frappe.db.exists(dt, name):
+			names = frappe.get_all(dt, filters={"migration_batch": batch.name}, pluck="name", order_by="creation desc")
+			for k in range(0, len(names), CHUNK):
+				for name in names[k:k + CHUNK]:
 					frappe.delete_doc(dt, name, force=True, ignore_permissions=True)
+				if commit:
+					_progress(batch, _("Removing: {0} {1} left").format(max(len(names) - k - CHUNK, 0), _(dt)))
 	finally:
 		frappe.flags.in_migration_undo = False
 	batch.set("records", [])
 	batch.opening_import = None
-	batch.load_status = "Undone"
+	batch.load_status, batch.load_progress, batch.load_error = "Undone", None, None
+
+
+def undo_in_background(batch: str):
+	doc = frappe.get_doc("Migration Batch", batch)
+	if doc.load_status != "Undoing":
+		return
+	try:
+		undo(doc, commit=True)
+		doc.save(ignore_permissions=True)
+		frappe.db.commit()
+	except Exception:
+		frappe.db.rollback()
+		frappe.db.set_value("Migration Batch", batch, {"load_status": "Load failed", "load_error": frappe.get_traceback()[-1500:]})
+		frappe.db.commit()
+		raise
 
 
 # ---------------------------------------------------------------- the template workbook

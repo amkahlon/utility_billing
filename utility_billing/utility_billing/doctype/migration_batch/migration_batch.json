@@ -13,6 +13,8 @@
   "cb1",
   "workbook",
   "load_status",
+  "load_progress",
+  "load_error",
   "opening_import",
   "control_section",
   "control_accounts",
@@ -110,12 +112,27 @@
    "fieldname": "load_status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Draft\nChecked\nLoaded\nUndone",
+   "options": "Draft\nChecked\nLoading\nLoaded\nLoad failed\nUndoing\nUndone",
    "default": "Draft",
    "read_only": 1,
    "no_copy": 1,
    "allow_on_submit": 1,
    "in_list_view": 1
+  },
+  {
+   "fieldname": "load_progress",
+   "fieldtype": "Data",
+   "label": "Progress",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "load_error",
+   "fieldtype": "Small Text",
+   "label": "Why the Load Stopped",
+   "read_only": 1,
+   "no_copy": 1,
+   "depends_on": "eval:doc.load_error"
   },
   {
    "fieldname": "opening_import",

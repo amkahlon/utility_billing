@@ -77,6 +77,11 @@ class UnitTestMigrationMapping(UnitTestCase):
 		self.assertEqual(migration.parse_date("03/04/2026", prof(dayfirst=True)), datetime.date(2026, 4, 3))
 		self.assertEqual(migration.parse_date("03/04/2026", prof(dayfirst=False)), datetime.date(2026, 3, 4))
 		self.assertEqual(migration.parse_date(datetime.datetime(2026, 1, 2, 5), prof()), datetime.date(2026, 1, 2))
+		# year first with dashes is year-month-day in every profile (read day first, 2026-09-01 silently became 9 January)
+		for p in (prof(dayfirst=True), prof(dayfirst=False)):
+			self.assertEqual(migration.parse_date("2026-09-01", p), datetime.date(2026, 9, 1))
+			self.assertEqual(migration.parse_date("2026-10-25 00:00:00", p), datetime.date(2026, 10, 25))
+		self.assertEqual(migration.parse_date("01-09-2026", prof(dayfirst=True)), datetime.date(2026, 9, 1))
 
 
 class IntegrationTestMigration(IntegrationTestCase):
@@ -196,7 +201,10 @@ class IntegrationTestMigration(IntegrationTestCase):
 		self.assertTrue(frappe.db.exists("Transformer", f"{SOC}-MT1"))
 		imp = frappe.get_doc("Opening Balance Import", b.opening_import)
 		self.assertEqual((imp.row_count, imp.error_count, imp.total_receivable), (2, 0, 5805))
-		self.assertEqual(len(b.records), 1 + 1 + 3 + 3 + 3 + 2 + 3 + 1)  # feeder, transformer, meters, properties, connections, consumers, history, import
+		# what the batch made, counted from the records that carry it (they are no longer logged one by one on the batch)
+		self.assertEqual({r.record_type: r.record_count for r in b.records}, {
+			"Feeder": 1, "Transformer": 1, "Meter": 3, "Property": 3, "Consumer": 2, "Connection": 3, "Legacy Bill": 3, "Opening Balance Import": 1})
+		self.assertEqual(frappe.db.count("Connection", {"migration_batch": b.name}), 3)
 
 	def test_old_numbers_work_until_the_window_closes(self):
 		self.loaded()
