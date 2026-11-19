@@ -9,6 +9,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_months, cstr, flt, getdate, now_datetime, nowdate
 
+from utility_billing.utility_billing import bulk, readcache
 from utility_billing.utility_billing import reading_engine as engine
 from utility_billing.utility_billing import routes
 from utility_billing.utility_billing import rights
@@ -43,6 +44,9 @@ def _readings(connection, filters=None, order="billing_month desc", limit=None, 
 def monthly_history(connection, before_month, months=6):
 	"""Actual monthly units before `before_month`, most recent first. True-up months (which cover
 	several months) are left out so they don't distort averages."""
+	found, cached = readcache.history(connection, before_month, months)
+	if found:
+		return [flt(r.units) for r in cached]
 	rows = _readings(
 		connection,
 		{"billing_month": ["<", month_start(before_month)], "status": ["in", ACTUAL_DONE],
@@ -53,6 +57,9 @@ def monthly_history(connection, before_month, months=6):
 
 
 def same_month_last_year(connection, month):
+	found, cached = readcache.same_month_last_year(connection, month)
+	if found:
+		return flt(cached.units) if cached else None
 	rows = _readings(
 		connection,
 		{"billing_month": add_months(month_start(month), -12), "status": ["in", ACTUAL_DONE],
@@ -63,6 +70,9 @@ def same_month_last_year(connection, month):
 
 
 def last_actual(connection, before_month):
+	found, cached = readcache.last_actual(connection, before_month)
+	if found:
+		return cached
 	rows = _readings(
 		connection,
 		{"billing_month": ["<", month_start(before_month)], "status": ["in", ACTUAL_DONE], "consumption_type": "Actual"},
@@ -73,6 +83,9 @@ def last_actual(connection, before_month):
 
 def estimated_since(connection, after_month, before_month):
 	"""Units billed as estimates after the last actual reading and before this month (true-up)."""
+	found, cached = readcache.estimated_since(connection, after_month, before_month)
+	if found:
+		return cached
 	filters = {"billing_month": ["<", month_start(before_month)], "status": "Estimated"}
 	if after_month:
 		filters["billing_month"] = ["between", [add_months(month_start(after_month), 1), add_months(month_start(before_month), -1)]]
@@ -82,11 +95,13 @@ def estimated_since(connection, after_month, before_month):
 def reading_context(connection_name, month):
 	"""Previous reading, meter, multiplier, digits, units on a replaced meter and units already
 	estimated, for a connection's reading in `month`."""
-	conn = frappe.get_doc("Connection", connection_name)
-	current = next((m for m in conn.meters if not m.removed_on), None)
+	meters = readcache.meters_of(connection_name)  # a cycle's bulk work reads a group of accounts at a time
+	if meters is None:
+		meters = frappe.get_doc("Connection", connection_name).meters
+	current = next((m for m in meters if not m.removed_on), None)
 	if not current:
 		frappe.throw(_("Connection {0} has no installed meter.").format(connection_name))
-	meter = frappe.db.get_value("Meter", current.meter, ["multiplier", "digits", "meter_type"], as_dict=True)
+	meter = readcache.meter_info(current.meter)
 	last = last_actual(connection_name, month)
 	ctx = frappe._dict(
 		meter=current.meter, multiplier=flt(meter.multiplier) or 1, digits=meter.digits or 5,
@@ -101,14 +116,15 @@ def reading_context(connection_name, month):
 		ctx.previous_export_reading = flt(last.get("present_export_reading"))
 	elif last:
 		# Meter changed since the last actual reading: bill the old meter up to its end reading.
-		old = next((m for m in conn.meters if m.meter == last.meter and m.removed_on), None)
+		old = next((m for m in meters if m.meter == last.meter and m.removed_on), None)
 		if old and frappe.utils.cint(old.get("unreadable")):
 			return ctx  # FS-WF-08: the old meter couldn't be read at removal, so the months billed on averages stand (no true-up)
 		if old:
-			old_mult = flt(frappe.db.get_value("Meter", old.meter, "multiplier")) or 1
+			old_meter = readcache.meter_info(old.meter) or frappe._dict()
+			old_mult = flt(old_meter.multiplier) or 1
 			ctx.old_meter_units = max(0, (flt(old.end_reading) - flt(last.present_reading)) * old_mult)
 			# a replaced net-metering meter: what it exported after its last reading is credited with this month's exports (increment 28)
-			if flt(old.get("end_export_reading")) and frappe.db.get_value("Meter", old.meter, "meter_type") == NET_METERING:
+			if flt(old.get("end_export_reading")) and old_meter.meter_type == NET_METERING:
 				ctx.old_meter_export_units = max(0, (flt(old.end_export_reading) - flt(last.get("present_export_reading"))) * old_mult)
 				ctx.net_metering = 1  # credited even if the new meter has no export register
 	ctx.estimated_since_units = estimated_since(connection_name, last.billing_month if last else None, month)
@@ -144,11 +160,13 @@ def create_reading_sheet(cycle: str):
 		pluck="name",
 		order_by="name",
 	)
-	for conn in sorted(names, key=lambda n: (n not in routed, routed.get(n, {}).get("rank", 0))):
-		if conn in existing:
-			continue
-		frappe.get_doc({"doctype": "Meter Reading", "reading_cycle": c.name, "connection": conn, "source": "Office"}).insert()
-		created += 1
+	todo = [n for n in sorted(names, key=lambda n: (n not in routed, routed.get(n, {}).get("rank", 0))) if n not in existing]
+	if bulk.plain("Meter Reading"):
+		created = _create_readings(c, todo)
+	else:  # something on the site reacts to a reading being saved: one document at a time, so it still fires
+		for conn in todo:
+			frappe.get_doc({"doctype": "Meter Reading", "reading_cycle": c.name, "connection": conn, "source": "Office"}).insert()
+			created += 1
 	routes.apply(c)
 	checks = routes.check_meters(c)  # the routes' check meters are read with the month (FS-RDG-12)
 	c.refresh_counts()
@@ -206,19 +224,75 @@ def upload_readings(cycle: str, file_url: str):
 	if "reference no" not in col or ("present reading" not in col and "exception code" not in col):
 		frappe.throw(_("The file needs the columns Reference No and Present Reading (or Exception Code)."))
 	updated, errors = 0, []
+	fast = bulk.plain("Meter Reading")
+	in_cycle = dict(frappe.db.sql("select connection, name from `tabMeter Reading` where reading_cycle = %s", c.name))
+	lines = []
 	for i, row in enumerate(rows[1:], start=2):
+		ref = cstr(row[col["reference no"]] if col["reference no"] < len(row) else "").strip().split(".")[0]
+		if ref:
+			lines.append((i, row, ref))
+	with readcache.for_cycle(c):
+		for group in bulk.in_chunks(lines, GROUP):
+			loaded = _load_readings(c, [in_cycle[ref] for _i, _row, ref in group if ref in in_cycle]) if fast else {}
+			updated += _apply_rows(group, col, in_cycle, loaded, errors, fast)
+	c.refresh_counts()
+	return {"updated": updated, "errors": errors}
+
+
+GROUP = 500  # the performance step, part 2: a cycle reads and writes its readings this many at a time
+
+
+def _create_readings(c, connections) -> int:
+	"""The cycle's empty readings for these accounts, built as an insert would build them (the previous reading, meter and
+	multiplier from the account) and written a group at a time. Held to the one-by-one way by test_bulk_readings."""
+	writer, created = bulk.Inserter(), 0
+	with readcache.for_cycle(c):
+		for group in bulk.in_chunks(connections, GROUP):
+			readcache.prime(group)
+			for conn in group:
+				info = readcache.connection_info(conn) or frappe._dict()
+				r = writer.add({"doctype": "Meter Reading", "reading_cycle": c.name, "connection": conn, "source": "Office",
+				                "consumer_name": info.get("consumer_name"), "property": info.get("property")})  # the fields fetched from the account
+				r.flags.in_bulk = True  # the accounts were chosen as having no reading in this cycle
+				r.validate()
+				created += 1
+			writer.flush()
+	return created
+
+
+def _load_readings(c, names) -> dict:
+	"""{connection: Meter Reading document} for a group of the cycle's readings, read together with what their checks need."""
+	if not names:
+		readcache.prime([])
+		return {}
+	rows = frappe.db.sql("select * from `tabMeter Reading` where name in %s", (names,), as_dict=True)
+	readcache.prime([r.connection for r in rows], history=True)
+	out = {}
+	for row in rows:
+		doc = frappe.get_doc(dict(row, doctype="Meter Reading"))
+		doc._doc_before_save = frappe.get_doc(dict(row, doctype="Meter Reading"))
+		out[row.connection] = doc
+	return out
+
+
+def _apply_rows(group, col, in_cycle, loaded, errors, fast) -> int:
+	"""Apply a group of file rows. A reading entered for the first time is checked and written without the document's save
+	(the same validate, one update); a reading that already had a value is a correction and is saved as a document, with its
+	change history. Returns the number of readings updated."""
+	updated, stamp, user = 0, frappe.utils.now(), frappe.session.user
+	for i, row, ref in group:
 		def val(key):
 			return row[col[key]] if key in col and col[key] < len(row) else None
 
-		ref = cstr(val("reference no")).strip().split(".")[0]
-		if not ref:
-			continue
-		name = frappe.db.get_value("Meter Reading", {"reading_cycle": c.name, "connection": ref}, "name")
+		name = in_cycle.get(ref)
 		if not name:
 			errors.append({"row": i, "reference_no": ref, "error": _("No reading for this connection in the cycle")})
 			continue
 		try:
-			r = frappe.get_doc("Meter Reading", name)
+			r = loaded.get(ref) if fast else None
+			first_entry = bool(r) and not r.reading_date and not r.exception_code and r.status == "Pending"
+			if not first_entry:
+				r = frappe.get_doc("Meter Reading", name)
 			code = cstr(val("exception code")).strip()
 			if code:
 				r.exception_code = code
@@ -236,13 +310,20 @@ def upload_readings(cycle: str, file_url: str):
 					r.present_export_reading = flt(val("export reading"))
 			r.reading_date = getdate(val("reading date")) if val("reading date") else nowdate()
 			r.source = "Import"
-			r.save()
+			if first_entry:
+				r.flags.in_bulk = True
+				r.validate()
+				r.modified, r.modified_by = stamp, user
+				r.db_update()
+				r.on_update()
+			else:
+				r.save()
 			updated += 1
 		except Exception as e:
 			frappe.clear_last_message()
+			loaded.pop(ref, None)  # a row that failed must not leave a half-changed reading for a later row of the file
 			errors.append({"row": i, "reference_no": ref, "error": cstr(e) or e.__class__.__name__})
-	c.refresh_counts()
-	return {"updated": updated, "errors": errors}
+	return updated
 
 
 def _read_rows(file_url):

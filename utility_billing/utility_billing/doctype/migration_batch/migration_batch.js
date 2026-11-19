@@ -35,22 +35,37 @@ frappe.ui.form.on("Migration Batch", {
 		mb_reconciliation(frm);
 		frm.add_custom_button(__("Download Template"), () => window.open(`/api/method/${MB}template`), __("Workbook"));
 		const editable = !frm.is_new() && frm.doc.docstatus === 0 && ["Draft", "Rejected", undefined, null, ""].includes(frm.doc.workflow_state);
-		if (editable && frm.doc.load_status !== "Loaded") {
+		const busy = ["Loading", "Undoing"].includes(frm.doc.load_status);
+		const holding = ["Loaded", "Load failed"].includes(frm.doc.load_status);  // records exist: only Undo Load is offered
+		if (busy) {
+			// a large workbook is loaded or removed in the background: show where it is, and look again every few seconds
+			frm.dashboard.set_headline(`${frm.doc.load_status === "Loading" ? __("Loading in the background") : __("Removing in the background")}: ${frappe.utils.escape_html(frm.doc.load_progress || "")}. ${__("You can leave this page.")}`, "blue");
+			clearTimeout(frm._mb_poll);
+			frm._mb_poll = setTimeout(() => { if (cur_frm === frm && !frm.is_dirty()) frm.reload_doc(); }, 5000);
+			return;
+		}
+		if (editable && !holding) {
 			frm.add_custom_button(__("Check"), () => mb_run(frm, "check", __("Checking the workbook…")).then((m) =>
 				frappe.show_alert({ message: __("{0} accounts: {1} errors, {2} warnings", [m.accounts, m.errors, m.warnings]), indicator: m.errors ? "orange" : "green" })),
 			__("Workbook"));
 			frm.add_custom_button(__("Load"), () => frappe.confirm(__("Create the accounts, meters, history and opening balances from the workbook?"), () =>
-				mb_run(frm, "load", __("Loading…")).then((m) => frappe.show_alert(m.loaded
+				mb_run(frm, "load", __("Loading…")).then((m) => frappe.show_alert(m.queued
+					? { message: __("A large workbook: it is loading in the background. Its progress shows here."), indicator: "blue" }
+					: m.loaded
 					? { message: __("{0} accounts loaded ({1} records)", [m.accounts, m.records]), indicator: "green" }
 					: { message: __("Not loaded: {0} errors. See Problems.", [m.errors]), indicator: "red" }))),
 			__("Workbook"));
 		}
-		if (editable && frm.doc.load_status === "Loaded") {
+		if (editable && holding) {
 			frm.add_custom_button(__("Undo Load"), () => frappe.confirm(__("Remove everything this batch created?"), () =>
-				mb_run(frm, "undo", __("Undoing…")).then((m) => frappe.show_alert({ message: __("{0} records removed", [m.removed]), indicator: "green" }))),
+				mb_run(frm, "undo", __("Undoing…")).then((m) => frappe.show_alert(m.queued
+					? { message: __("Removing the loaded records in the background."), indicator: "blue" }
+					: { message: __("{0} records removed", [m.removed]), indicator: "green" }))),
 			__("Workbook"));
 		}
-		if (frm.doc.error_count) {
+		if (frm.doc.load_status === "Load failed") {
+			frm.dashboard.set_headline(__("The load stopped part-way (see Why the Load Stopped). Use Workbook › Undo Load to remove what was loaded, fix the cause, then load again."), "red");
+		} else if (frm.doc.error_count) {
 			frm.dashboard.set_headline(__("{0} errors in the workbook: fix them at the source (see Problems) and check again.", [frm.doc.error_count]), "red");
 		} else if (frm.doc.load_status === "Checked") {
 			frm.dashboard.set_headline(__("No errors ({0} warnings). Compare the figures with the previous system, then Load.", [frm.doc.warning_count]), "green");
