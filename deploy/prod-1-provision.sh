@@ -56,6 +56,9 @@ chmod 755 /home/$FUSER
 # Python through pipx, which would have failed at bench init.
 # a clean environment for the frappe user: whatever the admin's shell carries (XDG_CONFIG_HOME, a Python path …) must not leak in
 # (found by the rehearsal, 2026-11-19: uv tried to write its settings into the calling user's home)
+# and start from the frappe user's own home: uv looks for a uv.toml in the folder it is started from and stops if it can't read
+# that folder (second rehearsal run, 2026-11-19: the admin's folder isn't readable by the frappe user)
+cd /home/$FUSER
 B="sudo -u $FUSER -H env -i HOME=/home/$FUSER USER=$FUSER LOGNAME=$FUSER LANG=C.UTF-8 PATH=/home/$FUSER/.local/bin:/usr/local/bin:/usr/bin:/bin"
 $B bash -c "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh"
 $B bash -c 'uv python install 3.14 && (uv tool install --python "$(uv python find 3.14)" frappe-bench || uv tool upgrade frappe-bench)'
