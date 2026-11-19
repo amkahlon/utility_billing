@@ -100,3 +100,10 @@ class IntegrationTestPdfEngine(BillingCase):
 			self.assertEqual(ubpdf.engine(), "wkhtmltopdf")
 		with patch.dict(frappe.local.conf, {"ub_pdf_engine": "something else"}):
 			self.assertEqual(ubpdf.engine(), "chrome")
+
+	def test_words_with_ffi_and_fi_can_be_found_in_the_pdf(self):
+		"""Chromium's ligatures put single ligature characters into the PDF's text: "Office copy" couldn't be found (2026-11-19)."""
+		html = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><p style="font-family: Noto Sans, sans-serif">Office copy, official affidavit, final floor</p></body></html>'
+		text = PdfReader(io.BytesIO(ubpdf.render(html, {"page-size": "A4"}, engine_name="chrome"))).pages[0].extract_text()
+		self.assertIn("Office copy, official affidavit, final floor", " ".join(text.split()))
+		self.assertFalse([ch for ch in text if 0xFB00 <= ord(ch) <= 0xFB06])

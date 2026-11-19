@@ -156,13 +156,25 @@ def render(html: str, options: dict | None = None, engine_name: str | None = Non
 	return fpdf.get_pdf(html, options=options)
 
 
+NO_LIGATURES = "<style>html { font-variant-ligatures: no-common-ligatures; }</style>"
+
+
+def plain_letters(html: str) -> str:
+	"""Chromium joins "ffi", "fi" and "fl" into single ligature glyphs, and the PDF's text then holds the ligature character: a search
+	for "Office" in the PDF finds nothing, and copied text reads "Oﬃce" (found by the end-to-end suite, 2026-11-19). The common
+	ligatures are switched off; the joining of Urdu and Arabic letters is a different, required feature and stays."""
+	if "<head>" in html:
+		return html.replace("<head>", "<head>" + NO_LIGATURES, 1)
+	return NO_LIGATURES + html
+
+
 def _chrome(html: str, options: dict) -> bytes:
 	import io  # noqa: PLC0415
 
 	from frappe.utils import pdf as fpdf  # noqa: PLC0415
 
 	options.pop("encoding", None)  # a wkhtmltopdf option; the page says its own
-	out = fpdf.get_chrome_pdf(None, inline_stylesheets(html), options, None, pdf_generator="chrome")
+	out = fpdf.get_chrome_pdf(None, plain_letters(inline_stylesheets(html)), options, None, pdf_generator="chrome")
 	if out is None:
 		raise RuntimeError("Chromium returned no PDF")
 	if hasattr(out, "write"):  # a PdfWriter, when a header or footer was merged in
