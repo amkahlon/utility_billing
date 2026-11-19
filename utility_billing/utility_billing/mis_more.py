@@ -57,7 +57,7 @@ def installment_plans(f):
 
 # ---------------------------------------------------------------- consumer movement (RPT-36) and disconnections (RPT-28)
 MOVEMENT = ("New connection", "Temporary connection", "Disconnection", "Reconnection", "Permanent disconnection", "Change of category",
-            "Load change", "Change of name or ownership", "Tenant moving in", "Tenant leaving", "Meter change")
+            "Load change", "Change of name or ownership", "Tenant moving in", "Tenant leaving", "Meter change", "Net-metering connection")
 
 
 @report("consumer_movement", "Consumer Movement", BILLING + ["Society Admin"], PERIOD,

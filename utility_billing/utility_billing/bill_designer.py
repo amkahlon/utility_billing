@@ -43,6 +43,8 @@ FIELDS = {
 	"mobile": ("Mobile", lambda c: c["consumer"].get("mobile")),
 	"cnic": ("CNIC", lambda c: c["consumer"].get("id_number")),
 	"ntn": ("NTN", lambda c: c["consumer"].get("tax_no")),
+	"tax_status": ("Tax status", lambda c: c["consumer"].get("tax_status")),
+	"connection_date": ("Connection date", lambda c: c["date"](c["con"].get("connection_date")) if c["con"].get("connection_date") else ""),
 	"category": ("Category", lambda c: c["con"].get("category")),
 	"sanctioned_load": ("Sanctioned load", lambda c: f'{c["qty"](c["con"].get("sanctioned_load_kw"))} kW' if c["con"].get("sanctioned_load_kw") else ""),
 	"phase": ("Phase", lambda c: c["con"].get("phase")),
@@ -141,6 +143,7 @@ BLOCKS = {
 		_opt("units", "Units column", "check", 1),
 		_opt("rate", "Rate column", "check", 1),
 		_opt("group", "Group by charge group", "check", 0),
+		_opt("group_totals", "Subtotal for each group", "check", 0),
 		_opt("subtotal", "Current bill total", "check", 1),
 	]},
 	"totals": {"label": "Totals", "description": "Current bill, arrears and the amounts payable.", "options": [

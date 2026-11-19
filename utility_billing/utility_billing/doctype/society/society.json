@@ -87,6 +87,7 @@
   "bill_layout_section",
   "bill_history_months",
   "print_office_copy",
+  "bill_group_subtotals",
   "show_qr_code",
   "show_barcode",
   "show_meter_photo",
@@ -608,6 +609,13 @@
    "label": "Print Office Copy"
   },
   {
+   "default": "0",
+   "fieldname": "bill_group_subtotals",
+   "fieldtype": "Check",
+   "label": "Subtotal for Each Charge Group",
+   "description": "The bill lists its charges under their groups (for example electricity, society and government charges), each with its own total. A charge the tariff sets at zero still prints, so a group can total zero."
+  },
+  {
    "default": "1",
    "description": "QR code of the reference number, for paying through banks and wallets.",
    "fieldname": "show_qr_code",
@@ -1087,7 +1095,7 @@
    "fieldtype": "Percent",
    "label": "Drop: Below % of Similar Accounts",
    "default": "50",
-   "description": "\u2026and below this share of the median of similar accounts (same category and plot size)."
+   "description": "…and below this share of the median of similar accounts (same category and plot size)."
   },
   {
    "fieldname": "ra_history_months",
@@ -1167,7 +1175,7 @@
    "fieldtype": "Select",
    "label": "Defective-Meter Billing",
    "default": "Average of last N months",
-   "options": "Average of last N months\nSame month last year\nLoad \u00d7 load factor \u00d7 hours\nMinimum charge only"
+   "options": "Average of last N months\nSame month last year\nLoad × load factor × hours\nMinimum charge only"
   },
   {
    "fieldname": "defective_average_months",
@@ -1191,14 +1199,14 @@
    "fieldtype": "Percent",
    "label": "Load Factor",
    "default": "30",
-   "depends_on": "eval:doc.defective_billing_method=='Load \u00d7 load factor \u00d7 hours'"
+   "depends_on": "eval:doc.defective_billing_method=='Load × load factor × hours'"
   },
   {
    "fieldname": "defective_hours",
    "fieldtype": "Int",
    "label": "Hours in a Month",
    "default": "720",
-   "depends_on": "eval:doc.defective_billing_method=='Load \u00d7 load factor \u00d7 hours'"
+   "depends_on": "eval:doc.defective_billing_method=='Load × load factor × hours'"
   },
   {
    "fieldname": "disconnected_fixed_charges",

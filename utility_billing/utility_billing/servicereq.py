@@ -27,6 +27,7 @@ NEW, TEMP, METER, DISC, RECON, CLOSE, CAT, LOAD, OWNER, T_IN, T_OUT, NODUES, CON
 	"Change of category", "Load change", "Change of name or ownership", "Tenant moving in", "Tenant leaving", "No-dues certificate",
 	"Contact update", "Meter test", "Deposit change", "Detection bill")
 MERGE, SPLIT = "Merge accounts", "Split account"  # FS-WF-35 (increment 23)
+NETMETER = "Net-metering connection"  # FS-WF-34 (increment 30): a solar consumer's meter replaced by a bi-directional one
 CREATES_CONNECTION = (NEW, TEMP)
 INSTALLS_METER = (NEW, TEMP, SPLIT)
 BO, BM, GM, AO, CASHIER, RO = "Billing Officer", "Billing Manager", "General Manager", "Accounts Officer", "Cashier", "Recovery Officer"
@@ -42,6 +43,10 @@ DEFAULT_TYPES = (
 	  ("Meter installed and first reading", "Field", BO, 3)),
 	 (("CNIC copy", 1), ("Construction approval", 1))),
 	("METER", "Meter change", METER, (("Approval", "Approval", BM, 2), ("Meter changed", "Field", BO, 3)), ()),
+	("NETMETER", "Net-metering (solar) connection", NETMETER,
+	 (("Application received", "Office", BO, 1), ("Documents checked", "Document check", BO, 3), ("Approval", "Approval", BM, 3),
+	  ("Net meter installed and first readings", "Field", BO, 5)),
+	 (("Solar system details (capacity, panels, inverter)", 1), ("Net-metering licence or DISCO approval", 0), ("CNIC copy", 1))),
 	("DISC", "Disconnection", DISC, (("Approval", "Approval", BM, 1), ("Supply disconnected", "Field", RO, 2)), ()),
 	("RECON", "Reconnection", RECON, (("Dues cleared and fee paid", "Payment", CASHIER, 3), ("Supply restored", "Field", BO, 1)), ()),
 	("CLOSE", "Permanent disconnection", CLOSE,
@@ -375,9 +380,11 @@ def _complete(sr):
 			new.name, conn.name, day, sr.new_meter, flt(reading))
 	elif k == MERGE:
 		note = merge(sr, conn, day)
-	elif k == METER:
+	elif k in (METER, NETMETER):
 		if not sr.new_meter:
 			frappe.throw(_("Choose the new meter."))
+		if k == NETMETER and frappe.db.get_value("Meter", sr.new_meter, "meter_type") != "Net Metering":
+			frappe.throw(_("Meter {0} isn't a net-metering meter (its Meter Type must be Net Metering).").format(sr.new_meter))
 		old = [r for r in conn.meters if not r.removed_on]
 		for r in old:
 			r.removed_on, r.end_reading, r.removal_reason = day, flt(sr.old_meter_reading), sr.meter_reason or _("Meter change {0}").format(sr.name)
@@ -389,6 +396,11 @@ def _complete(sr):
 		if sr.seal_no:
 			frappe.db.set_value("Meter", sr.new_meter, "seal_no", sr.seal_no)
 		note = _("Meter {0} replaced by {1} on {2}; the month's units are split between them.").format(old[0].meter if old else "-", sr.new_meter, day)
+		if k == NETMETER:
+			method = frappe.db.get_value("Society", sr.society, "net_metering_method") or "Net units"
+			note = _("Net meter {0} installed on {1} in place of {2}, import register at {3} and export register at {4}. "
+			         "Net billing ({5}) starts with the next bill.").format(sr.new_meter, day, old[0].meter if old else "-", flt(sr.new_meter_reading),
+			                                                             flt(sr.get("new_meter_export_reading")), _(method))
 		if old and frappe.db.get_value("Meter", old[0].meter, "status") == "Defective":
 			note += " " + (_("The months billed on averages stand: the old meter couldn't be read.") if cint(sr.get("old_meter_unreadable"))
 			               else _("The next reading trues up the months billed on averages from the old meter's final reading."))
