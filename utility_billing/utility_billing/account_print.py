@@ -62,9 +62,9 @@ def payment_receipt_html(name):
 def download_receipt(name: str):
 	r = frappe.get_doc("Payment Receipt", name)
 	r.check_permission("print")
-	from frappe.utils.pdf import get_pdf
+	from utility_billing import pdf as ubpdf  # noqa: PLC0415
 
-	send_pdf(get_pdf(wrap(receipt_html(name), name), options=dict(RECEIPT_PDF)), f"{name}.pdf")
+	send_pdf(ubpdf.render(wrap(receipt_html(name), name), options=dict(RECEIPT_PDF)), f"{name}.pdf")
 
 
 # ---------------------------------------------------------------- statement
@@ -88,7 +88,7 @@ def download_statement(connection: str, from_date: str | None = None, to_date: s
 		raise frappe.PermissionError(_("You can't print account statements."))
 	if from_date and to_date and getdate(from_date) > getdate(to_date):
 		frappe.throw(_("The start date is after the end date."))
-	from frappe.utils.pdf import get_pdf
+	from utility_billing import pdf as ubpdf  # noqa: PLC0415
 
 	html = wrap(statement_html(connection, from_date or None, to_date or None), connection)
-	send_pdf(get_pdf(html, options=dict(STATEMENT_PDF)), f"statement-{connection}.pdf")
+	send_pdf(ubpdf.render(html, options=dict(STATEMENT_PDF)), f"statement-{connection}.pdf")

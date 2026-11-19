@@ -58,10 +58,10 @@ jobs:
         with:
           node-version: 24
 
-      - name: System packages (database client, PDF tool with patched Qt)
+      - name: System packages (database client, Chromium's libraries, the older PDF tool as the fallback)
         run: |
           sudo apt-get update -q
-          sudo apt-get install -yq mariadb-client libcups2 xvfb fontconfig xfonts-75dpi xfonts-base
+          sudo apt-get install -yq mariadb-client libcups2 xvfb fontconfig xfonts-75dpi xfonts-base fonts-noto-core libnss3 libnspr4 libasound2t64
           curl -fsSL -o /tmp/wkhtml.deb https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/wkhtmltox_0.12.6.1-3.jammy_amd64.deb
           sudo apt-get install -yq /tmp/wkhtml.deb
           wkhtmltopdf --version
@@ -84,6 +84,7 @@ jobs:
           bench set-config -g redis_queue redis://127.0.0.1:11000
           bench set-config -g redis_socketio redis://127.0.0.1:13000
           bench set-config -gp webserver_port 8000
+          bench setup-chrome   # headless Chromium draws every PDF; the tests fail if it doesn't start
 
       - name: Install the app on a new site
         working-directory: /home/runner/frappe-bench
