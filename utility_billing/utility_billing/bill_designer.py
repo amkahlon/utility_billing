@@ -511,12 +511,12 @@ def long_bill(society):
 def pages_of(settings, bill) -> int:
 	from io import BytesIO  # noqa: PLC0415
 
-	from frappe.utils.pdf import get_pdf  # noqa: PLC0415
+	from utility_billing import pdf as ubpdf  # noqa: PLC0415
 	from pypdf import PdfReader  # noqa: PLC0415
 
 	from utility_billing.utility_billing import bill_print  # noqa: PLC0415
 
-	pdf = get_pdf(bill_print.wrap_pages([render_bill(bill, settings)]), options=pdf_options(settings))
+	pdf = ubpdf.render(bill_print.wrap_pages([render_bill(bill, settings)]), options=pdf_options(settings))
 	return len(PdfReader(BytesIO(pdf)).pages)
 
 
@@ -642,7 +642,7 @@ def fit_check(society: str, layout: str, page: str | None = None, bill: str | No
 @frappe.whitelist(methods=["POST"])
 def preview_pdf(society: str, layout: str, page: str | None = None, bill: str | None = None):
 	"""The exact PDF of the bill with an unsaved layout."""
-	from frappe.utils.pdf import get_pdf  # noqa: PLC0415
+	from utility_billing import pdf as ubpdf  # noqa: PLC0415
 
 	from utility_billing.utility_billing import bill_print  # noqa: PLC0415
 
@@ -650,7 +650,7 @@ def preview_pdf(society: str, layout: str, page: str | None = None, bill: str | 
 	settings = _settings_from(page, layout)
 	doc = _preview_bill(society, bill)
 	html = bill_print.wrap_pages([render_bill(doc, settings)])
-	bill_print.send_pdf(get_pdf(html, options=pdf_options(settings)), "bill-template-preview.pdf")
+	bill_print.send_pdf(ubpdf.render(html, options=pdf_options(settings)), "bill-template-preview.pdf")
 
 
 @frappe.whitelist(methods=["POST"])

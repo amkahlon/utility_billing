@@ -126,3 +126,61 @@ def apply():
 		return chrome_pdf(print_format, html, options, output, pdf_generator=pdf_generator)
 
 	fpdf.get_chrome_pdf = get_chrome_pdf
+
+
+# ---------------------------------------------------------------- the app's own PDFs (the Chromium move, 2026-11-18)
+ENGINES = ("chrome", "wkhtmltopdf")
+
+
+def engine() -> str:
+	"""The engine for the app's own PDFs (bills, receipts, statements, notices, invoices): headless Chromium. wkhtmltopdf, which
+	is no longer maintained, is used only where the site asks for it (`ub_pdf_engine` in site_config.json: the way back if a
+	layout misbehaves) or where Chromium can't start on the server."""
+	wanted = str(frappe.conf.get("ub_pdf_engine") or "chrome").lower()
+	if wanted not in ENGINES:
+		wanted = "chrome"
+	return "wkhtmltopdf" if wanted == "chrome" and not chrome_works() else wanted
+
+
+def render(html: str, options: dict | None = None, engine_name: str | None = None) -> bytes:
+	"""A PDF of the app's own HTML, as bytes. `options` are the page options the modules already use (page-size or page-width and
+	page-height, margins). Every module prints through here, so the engine is chosen in one place."""
+	from frappe.utils import pdf as fpdf  # noqa: PLC0415
+
+	options = dict(options or {})
+	if (engine_name or engine()) == "chrome":
+		try:
+			return _chrome(html, dict(options))
+		except Exception:  # noqa: BLE001 - a bill must still print: fall back, and leave a trace
+			frappe.log_error(title="Chromium PDF failed; wkhtmltopdf used instead")
+	return fpdf.get_pdf(html, options=options)
+
+
+NO_LIGATURES = "<style>html { font-variant-ligatures: no-common-ligatures; }</style>"
+
+
+def plain_letters(html: str) -> str:
+	"""Chromium joins "ffi", "fi" and "fl" into single ligature glyphs, and the PDF's text then holds the ligature character: a search
+	for "Office" in the PDF finds nothing, and copied text reads "Oﬃce" (found by the end-to-end suite, 2026-11-19). The common
+	ligatures are switched off; the joining of Urdu and Arabic letters is a different, required feature and stays."""
+	if "<head>" in html:
+		return html.replace("<head>", "<head>" + NO_LIGATURES, 1)
+	return NO_LIGATURES + html
+
+
+def _chrome(html: str, options: dict) -> bytes:
+	import io  # noqa: PLC0415
+
+	from frappe.utils import pdf as fpdf  # noqa: PLC0415
+
+	options.pop("encoding", None)  # a wkhtmltopdf option; the page says its own
+	out = fpdf.get_chrome_pdf(None, plain_letters(inline_stylesheets(html)), options, None, pdf_generator="chrome")
+	if out is None:
+		raise RuntimeError("Chromium returned no PDF")
+	if hasattr(out, "write"):  # a PdfWriter, when a header or footer was merged in
+		buf = io.BytesIO()
+		out.write(buf)
+		out = buf.getvalue()
+	if not bytes(out[:4]) == b"%PDF":
+		raise RuntimeError("Chromium returned something that isn't a PDF")
+	return bytes(out)

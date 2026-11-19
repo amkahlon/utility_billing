@@ -232,12 +232,12 @@ def invoice_html(name) -> str:
 @frappe.whitelist()
 def download_invoice(name: str):
 	frappe.get_doc("Licence Invoice", name).check_permission("print")
-	from frappe.utils.pdf import get_pdf  # noqa: PLC0415
+	from utility_billing import pdf as ubpdf  # noqa: PLC0415
 
 	from utility_billing.utility_billing import bill_print  # noqa: PLC0415
 
 	html = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + invoice_html(name) + "</body></html>"
-	bill_print.send_pdf(get_pdf(html, options=dict(bill_print.PDF_OPTIONS)), f"{name}.pdf")
+	bill_print.send_pdf(ubpdf.render(html, options=dict(bill_print.PDF_OPTIONS)), f"{name}.pdf")
 
 
 def receivables(as_of=None) -> list[dict]:

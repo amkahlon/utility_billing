@@ -405,9 +405,9 @@ def pdf_options_for(names) -> dict:
 
 
 def pdf_of(names, duplicate=0) -> bytes:
-	from frappe.utils.pdf import get_pdf
+	from utility_billing import pdf as ubpdf  # noqa: PLC0415
 
-	return get_pdf(document_html(names, duplicate), options=pdf_options_for(names))
+	return ubpdf.render(document_html(names, duplicate), options=pdf_options_for(names))
 
 
 def send_pdf(content: bytes, filename: str):

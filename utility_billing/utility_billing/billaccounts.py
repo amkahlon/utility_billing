@@ -124,12 +124,12 @@ def combined_html(name) -> str:
 def download_combined(name: str):
 	cb = frappe.get_doc("Combined Bill", name)
 	cb.check_permission("print")
-	from frappe.utils.pdf import get_pdf  # noqa: PLC0415
+	from utility_billing import pdf as ubpdf  # noqa: PLC0415
 
 	from utility_billing.utility_billing import bill_print  # noqa: PLC0415
 
 	html = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + combined_html(name) + "</body></html>"
-	bill_print.send_pdf(get_pdf(html, options=dict(bill_print.PDF_OPTIONS)), f"{name}.pdf")
+	bill_print.send_pdf(ubpdf.render(html, options=dict(bill_print.PDF_OPTIONS)), f"{name}.pdf")
 
 
 # ---------------------------------------------------------------- enquiry and payment

@@ -450,7 +450,7 @@ MAX_NOTICES_PER_PDF = 500
 @frappe.whitelist()
 def download_notices(run: str | None = None, notice: str | None = None):
 	"""PDF of one notice, or of every printable notice of a run (cancelled ones and SMS-only ones are left out)."""
-	from frappe.utils.pdf import get_pdf
+	from utility_billing import pdf as ubpdf  # noqa: PLC0415
 
 	from utility_billing.utility_billing.account_print import wrap
 	from utility_billing.utility_billing.bill_print import send_pdf
@@ -466,5 +466,5 @@ def download_notices(run: str | None = None, notice: str | None = None):
 		frappe.throw(_("There is nothing to print."))
 	if len(names) > MAX_NOTICES_PER_PDF:
 		frappe.throw(_("{0} notices is too many for one file (limit {1}). Filter the run by block or category.").format(len(names), MAX_NOTICES_PER_PDF))
-	send_pdf(get_pdf(wrap(notice_html(names), run or notice), options=dict(NOTICE_PDF)), f"{run or notice}-notices.pdf")
+	send_pdf(ubpdf.render(wrap(notice_html(names), run or notice), options=dict(NOTICE_PDF)), f"{run or notice}-notices.pdf")
 
