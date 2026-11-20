@@ -20,6 +20,8 @@ def measured_by(meter):
 def previous_of(meter, before_month):
 	last = frappe.db.get_value("Check Meter Reading", {"meter": meter, "status": "Read", "billing_month": ["<", before_month]}, "present_reading",
 	                           order_by="billing_month desc")
+	if last is None:  # the first month: from the meter's start reading (a migrated meter's last reading, increment 32), not from 0
+		return flt(frappe.db.get_value("Meter", meter, "start_reading"))
 	return flt(last)
 
 

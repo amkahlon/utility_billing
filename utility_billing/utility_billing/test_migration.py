@@ -131,8 +131,48 @@ class IntegrationTestMigration(IntegrationTestCase):
 			            ["MIG-1001", "01-10-2026", 70, 4795, 560, 0, 0, 5355, "", 0, 5355],
 			            ["MIG-1003", "01-10-2026", 20, 900, 0, 0, 0, 900, "05-10-2026", 900, 0]],
 			"Feeders": [["code", "name"], ["MF1", "Main feeder"]],
-			"Transformers": [["code", "feeder", "kva", "location"], ["MT1", "MF1", 200, "C Block park"]],
+			"Transformers": [["code", "feeder", "kva", "location", "meter_no", "multiplier", "last_reading"],
+			                 ["MT1", "MF1", 200, "C Block park", "TST-MIG-TM1", 40, 52310]],
 		}
+
+	def test_a_transformers_meter_becomes_its_check_meter(self):
+		from utility_billing.utility_billing.doctype.check_meter_reading.check_meter_reading import previous_of  # noqa: PLC0415
+
+		self.loaded()
+		self.assertEqual(frappe.db.get_value("Transformer", f"{SOC}-MT1", "check_meter"), "TST-MIG-TM1")
+		m = frappe.db.get_value("Meter", "TST-MIG-TM1", ["meter_type", "multiplier", "start_reading", "society", "utility"], as_dict=True)
+		self.assertEqual((m.meter_type, m.multiplier, m.start_reading, m.society, m.utility), ("Bulk / Check Meter", 40, 52310, SOC, "Electricity"))
+		self.assertEqual(previous_of("TST-MIG-TM1", "2026-11-01"), 52310)  # the first month counts from the last LESCO reading, not from 0
+
+	def test_a_transformer_given_on_the_consumers_rows_is_made_from_them(self):
+		book = self.good_book()
+		del book["Transformers"]
+		head = [*CONN_HEAD, "feeder", "transformer", "transformer_meter_no"]
+		book["Connections"] = [head] + [row + extra for row, extra in zip(book["Connections"][1:], (
+			["MF1", "MT9", "TST-MIG-TM9"], ["MF1", "MT9", "TST-MIG-TM9"], ["", "", ""]))]
+		b = self.batch(book)
+		self.assertTrue(migration.load(b), [p.problem for p in b.problems if p.severity == "Error"])
+		self.assertEqual(frappe.db.get_value("Transformer", f"{SOC}-MT9", ["feeder", "check_meter"]), (f"{SOC}-MF1", "TST-MIG-TM9"))
+		self.assertEqual(frappe.db.count("Transformer", {"migration_batch": b.name}), 1)  # named on two rows, made once
+		self.assertEqual(frappe.db.get_value("Connection", self.conn("MIG-1002"), "transformer"), f"{SOC}-MT9")
+		# rows that disagree, a transformer without a feeder, a meter that is also a consumer's
+		bad = self.good_book()
+		del bad["Transformers"]
+		bad["Connections"] = [head] + [row + extra for row, extra in zip(bad["Connections"][1:], (
+			["MF1", "MT8", "TST-MIG-TM8"], ["MF1", "MT8", "TST-MIG-TM7"], ["", "MT6", ""]))]
+		bad["Connections"][1][9], bad["Connections"][2][9], bad["Connections"][3][9] = "TST-MIG-M11", "TST-MIG-M12", "TST-MIG-M13"
+		bad["Connections"][1][0], bad["Connections"][2][0], bad["Connections"][3][0] = "MIG-2001", "MIG-2002", "MIG-2003"
+		bad["Readings"], bad["Balances"], bad["History"] = bad["Readings"][:1], bad["Balances"][:1], bad["History"][:1]
+		b2 = self.batch(bad)
+		migration.check(b2)
+		errors = [p.problem for p in b2.problems if p.severity == "Error"]
+		self.assertIn("Transformer MT8 has meter TST-MIG-TM7 here but TST-MIG-TM8 on Connections row 2.", errors)
+		self.assertIn("Transformer MT6 is neither in the Transformers sheet nor in the system. Give its feeder on this row to create it.", errors)
+		bad["Connections"][2][-1] = "TST-MIG-M11"  # MT8's meter is a consumer's meter
+		bad["Connections"][1][-1] = "TST-MIG-M11"
+		b3 = self.batch(bad)
+		migration.check(b3)
+		self.assertIn("Meter TST-MIG-M11 of transformer MT8 is also a consumer's meter in the file.", [p.problem for p in b3.problems if p.severity == "Error"])
 
 	# ---- increment 32: feeders and transformers on sheets of their own; a plot size without a unit
 	def test_feeders_and_transformers_have_sheets_of_their_own(self):
@@ -338,7 +378,7 @@ class IntegrationTestMigration(IntegrationTestCase):
 		self.assertEqual((imp.row_count, imp.error_count, imp.total_receivable), (2, 0, 5805))
 		# what the batch made, counted from the records that carry it (they are no longer logged one by one on the batch)
 		self.assertEqual({r.record_type: r.record_count for r in b.records}, {
-			"Feeder": 1, "Transformer": 1, "Meter": 3, "Property": 3, "Consumer": 2, "Connection": 3, "Legacy Bill": 3, "Opening Balance Import": 1})
+			"Feeder": 1, "Transformer": 1, "Meter": 4, "Property": 3, "Consumer": 2, "Connection": 3, "Legacy Bill": 3, "Opening Balance Import": 1})
 		self.assertEqual(frappe.db.count("Connection", {"migration_batch": b.name}), 3)
 
 	def test_old_numbers_work_until_the_window_closes(self):
@@ -419,7 +459,7 @@ class IntegrationTestMigration(IntegrationTestCase):
 		wb = load_workbook(io.BytesIO(migration.template_workbook()))
 		# every sheet but the older Network layout, which is still read but no longer offered (increment 32)
 		self.assertEqual(wb.sheetnames, [s for s in migration.TARGETS if s != "Network"])
-		self.assertEqual([c.value for c in wb["Transformers"][1]], ["code", "feeder", "kva", "location"])
+		self.assertEqual([c.value for c in wb["Transformers"][1]], ["code", "feeder", "kva", "location", "meter_no", "multiplier", "last_reading"])
 		self.assertEqual([c.value for c in wb["Readings"][1]], migration.TARGETS["Readings"])
 
 	# ---- the parallel run
