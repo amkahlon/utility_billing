@@ -458,7 +458,7 @@ class IntegrationTestMigration(IntegrationTestCase):
 
 		wb = load_workbook(io.BytesIO(migration.template_workbook()))
 		# every sheet but the older Network layout, which is still read but no longer offered (increment 32)
-		self.assertEqual(wb.sheetnames, [s for s in migration.TARGETS if s != "Network"])
+		self.assertEqual(wb.sheetnames, [s for s in migration.TARGETS if s not in ("Network", "Old Bills")])
 		self.assertEqual([c.value for c in wb["Transformers"][1]], ["code", "feeder", "kva", "location", "meter_no", "multiplier", "last_reading"])
 		self.assertEqual([c.value for c in wb["Readings"][1]], migration.TARGETS["Readings"])
 
@@ -491,6 +491,66 @@ class IntegrationTestMigration(IntegrationTestCase):
 		self.assertIn("current bill: ours is", res["MIG-1003"].explanation)
 		self.assertEqual(res["MIG-1002"].result, "Not in our run")
 		self.assertEqual((prm.accounts_compared, prm.accounts_matched, prm.comparison_status), (3, 1, "Compared"))
+
+	def test_without_an_old_bills_sheet_the_months_history_is_compared(self):
+		prm = self.parallel()
+		head = ["Ref_no", "month", "units", "current_amount", "arrears", "adjustment", "surcharge", "bill_amount", "paid_on", "paid_amount", "balance"]
+		prm.workbook = workbook({"History": [head, ["MIG-1001", "01-10-2026", 99, 9999, 0, 0, 0, 9999, "", 0, 9999],  # another month: not compared
+		                                     ["MIG-1001", "01-11-2026", 70, 3400, 560, 0, 0, 3960, "", 0, ""],
+		                                     ["MIG-1003", "01-11-2026", 25, 1000, 0, 0, 0, 1000, "", 0, ""]]})
+		migration.compare(prm)
+		res = {r.old_account_no or r.connection: r for r in prm.rows if r.old_account_no}
+		self.assertEqual(res["MIG-1001"].result, "Match")
+		self.assertEqual((res["MIG-1003"].result, res["MIG-1003"].difference), ("Different", -200))
+		self.assertEqual(prm.accounts_compared, 2)
+
+	# ---- increment 34: LESCO's own workbook (the user's revised template)
+	def lesco_book(self):
+		return {
+			"Connections": [["Ref_no", "Customer_id", "old_ref_no", "consumer_name", "cnic", "ntn", "filer", "mobile", "address", "house", "block",
+			                 "sector", "plot_area", "category", "Meter No"],
+			                [7114110123400, 4101234567, 99001, "Ahmed Raza", "", "1234567-8", "", "", "59-C, Model Town Extension, Lahore", "", "", "",
+			                 5, "RES", "TST-MIG-L1"],
+			                [7114110123401, 4101234568, "", "Sana Iqbal", "", "", "", "", "Model Town Extension", "", "", "", "", "RES", "TST-MIG-L2"]],
+			"Readings": [["Ref_no", "meter_no", "last_import_reading", "last_export_reading", "reading_date"], [7114110123400, "", 8452, "", "25-10-2026"],
+			             [7114110123401, "", 100, "", "25-10-2026"]],
+			"Balances": [["Ref_no", "current_bill", "arrears", "surcharge", "Deferred", "credit_balance", "security_deposit",
+			              "Remaining_instalments_amount", "installments (nos)", "solar_credit_units (balance)", "Total Receivable"],
+			             [7114110123400, 5355, 45, 0, 1000, 0, 3000, 0, 0, 0, 6400],
+			             [7114110123401, 0, 0, 0, 0, 200, 0, 0, 0, 12, -200]],
+			"History": [["Ref_no", "month", "units", "current_amount", "arrears", "adjustment", "surcharge", "bill_amount", "paid_on", "paid_amount", "balance"],
+			            [7114110123400, "01-10-2026", 190, 5355, 45, 0, 0, 5400, "", 0, 5400]],
+		}
+
+	def test_lescos_own_workbook_loads(self):
+		self.profile.update({"keep_old_reference": 1, "old_number_digits": 14, "missing_house": "Use the old account number", "default_block": "MTE",
+		                     "house_pattern": r"(?P<house>\d+)-(?P<block>[A-Z][A-Z0-9]*)", "columns": []})
+		self.profile.save()
+		b = self.batch(self.lesco_book())
+		self.assertTrue(migration.load(b), [p.problem for p in b.problems if p.severity == "Error"])
+		c1, c2 = frappe.get_doc("Connection", "07114110123400"), frappe.get_doc("Connection", "07114110123401")  # the lost leading 0 restored
+		self.assertEqual((c1.reference_no, c1.legacy_collection_no), ("07114110123400", "99001"))
+		self.assertEqual(frappe.db.get_value("Consumer", c1.consumer, ["legacy_customer_id", "tax_no", "tax_status"]), ("4101234567", "1234567-8", "Filer"))
+		self.assertEqual(frappe.db.get_value("Consumer", c2.consumer, "tax_status"), "Non-filer")  # no NTN and the filer column blank
+		self.assertEqual(frappe.db.get_value("Property", c1.property, ["property_no", "block"]), ("C-59", "C"))  # found in the address
+		self.assertEqual(frappe.db.get_value("Property", c2.property, "property_no"), "MTE-07114110123401")  # none in the address
+		self.assertEqual(c1.meters[0].start_reading, 8452)
+		self.assertEqual(frappe.db.count("Legacy Bill", {"migration_batch": b.name}), 1)
+		imp = frappe.get_doc("Opening Balance Import", b.opening_import)
+		rows = {r.reference_no: r for r in imp.rows}
+		self.assertEqual((rows["07114110123400"].arrears, rows["07114110123401"].credit, rows["07114110123401"].solar_credit_units), (45, 200, 12))
+		self.assertEqual(b.receivable_total, 5200)  # 5,355 + 45 − 200: the deferred 1,000 is left out
+		warnings = [p.problem for p in b.problems if p.severity == "Warning"]
+		self.assertTrue(any("Deferred Rs 1,000 (set aside by court order) isn't loaded" in w for w in warnings), warnings)
+		self.assertTrue(any("Deferred amounts (court orders) total Rs 1,000" in w for w in warnings), warnings)
+
+	def test_a_total_receivable_that_doesnt_add_up_is_refused(self):
+		book = self.lesco_book()
+		book["Balances"][1][-1] = 5400  # leaves out the deferred 1,000
+		b = self.batch(book)
+		migration.check(b)
+		self.assertIn("Total receivable 5,400.00 isn't current bill + arrears + surcharge + fees + deferred − credit = 6,400.00.",
+		              [p.problem for p in b.problems if p.severity == "Error"])
 
 	def test_old_system_payments_are_recorded_once(self):
 		prm = self.parallel()

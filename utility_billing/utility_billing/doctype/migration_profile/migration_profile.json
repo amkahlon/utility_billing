@@ -12,6 +12,7 @@
   "default_utility",
   "default_category",
   "keep_old_reference",
+  "old_number_digits",
   "house_section",
   "house_pattern",
   "missing_house",
@@ -79,6 +80,12 @@
    "description": "Migrated accounts keep the number their consumers and banks already know (for example a 14-digit DISCO reference number) as their permanent reference number. New accounts opened later get our own 10-digit numbers. The number must be 4 to 20 letters, digits or hyphens and not yet used on this site."
   },
   {
+   "fieldname": "old_number_digits",
+   "fieldtype": "Int",
+   "label": "Old Account Number Digits",
+   "description": "For numbers kept in a number column, which drops leading zeros: shorter old account numbers get zeros in front up to this length (14 for LESCO, so 7114110123400 becomes 07114110123400). Empty: numbers are used as they are."
+  },
+  {
    "fieldname": "house_section",
    "fieldtype": "Section Break",
    "label": "House Numbers",
@@ -88,7 +95,7 @@
    "fieldname": "house_pattern",
    "fieldtype": "Data",
    "label": "House Number Pattern",
-   "description": "Examples: (?P&lt;house&gt;\\d+)-?(?P&lt;block&gt;[A-Z][A-Z0-9]*) for 59-C or 987-M3; (?P&lt;block&gt;[A-Z]+)\\s*(?P&lt;house&gt;\\d+) for N 2308; (?P&lt;house&gt;\\d+)\\s+(?P&lt;block&gt;.+) for 2413 Tulip Overseas Block. Empty: the house column is used as it is.",
+   "description": "Examples: (?P&lt;house&gt;\\d+)-?(?P&lt;block&gt;[A-Z][A-Z0-9]*) for 59-C or 987-M3; (?P&lt;block&gt;[A-Z]+)\\s*(?P&lt;house&gt;\\d+) for N 2308; (?P&lt;house&gt;\\d+)\\s+(?P&lt;block&gt;.+) for 2413 Tulip Overseas Block. Empty: the house column is used as it is. With no house column (LESCO), the pattern is looked for inside the address: (?P&lt;house&gt;\\d+)-(?P&lt;block&gt;[A-Z][A-Z0-9]*) finds 59-C in \"59-C, Model Town Extension\".",
    "ignore_xss_filter": 1
   },
   {
@@ -139,7 +146,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-11-20 20:00:00.000000",
+ "modified": "2026-11-20 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Migration Profile",

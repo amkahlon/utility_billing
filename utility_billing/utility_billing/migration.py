@@ -30,7 +30,7 @@ TARGETS = {
 	                "transformer_meter_no"],
 	"Readings": ["old_account_no", "meter_no", "last_reading", "last_export_reading", "reading_date"],
 	"Balances": ["old_account_no", "current_bill", "arrears", "surcharge", "fees", "credit", "security_deposit", "plan_remaining", "plan_installments",
-	             "solar_credit_units"],
+	             "solar_credit_units", "deferred", "total_receivable"],
 	"History": ["old_account_no", "month", "units", "current_amount", "arrears", "adjustment", "surcharge", "bill_amount", "paid_on", "paid_amount",
 	            "balance"],
 	# feeders and transformers, a sheet each (increment 32, the user's request); a Network sheet with a kind column is still read
@@ -47,7 +47,12 @@ PLOT_UNITS = ("Marla", "Kanal", "Sq Ft", "Sq Yd", "Sq M")
 REQUIRED_SHEETS = ("Connections",)
 NUMBERS = {"sanctioned_load_kw", "multiplier", "digits", "plot_area", "last_reading", "last_export_reading", "current_bill", "arrears", "surcharge",
            "fees", "credit", "security_deposit", "plan_remaining", "plan_installments", "solar_credit_units", "units", "current_amount", "adjustment",
-           "bill_amount", "paid_amount", "balance", "kva", "payable", "amount"}
+           "bill_amount", "paid_amount", "balance", "kva", "payable", "amount", "deferred", "total_receivable"}
+# other names a previous system's export uses for our columns, accepted without a column map (LESCO's, increment 34)
+ALIASES = {"ref no": "old_account_no", "reference no": "old_account_no", "customer id": "old_customer_id", "old ref no": "old_collection_no",
+           "last import reading": "last_reading", "credit balance": "credit", "remaining instalments amount": "plan_remaining",
+           "remaining installments amount": "plan_remaining", "installments (nos)": "plan_installments", "instalments (nos)": "plan_installments",
+           "solar credit units (balance)": "solar_credit_units", "total receivable": "total_receivable"}
 DATES = {"connection_date", "reading_date", "month", "paid_on"}
 MAPPED = ("utility", "category", "status", "phase", "meter_type", "property_type", "plot_unit", "filer")
 
@@ -78,7 +83,7 @@ def profile_of(name) -> frappe._dict:
 	"""The profile as lookups; with no profile, our own column names and day-first dates."""
 	if not name:
 		return frappe._dict(name=None, society=None, columns={}, valuemap={}, pattern=None, dayfirst=True, yearfirst=False, utility=None, category=None,
-		                    house_default=False, default_block=None, keep_reference=False, plot_unit=None)
+		                    house_default=False, default_block=None, keep_reference=False, plot_unit=None, digits=0)
 	p = frappe.get_doc("Migration Profile", name)
 	cols = defaultdict(dict)
 	for c in p.columns:
@@ -91,7 +96,8 @@ def profile_of(name) -> frappe._dict:
 	                    dayfirst=fmt.startswith("Day"), yearfirst=fmt.startswith("Year"), utility=p.default_utility, category=p.default_category,
 	                    # increment 31: what the previous system doesn't have is filled in, and its numbers can stay
 	                    house_default=(p.get("missing_house") or "").startswith("Use"), default_block=(p.get("default_block") or "").strip() or None,
-	                    keep_reference=bool(cint(p.get("keep_old_reference"))), plot_unit=p.get("default_plot_unit") or None)
+	                    keep_reference=bool(cint(p.get("keep_old_reference"))), plot_unit=p.get("default_plot_unit") or None,
+	                    digits=cint(p.get("old_number_digits")))
 
 
 def mapped(prof, target, v):
@@ -121,6 +127,14 @@ def split_house(row, prof):
 	"""House, block and sector from the source's house column, by the profile's pattern."""
 	house = str(row.get("house") or "").strip()
 	block, sector = str(row.get("block") or "").strip(), str(row.get("sector") or "").strip()
+	if prof.pattern and not house and row.get("address"):
+		# no house column (LESCO, increment 34): the house number is looked for inside the address, e.g. 59-C in "59-C, Model Town"
+		m = re.search(prof.pattern, str(row.address), re.I)
+		if not m:
+			return "", block, sector
+		parts = m.groupdict()
+		return ((parts.get("house") or "").strip(), block or (parts.get("block") or "").strip(),
+		        sector or (parts.get("sector") or "").strip())
 	if prof.pattern and house:
 		m = re.fullmatch(prof.pattern, house, re.I)
 		if not m:
@@ -168,7 +182,8 @@ def normalise(sheet, table, prof, problems):
 	header = []
 	for h in table[0]:
 		k = _key(h)
-		header.append(prof.columns.get(sheet, {}).get(k) or ours.get(k))
+		alias = ALIASES.get(k)
+		header.append(prof.columns.get(sheet, {}).get(k) or ours.get(k) or (alias if alias in TARGETS[sheet] else None))
 	unknown = [str(h) for h, t in zip(table[0], header) if h not in (None, "") and not t]
 	if unknown:
 		problems.append(dict(sheet=sheet, row_no=1, severity="Warning", problem=_("Columns not used: {0}.").format(", ".join(unknown))))
@@ -194,6 +209,8 @@ def normalise(sheet, table, prof, problems):
 			if t in ("old_account_no", "meter_no", "old_customer_id", "old_collection_no", "code", "reference", "feeder", "transformer",
 			         "transformer_meter_no") and v not in (None, ""):
 				v = str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)  # Excel may hand back 7402006006.0
+				if t == "old_account_no" and prof.get("digits") and v.isdigit() and len(v) < prof.digits:
+					v = v.zfill(prof.digits)  # a number column drops the leading 0 of LESCO's 14-digit reference numbers
 			r[t] = v
 		rows.append(r)
 	return rows
@@ -334,15 +351,15 @@ def analyse(batch) -> frappe._dict:
 			r.plot_unit = prof.get("plot_unit")
 			if not r.plot_unit:
 				err("Connections", r, _("Plot size {0} has no unit: set a Default Plot Unit in the profile.").format(r.plot_area), severity="Warning")
-		r.filer = mapped(prof, "filer", r.filer) or None
+		# the NTN decides when the filer column is blank (user, 2026-11-20: "NTN is sufficient"): with one a filer, without one a non-filer
+		r.filer = mapped(prof, "filer", r.filer) or ("Filer" if str(r.ntn or "").strip() else "Non-filer")
 		if r.filer and r.filer not in ("Filer", "Non-filer"):
 			err("Connections", r, _("Filer status {0}: use Filer or Non-filer.").format(r.filer), severity="Warning")
 			r.filer = None
-		if prof.get("house_default") and not str(r.house or "").strip():
-			# the previous system has no house number: a property of its own, numbered by the old account number (increment 31)
+		parts = split_house(r, prof)
+		if prof.get("house_default") and not str(r.house or "").strip() and not (parts and parts[0]):
+			# no house number, and none found in the address: a property of its own, numbered by the old account number (increment 31)
 			parts = (ref, str(r.block or "").strip(), str(r.sector or "").strip())
-		else:
-			parts = split_house(r, prof)
 		if parts and not parts[1] and prof.get("default_block"):
 			parts = (parts[0], prof.default_block, parts[2])
 		if not parts or not parts[0]:
@@ -435,6 +452,15 @@ def analyse(batch) -> frappe._dict:
 			err("Balances", r, _("An account either owes or is in credit, not both."), account=ref)
 		if ref in balances:
 			err("Balances", r, _("Two balance rows for the same account."), account=ref)
+		# the previous system's own total, when given, must be what the parts add up to (increment 34)
+		total = round(owes + flt(r.deferred) - flt(r.credit), 2)
+		if r.total_receivable not in (None, "") and abs(flt(r.total_receivable) - total) > 1:
+			err("Balances", r, _("Total receivable {0} isn't current bill + arrears + surcharge + fees + deferred − credit = {1}.").format(
+				frappe.utils.fmt_money(r.total_receivable, 2), frappe.utils.fmt_money(total, 2)), account=ref)
+		if flt(r.deferred) > 0:
+			# set aside by a court order (user, 2026-11-20): owed, but not to be billed or recovered; the app can't hold it yet
+			err("Balances", r, _("Deferred Rs {0} (set aside by court order) isn't loaded: it isn't billed or recovered, and the batch's receivable leaves it out.").format(
+				frappe.utils.fmt_money(r.deferred, 0)), account=ref, severity="Warning")
 		balances[ref] = r
 	# history
 	history, seen = [], set()
@@ -454,6 +480,11 @@ def analyse(batch) -> frappe._dict:
 		seen.add((ref, r.month))
 		history.append(r)
 	receivable = sum(flt(b.current_bill) + flt(b.arrears) + flt(b.surcharge) + flt(b.fees) - flt(b.credit) for b in balances.values())
+	deferred = sum(flt(b.deferred) for b in balances.values())
+	if deferred > 0:
+		problems.append(dict(sheet="Balances", row_no=0, account="", severity="Warning", problem=_(
+			"Deferred amounts (court orders) total Rs {0} and aren't loaded: compare the control figure with the receivable plus this amount.").format(
+			frappe.utils.fmt_money(deferred, 0))))
 	return frappe._dict(prof=prof, problems=problems, network=network, accounts=accounts, balances=balances, history=history,
 	                    receivable=round(receivable, 2))
 
@@ -726,15 +757,14 @@ def template_workbook() -> bytes:
 		                "2413 Tulip Overseas Block", "2413", "Tulip Overseas", "", 5, "Marla", "House", "Electricity", "Residential", 5, "Single",
 		                "2025-04-01", "Active", "173753", "", "Single Phase", 1, 5, "", "", "", ""],
 		"Readings": ["7402006006", "173753", 1677, "", "2026-10-25"],
-		"Balances": ["7402006006", 5355, 0, 0, 0, 0, 0, 0, 0, 0],
+		"Balances": ["7402006006", 5355, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5355],
 		"History": ["7402006006", "2026-09-01", 63, 3130, 0, 0, 0, 3130, "2026-10-10", 2570, 560],
 		"Feeders": ["F1", "Feeder 1"],
 		"Transformers": ["F1-T1", "F1", 200, "Tulip Overseas Block", "TM-1001", 40, 52310],
-		"Old Bills": ["7402006006", 70, 3400, 560, 0, 3960, 3960],
 		"Payments": ["7402006006", "2026-11-12", 3960, "TXN-001", "Bank Transfer"],
 	}
 	for sheet, cols in TARGETS.items():
-		if sheet not in examples:  # Network: the older layout, read but no longer offered
+		if sheet not in examples:  # Network and Old Bills: still read, no longer offered (the History sheet has the old bills)
 			continue
 		ws = wb.create_sheet(sheet)
 		ws.append(cols)
@@ -811,11 +841,23 @@ def load_payments(doc) -> dict:
 	return {"recorded": doc.payments_recorded, "skipped": doc.payments_skipped}
 
 
+def _old_bills_from_history(doc):
+	"""Without an Old Bills sheet (LESCO's workbook, increment 34): the History sheet's rows of the month are the old system's bills."""
+	_prof, data = _parallel_sheets(doc, ("History",))
+	month = getdate(doc.billing_month).replace(day=1)
+	return [frappe._dict(old_account_no=r.old_account_no, units=r.units, current_bill=r.current_amount, arrears=r.arrears, surcharge=r.surcharge,
+	                     payable=r.bill_amount, balance=r.balance)
+	        for r in data["History"] if r.month and getdate(r.month).replace(day=1) == month]
+
+
 def compare(doc) -> dict:
 	"""Account by account: their bill of the month against ours, with what explains each difference, and the closing balances."""
 	if not doc.bill_run:
 		frappe.throw(_("Choose this month's bill run first."))
-	_prof, data = _parallel_sheets(doc, ("Old Bills",))
+	if "Old Bills" not in read_workbook(doc.workbook or ""):
+		data = {"Old Bills": _old_bills_from_history(doc)}
+	else:
+		_prof, data = _parallel_sheets(doc, ("Old Bills",))
 	tol = flt(doc.tolerance) if doc.tolerance not in (None, "") else 1
 	month_end = frappe.utils.get_last_day(doc.billing_month)
 	ours = {b.connection: b for b in frappe.get_all("Utility Bill", filters={"bill_run": doc.bill_run, "docstatus": ["<", 2]},
