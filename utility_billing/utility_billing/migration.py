@@ -457,10 +457,9 @@ def analyse(batch) -> frappe._dict:
 		if r.total_receivable not in (None, "") and abs(flt(r.total_receivable) - total) > 1:
 			err("Balances", r, _("Total receivable {0} isn't current bill + arrears + surcharge + fees + deferred − credit = {1}.").format(
 				frappe.utils.fmt_money(r.total_receivable, 2), frappe.utils.fmt_money(total, 2)), account=ref)
-		if flt(r.deferred) > 0:
-			# set aside by a court order (user, 2026-11-20): owed, but not to be billed or recovered; the app can't hold it yet
-			err("Balances", r, _("Deferred Rs {0} (set aside by court order) isn't loaded: it isn't billed or recovered, and the batch's receivable leaves it out.").format(
-				frappe.utils.fmt_money(r.deferred, 0)), account=ref, severity="Warning")
+		if flt(r.deferred) < 0:
+			err("Balances", r, _("Deferred can't be negative."), account=ref)
+		# deferred = set aside by a court order (user, 2026-11-20): loaded as a Held Amount at go-live (increment 35)
 		balances[ref] = r
 	# history
 	history, seen = [], set()
@@ -479,12 +478,8 @@ def analyse(batch) -> frappe._dict:
 			err("History", r, _("{0} is in the history twice.").format(r.month.strftime("%b %Y")), account=ref)
 		seen.add((ref, r.month))
 		history.append(r)
-	receivable = sum(flt(b.current_bill) + flt(b.arrears) + flt(b.surcharge) + flt(b.fees) - flt(b.credit) for b in balances.values())
-	deferred = sum(flt(b.deferred) for b in balances.values())
-	if deferred > 0:
-		problems.append(dict(sheet="Balances", row_no=0, account="", severity="Warning", problem=_(
-			"Deferred amounts (court orders) total Rs {0} and aren't loaded: compare the control figure with the receivable plus this amount.").format(
-			frappe.utils.fmt_money(deferred, 0))))
+	# the receivable includes what is held by court order, as the previous system's total does (increment 35)
+	receivable = sum(flt(b.current_bill) + flt(b.arrears) + flt(b.surcharge) + flt(b.fees) + flt(b.deferred) - flt(b.credit) for b in balances.values())
 	return frappe._dict(prof=prof, problems=problems, network=network, accounts=accounts, balances=balances, history=history,
 	                    receivable=round(receivable, 2))
 
@@ -502,7 +497,7 @@ def _store_results(batch, a):
 		k = (r.block or "", r.category or "")
 		by[k]["accounts"] += 1
 		if b:
-			by[k]["receivable"] += flt(b.current_bill) + flt(b.arrears) + flt(b.surcharge) + flt(b.fees) - flt(b.credit)
+			by[k]["receivable"] += flt(b.current_bill) + flt(b.arrears) + flt(b.surcharge) + flt(b.fees) + flt(b.deferred) - flt(b.credit)
 	batch.reconciliation = json.dumps([{"block": k[0], "category": k[1], **v} for k, v in sorted(by.items())])
 
 
@@ -664,7 +659,8 @@ def load(batch, commit=False) -> bool:
 				_progress(batch, _("Opening balances"))
 			rows = [{"reference_no": made[ref], "current_bill": flt(b.current_bill), "arrears": flt(b.arrears), "surcharge": flt(b.surcharge),
 			         "fees": flt(b.fees), "credit": flt(b.credit), "security_deposit": flt(b.security_deposit), "plan_remaining": flt(b.plan_remaining),
-			         "plan_installments": cint(b.plan_installments), "solar_credit_units": flt(b.solar_credit_units)} for ref, b in a.balances.items()]
+			         "plan_installments": cint(b.plan_installments), "solar_credit_units": flt(b.solar_credit_units),
+			         "held_amount": flt(b.deferred)} for ref, b in a.balances.items()]
 			imp = frappe.get_doc({"doctype": "Opening Balance Import", "society": batch.society, "as_of_date": batch.as_of_date, "rows": rows}).insert(ignore_permissions=True)
 			batch.opening_import = imp.name
 	finally:

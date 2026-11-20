@@ -34,6 +34,7 @@ def settings(society):
 		receivables=s.receivables_account, surcharge=s.surcharge_income_account, other=s.other_income_account,
 		adjustments=s.adjustments_account, write_off=s.write_off_account, payments={r.mode: r.account for r in s.payment_accounts},
 		deposits=s.get("deposit_liability_account"), opening=s.get("opening_balance_account"),
+		held=s.get("held_receivables_account"),  # amounts held by court order (increment 35)
 	)
 
 
@@ -115,6 +116,9 @@ def lines_for(entry_name):
 		mode = frappe.db.get_value("Refund", e.voucher_no, "refund_mode")
 		paid_from = need(soc.payments.get(mode), _("{0} payments (Society {1} → Accounting)").format(_(mode), e.society))
 		return [(rec, amount, 0), (paid_from, 0, amount)]  # receivables debited (credit used up), cash or bank credited
+	if e.entry_type == "Hold released":  # an amount held by court order comes back into the receivables (increment 35)
+		held = need(soc.held, _("amounts held by court order (Society {0} → Held Receivables Account)").format(e.society))
+		return [(rec, amount, 0), (held, 0, amount)]
 	if e.entry_type in ("Credit Note", "Debit Note"):
 		adj = need(soc.adjustments, _("credit and debit notes (Society {0} → Bill Adjustments and Waivers)").format(e.society))
 		return [(rec, amount, 0), (adj, 0, amount)] if amount >= 0 else [(adj, -amount, 0), (rec, 0, -amount)]

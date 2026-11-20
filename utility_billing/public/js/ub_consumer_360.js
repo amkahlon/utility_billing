@@ -233,6 +233,7 @@ window.UtilityBillingConsumer360 = class UtilityBillingConsumer360 {
 				[__("Security deposit held"), this.n(p.deposit), "num"],
 				[__("Last payment"), lp ? `${this.n(lp.amount)} · ${this.esc(moment(lp.payment_date).format("D MMM"))} · ${this.esc(lp.mode || "")}` : "—", "num"],
 				p.former ? [__("Owed by former occupants"), this.n(p.former), "num"] : null,
+				p.court_held ? [__("Held by court order (not billed)"), this.n(p.court_held), "num"] : null,
 			])}</section>`;
 		const b = o.bill;
 		const billCard = b

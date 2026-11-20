@@ -112,6 +112,10 @@ def overview(conn_name) -> dict:
 	                        ("Installment Plan", _("Installment plan"), {"plan_status": "Active", "docstatus": 1})):
 		for n in frappe.get_all(dt, filters={"connection": conn_name, **cond}, pluck="name", limit=3):
 			alerts.append({"tone": "blue", "text": f"{label} {n}", "go": [dt, n]})
+	court_held = frappe.get_all("Held Amount", filters={"connection": conn_name, "status": "Held"}, fields=["name", "amount", "court_order"])
+	for h in court_held:  # owed, but set aside by a court order: not on the bills (increment 35)
+		alerts.append({"tone": "amber", "go": ["Held Amount", h.name],
+		               "text": _("Rs {0} held by court order{1}: not billed").format(f"{flt(h.amount):,.0f}", f" ({h.court_order})" if h.court_order else "")})
 	case = frappe.db.get_value("Recovery Case", {"connection": conn_name, "status": ["!=", "Closed"]}, ["name", "last_stage", "assigned_to"], as_dict=True)
 	if case:
 		alerts.append({"tone": "red", "text": _("Recovery: {0}").format(case.last_stage or _("case open")) + (f" · {case.assigned_to}" if case.assigned_to else ""),
@@ -150,6 +154,7 @@ def overview(conn_name) -> dict:
 		"payable": {"amount_due": flt(enq["amount_due"]), "within_due": flt(enq["payable_within_due"]), "after_due": flt(enq["payable_after_due"]),
 		            "due_date": enq.get("due_date"), "current": flt(bill.current_amount) if bill else 0, "arrears": flt(bill.arrears) if bill else 0,
 		            "balance": flt(enq["balance"]), "former": flt(enq.get("former_balance")), "deposit": held,
+		            "court_held": round(sum(flt(h.amount) for h in court_held), 2),
 		            "last_payment": last_pay, "bill_month": getdate(bill.billing_month).strftime("%B %Y") if bill else None},
 		"bill": {"name": bill.name, "month": getdate(bill.billing_month).strftime("%B %Y"), "units": flt(bill.units), "consumption_type": bill.consumption_type,
 		         "previous": flt(reading.previous_reading) if reading else None, "present": flt(reading.present_reading) if reading else None,
@@ -211,11 +216,12 @@ def view(consumer: str, account: str | None = None):
 	occupancy = frappe.get_all("Property Occupancy", filters={"consumer": consumer, "parenttype": "Property"},
 	                           fields=["parent", "occupant_role", "from_date", "to_date", "share_percent", "is_billed"], order_by="from_date desc")
 	open_items = []
-	for dt, label in (("Bill Dispute", "Dispute"), ("Recovery Case", "Recovery case"), ("Installment Plan", "Installment plan")):
+	for dt, label in (("Bill Dispute", "Dispute"), ("Recovery Case", "Recovery case"), ("Installment Plan", "Installment plan"),
+	                  ("Held Amount", "Held by court order")):
 		meta = frappe.get_meta(dt)
 		filters = {"connection": ["in", names]}
 		if meta.has_field("status"):
-			filters["status"] = ["not in", ["Closed", "Resolved", "Decided", "Cancelled"]]
+			filters["status"] = ["not in", ["Closed", "Resolved", "Decided", "Cancelled", "Released", "Written off"]]
 		if meta.has_field("plan_status"):
 			filters["plan_status"] = "Active"
 		for n in frappe.get_all(dt, filters=filters, pluck="name", limit=10):

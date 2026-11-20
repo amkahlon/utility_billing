@@ -2518,13 +2518,13 @@ def t_migration_lesco_layout(d: Desk):
 	n1, n2 = int(f"71{RUN}0000001"), int(f"71{RUN}0000002")  # 13 digits: a number column dropped the leading 0
 	r1, r2 = f"0{n1}", f"0{n2}"
 	book = {"Connections": [["Ref_no", "Customer_id", "old_ref_no", "consumer_name", "ntn", "address", "house", "block", "plot_area", "meter_no"],
-	                        [n1, int(f"41{RUN}0001"), "", "QA Lesco One", "1234567-8", f"{RUN}-C, Model Town Extension, Lahore", "", "", 5, f"QL{RUN}-1"],
+	                        [n1, int(f"41{RUN}0001"), "", "QA Lesco One", f"{RUN}567-8", f"{RUN}-C, Model Town Extension, Lahore", "", "", 5, f"QL{RUN}-1"],
 	                        [n2, int(f"41{RUN}0002"), "", "QA Lesco Two", "", "Model Town Extension, Lahore", "", "", "", f"QL{RUN}-2"]],
 	        "Readings": [["Ref_no", "meter_no", "last_import_reading", "last_export_reading", "reading_date"],
 	                     [n1, "", 8452, "", "25/10/2026"], [n2, "", 100, "", "25/10/2026"]],
 	        "Balances": [["Ref_no", "current_bill", "arrears", "surcharge", "Deferred", "credit_balance", "security_deposit",
 	                      "Remaining_instalments_amount", "installments (nos)", "solar_credit_units (balance)", "Total Receivable"],
-	                     [n1, 5355, 45, 0, 1000, 0, 3000, 0, 0, 0, 6400], [n2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+	                     [n1, 5355, 45, 0, 1000, 0, 3000, 0, 0, 0, 6400], [n2, 0, 0, 0, 0, 150, 0, 0, 0, 0, -150]],  # n2 in credit
 	        "History": [["Ref_no", "month", "units", "current_amount", "arrears", "adjustment", "surcharge", "bill_amount", "paid_on", "paid_amount",
 	                     "balance"], [n1, "01/10/2026", 190, 5355, 45, 0, 0, 5400, "", 0, 5400]]}
 	b = ao.save_doc({"doctype": "Migration Batch", "naming_series": "MIG-.YYYY.-.####", "society": s, "profile": p["name"], "as_of_date": "2026-10-31"})
@@ -2537,8 +2537,48 @@ def t_migration_lesco_layout(d: Desk):
 	   "the house found in the address; none found: the old number and the default block")
 	eq([d.get("Consumer", c["consumer"])["tax_status"] for c in (c1, c2)], ["Filer", "Non-filer"], "the NTN decides the filer status")
 	batch = d.get("Migration Batch", b["name"])
-	eq(batch["receivable_total"], 5400, "the receivable leaves out the deferred 1,000 (court order)")
-	eq(any("set aside by court order" in x["problem"] for x in batch["problems"]), True, "the deferred amount is reported")
+	eq(batch["receivable_total"], 6250, "the receivable includes the deferred 1,000, as LESCO's total does (increment 35)")
+	imp = d.get("Opening Balance Import", batch["opening_import"])
+	eq((float(imp["total_receivable"]), float(imp["total_held"]), imp["error_count"]), (5250.0, 1000.0, 0),
+	   "the deferred amount goes to the opening balances as held")
+	S["lesco"] = {"import": imp["name"], "refs": (r1, r2)}
+
+
+@case("QA-99", "Increment 35: an amount held by court order: posted at go-live, kept off the bill, released or written off")
+def t_held_amounts(d: Desk):
+	ao, gm, bm, bo = USERS["ao"], USERS["gm"], USERS["bm"], USERS["bo"]
+	s, lesco = S["mig_soc"], S["lesco"]
+	for code, name, kind in (("1201", "Receivables (migrated)", "Receivable"), ("1250", "Held receivables (court orders)", "Receivable"),
+	                         ("3900", "Opening balance equity", "Equity"), ("6100", "Bad debts", "Expense"),
+	                         ("2201", "Security deposits held (migrated)", "Liability")):  # LESCO's sample account has a deposit
+		ao.save_doc({"doctype": "Ledger Account", "account_code": acct(code), "account_name": name, "account_type": kind})
+	d.save_doc(dict(d.get("Society", s), receivables_account=acct("1201"), opening_balance_account=acct("3900"),
+	                held_receivables_account=acct("1250"), write_off_account=acct("6100"), deposit_liability_account=acct("2201")))
+	imp = ao.workflow(d.get("Opening Balance Import", lesco["import"]), "Submit for Approval")
+	imp = gm.workflow(imp, "Approve")
+	eq((imp["docstatus"], bool(imp["held_journal"])), (1, True), "the opening balances are posted, with a journal for the held amount")
+	j = d.get("GL Journal", imp["held_journal"])
+	eq(sorted((x["account"], float(x["debit"]), float(x["credit"])) for x in j["lines"]),
+	   sorted([(acct("1250"), 1000.0, 0.0), (acct("3900"), 0.0, 1000.0)]), "held receivables against the opening balances")
+	r1 = lesco["refs"][0]
+	h = d.call("frappe.client.get_value", doctype="Held Amount", filters={"connection": r1}, fieldname=["name", "status", "amount"])
+	eq((h["status"], float(h["amount"])), ("Held", 1000.0), "a held amount for the account")
+	enq = USERS["cashier"].call("utility_billing.utility_billing.account.enquiry", reference_no=r1)
+	eq(float(enq["balance"]), 5400.0, "what the account owes leaves the held 1,000 out")
+	def decide(user, method, remarks):  # as the form's Release and Write Off buttons call it
+		return user.s.post(f"{URL}/api/method/run_doc_method", data={"dt": "Held Amount", "dn": h["name"], "method": method,
+		                                                            "args": json.dumps({"remarks": remarks})})
+
+	eq(decide(bo, "release", "Court dismissed the petition").status_code in (403, 417), True, "a Billing Officer can't release it")
+	eq(decide(bm, "write_off", "Court quashed the demand").status_code in (403, 417), True, "a Billing Manager can't write it off")
+	r = decide(bm, "release", "Court dismissed the petition")
+	eq(r.status_code, 200, f"the Billing Manager releases it ({r.text[:120]})")
+	h2 = d.get("Held Amount", h["name"])
+	e = d.get("Customer Ledger Entry", h2["ledger_entry"])
+	eq((h2["status"], e["entry_type"], float(e["amount"]), float(e["arrears_balance"])), ("Released", "Hold released", 1000.0, 1045.0),
+	   "released: the amount is in the arrears now")
+	eq(float(USERS["cashier"].call("utility_billing.utility_billing.account.enquiry", reference_no=r1)["balance"]), 6400.0, "and is owed")
+	eq(decide(bm, "release", "again please").status_code in (403, 417), True, "decided once only")
 
 
 def _notice_pdf(desk, run):
