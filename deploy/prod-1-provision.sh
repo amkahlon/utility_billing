@@ -17,9 +17,11 @@ echo "== packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 # pkg-config and libmariadb-dev: Frappe's database driver (mysqlclient) is compiled during bench init and stops without them
-# (third rehearsal run, 2026-11-19); libcups2 and the x fonts: as on the CI machine, for Chromium and wkhtmltopdf
+# (third rehearsal run, 2026-11-19); libcups2 and the x fonts: as on the CI machine, for Chromium and wkhtmltopdf.
+# ansible-core and fail2ban: "bench setup production" looks for both and, when missing, tries "pip install ansible" with bench's own
+# Python, which uv leaves without pip (sixth rehearsal run, 2026-11-20). prod-7 configures fail2ban later.
 apt-get install -yq git curl ca-certificates build-essential pkg-config python3-dev python3-venv python3-pip pipx \
-	mariadb-server mariadb-client libmariadb-dev redis-server libcups2 xfonts-75dpi xfonts-base \
+	mariadb-server mariadb-client libmariadb-dev redis-server libcups2 xfonts-75dpi xfonts-base ansible-core fail2ban \
 	nginx supervisor xvfb libfontconfig1 fontconfig fonts-noto-core cron gnupg logrotate unattended-upgrades jq \
 	libnss3 libnspr4 libasound2t64  # headless Chromium makes every PDF (bills, receipts, reports) and can't start without them
 # wkhtmltopdf with patched Qt: only the fallback if Chromium can't start (the Chromium move, 2026-11-18)
