@@ -82,6 +82,9 @@ if ! $B node --version 2>/dev/null | grep -q '^v24'; then
 fi
 $B bash -c "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh"
 $B bash -c 'uv python install 3.14 && (uv tool install --python "$(uv python find 3.14)" frappe-bench || uv tool upgrade frappe-bench)'
+# bench on every path: root's (bench setup production writes the full path of bench into supervisor's worker entries and wrote
+# "None" when root couldn't find it) and the frappe user's login shell (prod-2, prod-7, maintenance by hand). Ninth run, 2026-11-20.
+ln -sfn /home/$FUSER/.local/bin/bench /usr/local/bin/bench
 # a bench init that stopped halfway leaves the folder behind without a working Frappe; set it aside so a second run starts afresh
 # instead of skipping the step as done
 if [ -d "$BENCH" ] && ! $B bash -c "$BENCH/env/bin/python -c 'import frappe'" >/dev/null 2>&1; then
@@ -113,14 +116,23 @@ $B bash -c "cd $BENCH && bench --site $DOMAIN execute utility_billing.pdf.chrome
 
 echo "== production processes (supervisor + Nginx)"
 $B bash -c "cd $BENCH && bench build --app utility_billing"
-cd "$BENCH" && /home/$FUSER/.local/bin/bench setup production "$FUSER" --yes
+# bench init ran with --skip-redis-config-generation (the dev laptop uses the system Redis); production runs bench's own Redis
+# processes under supervisor, which exit at once without these files (ninth run, 2026-11-20)
+$B bash -c "cd $BENCH && bench setup redis"
+# a plain PATH, so bench finds node and itself when it writes supervisor's entries
+cd "$BENCH" && env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin bench setup production "$FUSER" --yes
+if grep -n "command=None\|command = None" "$BENCH/config/supervisor.conf"; then
+	echo "bench wrote supervisor entries without a command (it couldn't find node or bench); see above."; exit 1
+fi
 # bench setup production should hand its process list to supervisor; on the eighth rehearsal run (2026-11-20) supervisor ended up
 # with no processes and the site answered 502. Link the list ourselves and don't finish until the processes run.
 [ -f "$BENCH/config/supervisor.conf" ] || $B bash -c "cd $BENCH && bench setup supervisor --yes"
 ln -sfn "$BENCH/config/supervisor.conf" /etc/supervisor/conf.d/frappe-bench.conf
 supervisorctl reread && supervisorctl update
-for _ in $(seq 1 30); do supervisorctl status 2>/dev/null | grep -q "web.*RUNNING" && break; sleep 2; done
-if ! supervisorctl status | grep -q "web.*RUNNING"; then
+# every process must run: web, socket.io, both Redis, the workers and the scheduler (the ninth run had only web running)
+all_running() { local s; s=$(supervisorctl status 2>/dev/null); [ -n "$s" ] && ! grep -qv "RUNNING" <<<"$s"; }
+for _ in $(seq 1 30); do all_running && break; sleep 2; done
+if ! all_running; then
 	echo "The site's processes aren't running under supervisor:"; supervisorctl status || true
 	ls -la /etc/supervisor/conf.d/ "$BENCH/config/"; grep -n "include\|files" /etc/supervisor/supervisord.conf || true
 	exit 1
