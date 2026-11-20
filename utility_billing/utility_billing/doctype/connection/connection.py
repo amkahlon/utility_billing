@@ -35,8 +35,11 @@ class Connection(Document):
 		code = frappe.db.get_value("Utility Type", self.utility, "reference_code")
 		if not code:
 			frappe.throw(_("Set a Reference Code on Utility Type {0} first.").format(self.utility))
-		serial = int(getseries(f"UB-REF-{int(code)}", 8))
-		return make_reference(int(code), serial)
+		while True:
+			ref = make_reference(int(code), int(getseries(f"UB-REF-{int(code)}", 8)))
+			# a migrated account may have kept its old number as its reference number (increment 31): skip a number already taken
+			if not frappe.db.exists("Connection", ref):
+				return ref
 
 	def validate(self):
 		self.validate_reference_unchanged()

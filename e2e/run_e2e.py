@@ -2431,6 +2431,43 @@ def t_parallel_run(d: Desk):
 	eq((res["compared"], prm["missing_here"], prm["comparison_status"]), (1, 1, "Compared"), "not yet billed here: listed as a difference")
 
 
+@case("QA-96", "Increment 31: a DISCO's 14-digit numbers kept as reference numbers, missing house numbers filled in, accounts found by consumer ID")
+def t_migration_keep_numbers(d: Desk):
+	ao, cashier = USERS["ao"], USERS["cashier"]
+	s = S["mig_soc"]
+	p = ao.save_doc({"doctype": "Migration Profile", "profile_name": f"QA DISCO {RUN}", "society": s, "source_system": "LESCO",
+	                 "date_format": "Day first (31-12-2026)", "default_utility": "Electricity", "keep_old_reference": 1,
+	                 "house_pattern": "(?P<house>\\d+)-?(?P<block>[A-Z][A-Z0-9]*)", "missing_house": "Use the old account number",
+	                 "default_block": "Gulberg",
+	                 "columns": [{"sheet": "Connections", "source_column": "Account No", "target": "old_account_no"},
+	                             {"sheet": "Connections", "source_column": "House No", "target": "house"},
+	                             {"sheet": "Connections", "source_column": "Tariff", "target": "category"},
+	                             {"sheet": "Connections", "source_column": "Meter No", "target": "meter_no"}],
+	                 "value_maps": [{"target": "category", "source_value": "RES", "our_value": f"Residential MIG {RUN}"}]})
+	eq((p["keep_old_reference"], p["missing_house"], p["default_block"]), (1, "Use the old account number", "Gulberg"), "the profile keeps its settings")
+	refs = [f"0711{RUN}{n:06d}" for n in (1, 2, 3)]  # 14 digits, as on a LESCO bill
+	book = {"Connections": [["Account No", "consumer_name", "cnic", "House No", "Tariff", "Meter No"],
+	                        [refs[0], "QA Disco One", "35202-1111111-1", "", "RES", f"QD{RUN}-1"],
+	                        [refs[1], "QA Disco One", "35202-1111111-1", "", "RES", f"QD{RUN}-2"],
+	                        [refs[2], "QA Disco Two", "", "12-B", "RES", f"QD{RUN}-3"]],
+	        "Readings": [["old_account_no", "last_reading", "reading_date"], [refs[0], "100", "25/10/2026"], [refs[1], "200", "25/10/2026"],
+	                     [refs[2], "300", "25/10/2026"]]}
+	b = ao.save_doc({"doctype": "Migration Batch", "naming_series": "MIG-.YYYY.-.####", "society": s, "profile": p["name"], "as_of_date": "2026-10-31"})
+	ao.save_doc(dict(ao.get("Migration Batch", b["name"]), workbook=_upload_xlsx(ao, book, "Migration Batch", b["name"])))
+	res = ao.call(f"{MIG}.load", name=b["name"])
+	eq((res["loaded"], res["accounts"]), (True, 3), "loaded, with no house numbers for two accounts")
+	c1, c3 = d.get("Connection", refs[0]), d.get("Connection", refs[2])
+	eq((c1["reference_no"], c1["legacy_account_no"]), (refs[0], refs[0]), "the 14-digit number is the account's reference number")
+	eq([(x["property_no"], x["block"]) for x in (d.get("Property", c1["property"]), d.get("Property", c3["property"]))],
+	   [(f"Gulberg-{refs[0]}", "Gulberg"), ("B-12", "B")], "a missing house number: the old number and the default block; a real one kept")
+	look = "utility_billing.utility_billing.cashdesk.lookup"
+	eq(cashier.call(look, reference=refs[2])["connection"], refs[2], "the 14-digit number at the counter")
+	eq(cashier.call(look, reference=c3["consumer"])["connection"], refs[2], "a consumer with one account, found by consumer ID")
+	pick = cashier.call(look, reference=c1["consumer"])
+	eq(sorted(r["reference"] for r in pick["choose"]), refs[:2], "a consumer with two accounts: the counter offers both")
+	expect_error(lambda: cashier.call("utility_billing.utility_billing.account.enquiry", reference_no=c1["consumer"]), "has 2 accounts")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

@@ -372,7 +372,35 @@ def connection_of(reference_no):
 		return found
 	from utility_billing.utility_billing import legacy  # noqa: PLC0415
 
-	return legacy.connection_of(ref)  # an old account number from the previous system, while still accepted (increment 29)
+	found = legacy.connection_of(ref)  # an old account number from the previous system, while still accepted (increment 29)
+	if found:
+		return found
+	rows = accounts_of_consumer(ref)[1]  # a consumer ID, when the consumer has one open account (increment 31)
+	return rows[0].name if len(rows) == 1 else None
+
+
+def accounts_of_consumer(consumer_id, permitted=False):
+	"""(consumer, open accounts) for a consumer ID: ours, or the previous system's customer ID while its society still accepts old
+	numbers. User's decision, 2026-11-20: payments are found by reference number and consumer ID. `permitted`: only the accounts the
+	current user may read (for a list shown on screen)."""
+	ref = (consumer_id or "").strip()
+	if not ref:
+		return None, []
+	old = False
+	consumer = ref if frappe.db.exists("Consumer", ref) else None
+	if not consumer:
+		names = frappe.get_all("Consumer", filters={"legacy_customer_id": ref}, pluck="name", limit=2)
+		if len(names) != 1:  # unknown, or the same old ID on two consumers
+			return None, []
+		consumer, old = names[0], True
+	rows = (frappe.get_list if permitted else frappe.get_all)(
+		"Connection", filters={"consumer": consumer, "status": ["in", ["Active", "Disconnected"]]},
+		fields=["name", "society", "utility", "property", "status"], order_by="name")
+	if old:
+		from utility_billing.utility_billing import legacy  # noqa: PLC0415
+
+		rows = [r for r in rows if legacy.accepted(r.society)]
+	return consumer, rows
 
 
 @frappe.whitelist()
@@ -386,7 +414,10 @@ def enquiry(reference_no: str):
 		if ba:
 			frappe.get_doc("Billing Account", ba).check_permission("read")
 			return billaccounts.enquiry(ba)
-		frappe.throw(_("No account with reference number {0}.").format(reference_no))
+		consumer, rows = accounts_of_consumer(reference_no)
+		if len(rows) > 1:
+			frappe.throw(_("Consumer {0} has {1} accounts. Use the reference number of the account to pay.").format(consumer, len(rows)))
+		frappe.throw(_("No account with reference number or consumer ID {0}.").format(reference_no))
 	frappe.get_doc("Connection", connection).check_permission("read")
 	return enquiry_of(connection)
 

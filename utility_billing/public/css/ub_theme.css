@@ -312,6 +312,11 @@ body[data-path="login"] .web-footer, body[data-path="login"] footer { color: #94
 .ub-cash-scan { display: flex; gap: 8px; } .ub-cash-scan input { flex: 1; font-size: 16px; padding: 10px 12px; }
 .ub-cash-who { margin: 16px 0 4px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; } .ub-cash-who b { font-size: 18px; }
 .ub-cash-due { font-size: 26px; font-weight: 700; }
+/* a consumer ID with several accounts: the cashier picks one (increment 31) */
+.ub-cash-choose { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+.ub-cash-choose td { padding: 8px 8px; border-top: 1px solid var(--ub-line); vertical-align: middle; }
+.ub-cash-choose td:first-child { padding-left: 0; white-space: nowrap; } .ub-cash-choose td.text-right { white-space: nowrap; }
+.ub-cash-choose td:nth-child(3) { color: var(--ub-muted); }
 .ub-cash-change { padding: 8px 0; font-size: 20px; font-weight: 700; color: var(--ub-green); } .ub-cash-change.red { color: var(--ub-red); }
 .ub-cash-modes { margin: 12px 0 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--ub-muted); }
 .ub-cash-modes .ub-te-method { border: 1px solid var(--ub-line); }

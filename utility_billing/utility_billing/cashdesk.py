@@ -47,6 +47,12 @@ def state():
 	}
 
 
+def billaccounts_account(ref):
+	from utility_billing.utility_billing import billaccounts  # noqa: PLC0415
+
+	return billaccounts.account_of(ref)
+
+
 @frappe.whitelist()
 def lookup(reference: str):
 	"""What the account owes, as the counter shows it (the reference as typed or scanned from the bill's barcode or QR)."""
@@ -54,6 +60,13 @@ def lookup(reference: str):
 	ref = (reference or "").strip()
 	if "/" in ref:  # a QR payment link carries the reference as its last part
 		ref = ref.rstrip("/").split("/")[-1].split("=")[-1]
+	if not account.connection_of(ref) and not billaccounts_account(ref):
+		consumer, rows = account.accounts_of_consumer(ref, permitted=True)
+		if len(rows) > 1:  # a consumer ID with several accounts: the cashier picks one (increment 31)
+			return {"choose": [{"reference": r.name, "utility": r.utility, "status": r.status,
+			                    "property_no": frappe.db.get_value("Property", r.property, "property_no") if r.property else None,
+			                    "amount_due": flt(account.enquiry_of(r.name)["amount_due"])} for r in rows],
+			        "consumer": consumer, "consumer_name": frappe.db.get_value("Consumer", consumer, "consumer_name")}
 	e = account.enquiry(ref)
 	conn = e.get("connection")
 	prop = frappe.db.get_value("Property", frappe.db.get_value("Connection", conn, "property"), ["property_no", "block"], as_dict=True) if conn \

@@ -60,6 +60,9 @@ SAP_ISU = [
 ]
 
 
+KEPT_REFERENCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{3,19}")  # an old account number that can serve as a reference number
+
+
 def _key(v) -> str:
 	return " ".join(str(v or "").strip().lower().replace("_", " ").split())
 
@@ -68,7 +71,8 @@ def _key(v) -> str:
 def profile_of(name) -> frappe._dict:
 	"""The profile as lookups; with no profile, our own column names and day-first dates."""
 	if not name:
-		return frappe._dict(name=None, society=None, columns={}, valuemap={}, pattern=None, dayfirst=True, yearfirst=False, utility=None, category=None)
+		return frappe._dict(name=None, society=None, columns={}, valuemap={}, pattern=None, dayfirst=True, yearfirst=False, utility=None, category=None,
+		                    house_default=False, default_block=None, keep_reference=False)
 	p = frappe.get_doc("Migration Profile", name)
 	cols = defaultdict(dict)
 	for c in p.columns:
@@ -78,7 +82,10 @@ def profile_of(name) -> frappe._dict:
 		values[v.target.strip()][_key(v.source_value)] = v.our_value.strip()
 	fmt = p.date_format or ""
 	return frappe._dict(name=p.name, society=p.society, columns=cols, valuemap=values, pattern=(p.house_pattern or "").strip() or None,
-	                    dayfirst=fmt.startswith("Day"), yearfirst=fmt.startswith("Year"), utility=p.default_utility, category=p.default_category)
+	                    dayfirst=fmt.startswith("Day"), yearfirst=fmt.startswith("Year"), utility=p.default_utility, category=p.default_category,
+	                    # increment 31: what the previous system doesn't have is filled in, and its numbers can stay
+	                    house_default=(p.get("missing_house") or "").startswith("Use"), default_block=(p.get("default_block") or "").strip() or None,
+	                    keep_reference=bool(cint(p.get("keep_old_reference"))))
 
 
 def mapped(prof, target, v):
@@ -233,6 +240,11 @@ def analyse(batch) -> frappe._dict:
 	for k in range(0, len(seen_meters), 1000):
 		existing_meters.update(frappe.get_all("Meter", filters={"name": ["in", list(seen_meters)[k:k + 1000]]}, pluck="name"))
 	existing = set(frappe.get_all("Connection", filters={"society": batch.society, "legacy_account_no": ["is", "set"]}, pluck="legacy_account_no"))
+	taken = set()  # reference numbers already on the site (any society): an old number kept as the reference must not be one of them
+	if prof.get("keep_reference"):
+		numbers = list({str(r.old_account_no).strip() for r in data["Connections"] if r.old_account_no})
+		for k in range(0, len(numbers), 1000):
+			taken.update(frappe.get_all("Connection", filters={"name": ["in", numbers[k:k + 1000]]}, pluck="name"))
 	for r in data["Connections"]:
 		ref = str(r.old_account_no or "").strip()
 		if not ref:
@@ -243,6 +255,12 @@ def analyse(batch) -> frappe._dict:
 			continue
 		if ref in existing:
 			err("Connections", r, _("Old account number {0} is already in the system (migrated before?).").format(ref))
+		if prof.get("keep_reference"):
+			if not KEPT_REFERENCE.fullmatch(ref):
+				err("Connections", r, _("Old account number {0} can't be kept as the reference number: use 4 to 20 letters, digits or hyphens.").format(ref))
+			elif ref in taken:
+				err("Connections", r, _("{0} is already the reference number of an account on this site.").format(ref))
+			r.keep_reference = 1
 		if not r.consumer_name:
 			err("Connections", r, _("The consumer's name is missing."))
 		r.utility = mapped(prof, "utility", r.utility) or prof.utility
@@ -271,7 +289,13 @@ def analyse(batch) -> frappe._dict:
 		if r.filer and r.filer not in ("Filer", "Non-filer"):
 			err("Connections", r, _("Filer status {0}: use Filer or Non-filer.").format(r.filer), severity="Warning")
 			r.filer = None
-		parts = split_house(r, prof)
+		if prof.get("house_default") and not str(r.house or "").strip():
+			# the previous system has no house number: a property of its own, numbered by the old account number (increment 31)
+			parts = (ref, str(r.block or "").strip(), str(r.sector or "").strip())
+		else:
+			parts = split_house(r, prof)
+		if parts and not parts[1] and prof.get("default_block"):
+			parts = (parts[0], prof.default_block, parts[2])
 		if not parts or not parts[0]:
 			err("Connections", r, _("House number {0} doesn't match the profile's pattern.").format(r.house or _("(none)")))
 		else:
@@ -452,6 +476,7 @@ def _new_account(batch, ref, r, consumers, properties):
 	                    "feeder": f"{batch.society}-{r.feeder}" if r.feeder else None,
 	                    "transformer": f"{batch.society}-{r.transformer}" if r.transformer else None, "route": r.route or None,
 	                    "legacy_account_no": ref, "legacy_collection_no": str(r.old_collection_no) if r.old_collection_no else None,
+	                    **({"reference_no": ref} if r.get("keep_reference") else {}),  # the old number stays the reference number
 	                    "meters": meters}).name
 
 
