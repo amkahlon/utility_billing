@@ -97,6 +97,19 @@ jobs:
           sudo -u frappe -H bash -lc "cd ~/frappe-bench && bench --site $DOMAIN execute utility_billing.pdf.engine" | tee /tmp/engine.txt
           grep -q chrome /tmp/engine.txt
 
+      - name: A society on the site, so the backup has data for the restore test to find
+        run: |
+          # a client's site has its societies; this fresh one has none, and prod-5 rightly refuses an empty restore
+          sudo -u frappe -H bash -lc "cd ~/frappe-bench && bench --site $DOMAIN console" <<'EOF' | tee /tmp/society.txt
+          import frappe
+          if not frappe.db.exists("Society", "REH"):
+              frappe.get_doc({"doctype": "Society", "society_name": "Rehearsal Society", "short_name": "REH", "billing_cycle": "Monthly", "days_to_due_date": 14, "payment_posting_order": "Oldest first", "surcharge_basis": "Percentage of current bill", "surcharge_rate": 10}).insert(ignore_permissions=True)
+
+          frappe.db.commit()
+          print("societies on the site:", frappe.db.count("Society"))
+          EOF
+          grep -q "societies on the site: [1-9]" /tmp/society.txt
+
       - name: "Step 4: backup, to a local folder (prod-4-backup.sh --install)"
         run: |
           sudo -E BACKUP_DEST="$BACKUP_DEST" bash app/deploy/prod-4-backup.sh --install
