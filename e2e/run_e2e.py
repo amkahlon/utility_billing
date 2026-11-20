@@ -2446,9 +2446,10 @@ def t_migration_keep_numbers(d: Desk):
 	                 "value_maps": [{"target": "category", "source_value": "RES", "our_value": f"Residential MIG {RUN}"}]})
 	eq((p["keep_old_reference"], p["missing_house"], p["default_block"]), (1, "Use the old account number", "Gulberg"), "the profile keeps its settings")
 	refs = [f"0711{RUN}{n:06d}" for n in (1, 2, 3)]  # 14 digits, as on a LESCO bill
+	cnic = f"35202-{RUN}111-1"  # a CNIC of this run only: the same CNIC from an earlier run would join that run's consumer
 	book = {"Connections": [["Account No", "consumer_name", "cnic", "House No", "Tariff", "Meter No"],
-	                        [refs[0], "QA Disco One", "35202-1111111-1", "", "RES", f"QD{RUN}-1"],
-	                        [refs[1], "QA Disco One", "35202-1111111-1", "", "RES", f"QD{RUN}-2"],
+	                        [refs[0], "QA Disco One", cnic, "", "RES", f"QD{RUN}-1"],
+	                        [refs[1], "QA Disco One", cnic, "", "RES", f"QD{RUN}-2"],
 	                        [refs[2], "QA Disco Two", "", "12-B", "RES", f"QD{RUN}-3"]],
 	        "Readings": [["old_account_no", "last_reading", "reading_date"], [refs[0], "100", "25/10/2026"], [refs[1], "200", "25/10/2026"],
 	                     [refs[2], "300", "25/10/2026"]]}
