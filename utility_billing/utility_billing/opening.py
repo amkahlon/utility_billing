@@ -18,12 +18,13 @@ from frappe.utils import add_days, add_months, cint, flt, getdate, now_datetime
 from utility_billing.utility_billing import account, gl, periods, plans
 from utility_billing.utility_billing.readings import month_start
 
-AMOUNTS = ("current_bill", "arrears", "surcharge", "fees", "credit", "security_deposit", "plan_remaining")
-COLUMNS = ("reference_no",) + AMOUNTS + ("plan_installments", "solar_credit_units")
+AMOUNTS = ("current_bill", "arrears", "surcharge", "fees", "credit", "security_deposit", "plan_remaining", "held_amount")
+COLUMNS = ("reference_no",) + AMOUNTS + ("plan_installments", "solar_credit_units", "court_order")
 ALIASES = {"reference": "reference_no", "reference number": "reference_no", "consumer number": "reference_no", "account": "reference_no",
            "current": "current_bill", "current bill": "current_bill", "deposit": "security_deposit", "security deposit": "security_deposit",
            "plan": "plan_remaining", "installments": "plan_installments", "installments left": "plan_installments",
-           "solar credit": "solar_credit_units", "solar units": "solar_credit_units", "solar credit units": "solar_credit_units"}
+           "solar credit": "solar_credit_units", "solar units": "solar_credit_units", "solar credit units": "solar_credit_units",
+           "held": "held_amount", "deferred": "held_amount", "held by court order": "held_amount"}  # increment 35
 BUCKETS = {"current_bill": "current", "arrears": "arrears", "surcharge": "surcharge", "fees": "fees"}
 WRITERS = {"System Manager", "Billing Manager", "Accounts Officer"}
 
@@ -51,6 +52,7 @@ def rows_from_table(table) -> list[dict]:
 			row[k] = _number(row.get(k))
 		row["plan_installments"] = cint(_number(row.get("plan_installments")))
 		row["solar_credit_units"] = _number(row.get("solar_credit_units"))  # net metering (increment 28): export units not yet used
+		row["court_order"] = str(row.get("court_order") or "").strip() or None
 		out.append(row)
 	return out
 
@@ -128,14 +130,16 @@ def check(doc) -> int:
 			problems.append(_("installments left without an amount still to pay"))
 		if flt(r.get("solar_credit_units")) < 0:
 			problems.append(_("solar credit units can't be negative"))
-		if not problems and not owes and not flt(r.credit) and not flt(r.security_deposit) and not flt(r.get("solar_credit_units")):
+		if not problems and not owes and not flt(r.credit) and not flt(r.security_deposit) and not flt(r.get("solar_credit_units")) \
+				and not flt(r.get("held_amount")):
 			problems.append(_("nothing to bring over"))
 		r.row_status = "Error" if problems else "OK"
 		r.error = "; ".join(problems) or None
 		errors += bool(problems)
 	doc.row_count, doc.error_count = len(doc.rows), errors
 	for field, key in (("total_current", "current_bill"), ("total_arrears", "arrears"), ("total_surcharge", "surcharge"), ("total_fees", "fees"),
-	                   ("total_credit", "credit"), ("total_deposits", "security_deposit"), ("total_plans", "plan_remaining")):
+	                   ("total_credit", "credit"), ("total_deposits", "security_deposit"), ("total_plans", "plan_remaining"),
+	                   ("total_held", "held_amount")):
 		doc.set(field, round(sum(flt(r.get(key)) for r in doc.rows), 2))
 	doc.total_receivable = round(doc.total_current + doc.total_arrears + doc.total_surcharge + doc.total_fees - doc.total_credit, 2)
 	return errors
@@ -148,6 +152,8 @@ def check_accounts(doc):
 	gl.need(s.opening, _("opening balances (Society {0} → Go-live → Opening Balances Account)").format(doc.society))
 	if flt(doc.total_deposits):
 		gl.need(s.deposits, _("security deposits held (Society {0} → Security Deposits Held Account)").format(doc.society))
+	if flt(doc.get("total_held")):
+		gl.need(s.held, _("amounts held by court order (Society {0} → Held Receivables Account)").format(doc.society))
 
 
 # ---------------------------------------------------------------- posting (on approval)
@@ -167,6 +173,8 @@ def post(doc):
 	journal = gl.build_journal(doc.society, entries, "Opening Balances", as_of, _("Opening balances at go-live, as at {0} ({1})").format(
 		frappe.utils.formatdate(as_of), doc.name)) if entries else None
 	deposit_journal = _deposits(doc, as_of, approver)
+	from utility_billing.utility_billing import held  # noqa: PLC0415
+	held_journal = held.from_opening(doc, as_of)  # amounts held by court order (increment 35)
 	for r in doc.rows:
 		if flt(r.plan_remaining) > 0:
 			_plan(doc, r, as_of, approver)
@@ -176,7 +184,8 @@ def post(doc):
 	legacy.set_window(doc.society, add_days(as_of, 1))  # old account numbers stay usable six months (increment 29)
 	frappe.clear_document_cache("Society", doc.society)
 	periods.clear_cache()
-	doc.db_set({"posted_on": now_datetime(), "gl_journal": journal.name if journal else None, "deposit_journal": deposit_journal}, update_modified=False)
+	doc.db_set({"posted_on": now_datetime(), "gl_journal": journal.name if journal else None, "deposit_journal": deposit_journal,
+	            "held_journal": held_journal}, update_modified=False)
 
 
 def _deposits(doc, as_of, approver):

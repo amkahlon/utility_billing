@@ -506,10 +506,11 @@ class IntegrationTestMigration(IntegrationTestCase):
 
 	# ---- increment 34: LESCO's own workbook (the user's revised template)
 	def lesco_book(self):
+		self.ntn = f"{frappe.generate_hash(length=7)}-8"  # an NTN of this run only: numbers are unique on the site
 		return {
 			"Connections": [["Ref_no", "Customer_id", "old_ref_no", "consumer_name", "cnic", "ntn", "filer", "mobile", "address", "house", "block",
 			                 "sector", "plot_area", "category", "Meter No"],
-			                [7114110123400, 4101234567, 99001, "Ahmed Raza", "", "1234567-8", "", "", "59-C, Model Town Extension, Lahore", "", "", "",
+			                [7114110123400, 4101234567, 99001, "Ahmed Raza", "", self.ntn, "", "", "59-C, Model Town Extension, Lahore", "", "", "",
 			                 5, "RES", "TST-MIG-L1"],
 			                [7114110123401, 4101234568, "", "Sana Iqbal", "", "", "", "", "Model Town Extension", "", "", "", "", "RES", "TST-MIG-L2"]],
 			"Readings": [["Ref_no", "meter_no", "last_import_reading", "last_export_reading", "reading_date"], [7114110123400, "", 8452, "", "25-10-2026"],
@@ -530,7 +531,7 @@ class IntegrationTestMigration(IntegrationTestCase):
 		self.assertTrue(migration.load(b), [p.problem for p in b.problems if p.severity == "Error"])
 		c1, c2 = frappe.get_doc("Connection", "07114110123400"), frappe.get_doc("Connection", "07114110123401")  # the lost leading 0 restored
 		self.assertEqual((c1.reference_no, c1.legacy_collection_no), ("07114110123400", "99001"))
-		self.assertEqual(frappe.db.get_value("Consumer", c1.consumer, ["legacy_customer_id", "tax_no", "tax_status"]), ("4101234567", "1234567-8", "Filer"))
+		self.assertEqual(frappe.db.get_value("Consumer", c1.consumer, ["legacy_customer_id", "tax_no", "tax_status"]), ("4101234567", self.ntn, "Filer"))
 		self.assertEqual(frappe.db.get_value("Consumer", c2.consumer, "tax_status"), "Non-filer")  # no NTN and the filer column blank
 		self.assertEqual(frappe.db.get_value("Property", c1.property, ["property_no", "block"]), ("C-59", "C"))  # found in the address
 		self.assertEqual(frappe.db.get_value("Property", c2.property, "property_no"), "MTE-07114110123401")  # none in the address
@@ -539,10 +540,9 @@ class IntegrationTestMigration(IntegrationTestCase):
 		imp = frappe.get_doc("Opening Balance Import", b.opening_import)
 		rows = {r.reference_no: r for r in imp.rows}
 		self.assertEqual((rows["07114110123400"].arrears, rows["07114110123401"].credit, rows["07114110123401"].solar_credit_units), (45, 200, 12))
-		self.assertEqual(b.receivable_total, 5200)  # 5,355 + 45 − 200: the deferred 1,000 is left out
-		warnings = [p.problem for p in b.problems if p.severity == "Warning"]
-		self.assertTrue(any("Deferred Rs 1,000 (set aside by court order) isn't loaded" in w for w in warnings), warnings)
-		self.assertTrue(any("Deferred amounts (court orders) total Rs 1,000" in w for w in warnings), warnings)
+		# the deferred 1,000 (court order) goes to the opening balances as held, not into the arrears (increment 35)
+		self.assertEqual((rows["07114110123400"].held_amount, imp.total_receivable, imp.total_held), (1000, 5200, 1000))
+		self.assertEqual(b.receivable_total, 6200)  # 5,355 + 45 + 1,000 − 200, as LESCO's total receivable counts it
 
 	def test_a_total_receivable_that_doesnt_add_up_is_refused(self):
 		book = self.lesco_book()

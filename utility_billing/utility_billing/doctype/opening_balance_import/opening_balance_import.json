@@ -23,12 +23,14 @@
   "cb3",
   "total_deposits",
   "total_plans",
+  "total_held",
   "rows_section",
   "rows",
   "posted_section",
   "posted_on",
   "gl_journal",
   "deposit_journal",
+  "held_journal",
   "approval_section",
   "requested_by",
   "requested_on",
@@ -162,6 +164,13 @@
    "read_only": 1
   },
   {
+   "fieldname": "total_held",
+   "fieldtype": "Currency",
+   "label": "Held by Court Order",
+   "read_only": 1,
+   "description": "Owed but set aside by court orders: not in the net receivable above; posted as Held Amounts on the Held Receivables account."
+  },
+  {
    "fieldname": "rows_section",
    "fieldtype": "Section Break",
    "label": "Accounts"
@@ -196,6 +205,13 @@
    "fieldname": "deposit_journal",
    "fieldtype": "Link",
    "label": "Deposits Journal",
+   "options": "GL Journal",
+   "read_only": 1
+  },
+  {
+   "fieldname": "held_journal",
+   "fieldtype": "Link",
+   "label": "Held Amounts Journal",
    "options": "GL Journal",
    "read_only": 1
   },
@@ -275,7 +291,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 22:00:00.000000",
+ "modified": "2026-11-20 23:30:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Opening Balance Import",

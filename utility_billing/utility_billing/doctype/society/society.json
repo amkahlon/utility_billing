@@ -145,6 +145,7 @@
   "cb_arr",
   "write_off_account",
   "deposit_liability_account",
+  "held_receivables_account",
   "approval_order",
   "approval_levels",
   "approvals_section",
@@ -983,6 +984,13 @@
    "description": "Where written-off receivables are booked (bad debts)."
   },
   {
+   "fieldname": "held_receivables_account",
+   "fieldtype": "Link",
+   "label": "Held Receivables Account",
+   "options": "Ledger Account",
+   "description": "Amounts owed but set aside by a court order (for example a DISCO's deferred amounts): part of the receivables, kept apart until released or written off."
+  },
+  {
    "fieldname": "approval_order",
    "fieldtype": "Select",
    "label": "Approval Order",
@@ -1221,7 +1229,7 @@
  "image_field": "logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-18 18:00:00.000000",
+ "modified": "2026-11-20 23:30:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Society",

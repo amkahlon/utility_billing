@@ -1,0 +1,203 @@
+{
+ "actions": [],
+ "creation": "2026-11-20 23:30:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "held_title",
+  "connection",
+  "consumer_name",
+  "society",
+  "cb1",
+  "status",
+  "amount",
+  "held_on",
+  "court_order",
+  "source_section",
+  "opening_import",
+  "migration_batch",
+  "gl_journal",
+  "decision_section",
+  "decision_remarks",
+  "decided_by",
+  "decided_on",
+  "cb2",
+  "ledger_entry",
+  "decision_journal"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "HA-.YYYY.-.#####",
+   "default": "HA-.YYYY.-.#####",
+   "hidden": 1
+  },
+  {
+   "fieldname": "held_title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Connection",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "consumer_name",
+   "fieldtype": "Data",
+   "label": "Consumer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "society",
+   "fieldtype": "Link",
+   "label": "Society",
+   "options": "Society",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Held\nReleased\nWritten off",
+   "default": "Held",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount Held",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "Owed, but set aside by a court order: part of the receivable, kept off the bills, the late payment surcharge and recovery until it is released or written off."
+  },
+  {
+   "fieldname": "held_on",
+   "fieldtype": "Date",
+   "label": "Held Since",
+   "read_only": 1
+  },
+  {
+   "fieldname": "court_order",
+   "fieldtype": "Data",
+   "label": "Court Order",
+   "description": "The case or order reference, when known."
+  },
+  {
+   "fieldname": "source_section",
+   "fieldtype": "Section Break",
+   "label": "Where It Came From",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "opening_import",
+   "fieldtype": "Link",
+   "label": "Opening Balance Import",
+   "options": "Opening Balance Import",
+   "read_only": 1
+  },
+  {
+   "fieldname": "migration_batch",
+   "fieldtype": "Link",
+   "label": "Migration Batch",
+   "options": "Migration Batch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gl_journal",
+   "fieldtype": "Link",
+   "label": "Journal (held)",
+   "options": "GL Journal",
+   "read_only": 1
+  },
+  {
+   "fieldname": "decision_section",
+   "fieldtype": "Section Break",
+   "label": "Decision"
+  },
+  {
+   "fieldname": "decision_remarks",
+   "fieldtype": "Small Text",
+   "label": "Decision and Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "decided_by",
+   "fieldtype": "Link",
+   "label": "Decided By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "decided_on",
+   "fieldtype": "Datetime",
+   "label": "Decided On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ledger_entry",
+   "fieldtype": "Link",
+   "label": "Ledger Entry (released)",
+   "options": "Customer Ledger Entry",
+   "read_only": 1,
+   "description": "Released: the amount moved into the account's arrears and is billed with the next bill."
+  },
+  {
+   "fieldname": "decision_journal",
+   "fieldtype": "Link",
+   "label": "Journal (written off)",
+   "options": "GL Journal",
+   "read_only": 1
+  }
+ ],
+ "in_create": 1,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-20 23:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Utility Billing",
+ "name": "Held Amount",
+ "owner": "Administrator",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "naming_series:",
+ "title_field": "held_title",
+ "show_title_field_in_link": 1,
+ "search_fields": "connection,consumer_name,court_order",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "Society Admin", "write": 1},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "Billing Manager", "write": 1},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "General Manager", "write": 1},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "Accounts Officer"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "Billing Officer"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "Recovery Officer"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "Management"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "Billing Auditor"}
+ ],
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}
