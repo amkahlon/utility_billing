@@ -216,15 +216,22 @@ def calculate(
 		result.payable_within_due = result.current + result.installment
 	# 7. Surcharge on the current bill only (FS-BIL-04), or, where the society chooses it, on the current bill and unpaid arrears
 	# (the Park View bills: the surcharge grows with every unpaid month; increment 22)
+	result.surcharge = surcharge_for(result.current, result.arrears, surcharge, bill_rounding)
+	result.payable_after_due = result.payable_within_due + result.surcharge
+	return result
+
+
+def surcharge_for(current, arrears, surcharge, bill_rounding=NEAREST) -> Decimal:
+	"""The late payment surcharge on a bill's current amount (and, where the society chooses it, its unpaid arrears). Also used for a
+	bill revised for a court hold (increment 36), on what is still payable."""
 	s = surcharge or {}
+	current, arrears = D(current), D(arrears)
 	if s.get("basis") == "Fixed amount":
 		sur = D(s.get("fixed_amount"))
 	elif s.get("basis") == SURCHARGE_WITH_ARREARS:
-		sur = rnd((result.current + max(result.arrears, Decimal(0))) * D(s.get("rate", 10)) / 100, bill_rounding)
+		sur = rnd((current + max(arrears, Decimal(0))) * D(s.get("rate", 10)) / 100, bill_rounding)
 	else:
-		sur = rnd(result.current * D(s.get("rate", 10)) / 100, bill_rounding)
+		sur = rnd(current * D(s.get("rate", 10)) / 100, bill_rounding)
 	if D(s.get("cap")) > 0:
 		sur = min(sur, D(s.get("cap")))
-	result.surcharge = max(sur, Decimal(0)) if result.current > 0 else Decimal(0)
-	result.payable_after_due = result.payable_within_due + result.surcharge
-	return result
+	return max(sur, Decimal(0)) if current > 0 else Decimal(0)

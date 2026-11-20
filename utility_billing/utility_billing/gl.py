@@ -119,6 +119,9 @@ def lines_for(entry_name):
 	if e.entry_type == "Hold released":  # an amount held by court order comes back into the receivables (increment 35)
 		held = need(soc.held, _("amounts held by court order (Society {0} → Held Receivables Account)").format(e.society))
 		return [(rec, amount, 0), (held, 0, amount)]
+	if e.entry_type == "Held by court order":  # a court hold takes an amount out of what is payable, into held receivables (increment 36)
+		held = need(soc.held, _("amounts held by court order (Society {0} → Held Receivables Account)").format(e.society))
+		return [(held, -amount, 0), (rec, 0, -amount)]
 	if e.entry_type in ("Credit Note", "Debit Note"):
 		adj = need(soc.adjustments, _("credit and debit notes (Society {0} → Bill Adjustments and Waivers)").format(e.society))
 		return [(rec, amount, 0), (adj, 0, amount)] if amount >= 0 else [(adj, -amount, 0), (rec, 0, -amount)]

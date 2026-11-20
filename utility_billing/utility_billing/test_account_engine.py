@@ -81,3 +81,13 @@ class UnitTestAccountEngine(UnitTestCase):
 	def test_rounding_to_paise(self):
 		self.assertEqual(e.D("1080.305"), e.D("1080.31"))
 		self.assertEqual(plain(e.payment(bal(current="10.10"), "10.1")), {"current": -10.1})
+
+	def test_a_court_hold_takes_the_oldest_first_and_no_more_than_is_owed(self):
+		"""Increment 36: arrears, surcharge, fees, then the current bill; capped at what the account owes."""
+		before = bal(current=22260, arrears=1104, surcharge=1781, fees=500)
+		self.assertEqual(plain(e.hold(before, 1000)), {"arrears": -1000})
+		self.assertEqual(plain(e.hold(before, 4000)), {"arrears": -1104, "surcharge": -1781, "fees": -500, "current": -615})
+		self.assertEqual(e.total(e.apply(before, e.hold(before, 25645))), 0)
+		self.assertRaises(ValueError, e.hold, before, 25646)
+		self.assertRaises(ValueError, e.hold, before, 0)
+		self.assertRaises(ValueError, e.hold, bal(credit=100), 1)  # nothing owed

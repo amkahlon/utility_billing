@@ -2581,6 +2581,44 @@ def t_held_amounts(d: Desk):
 	eq(decide(bm, "release", "again please").status_code in (403, 417), True, "decided once only")
 
 
+@case("QA-100", "Increment 36: a court hold after go-live: approved like a bill revision, a revised bill without it, counted in the total receivable")
+def t_court_hold(d: Desk):
+	from datetime import date
+
+	ao, bo, bm, gm, cashier = USERS["ao"], USERS["bo"], USERS["bm"], USERS["gm"], USERS["cashier"]
+	hold = {"doctype": "Court Hold", "amount": "2500", "court_order": f"WP {RUN}/2026 (LHC)", "court_order_date": "2026-11-05",
+	        "remarks": "The court set the disputed amount aside"}
+	expect_error(lambda: bo.save_doc(dict(hold, connection=S["conn"]["name"])), "installment plan")  # QA-71's account has a plan
+	s, conn = S["nm_society"], S["nm_conn"]  # QA-91's solar account: its September bill is posted
+	ao.save_doc({"doctype": "Ledger Account", "account_code": acct("1252"), "account_name": "Held receivables (solar society)", "account_type": "Receivable"})
+	d.save_doc(dict(d.get("Society", s), held_receivables_account=acct("1252")))
+	ref = d.get("Connection", conn)["reference_no"]
+	enquiry = lambda: cashier.call("utility_billing.utility_billing.account.enquiry", reference_no=ref)  # noqa: E731
+	before = enquiry()
+	owed, old_bill = float(before["balance"]), before["bill"]
+	hold["connection"] = conn
+	expect_error(lambda: cashier.save_doc(dict(hold)))
+	expect_error(lambda: bo.save_doc(dict(hold, amount=str(owed + 1000))), "no more than")
+	saved = bo.save_doc(dict(hold))
+	eq((saved["bill"], float(saved["owed_now"]), float(saved["payable_after"])), (old_bill, owed, round(owed - 2500, 2)), "the form shows what the hold does")
+	saved = bo.workflow(saved, "Submit for Approval")
+	expect_error(lambda: bo.workflow(saved, "Approve"))  # a Billing Officer doesn't approve
+	done = bm.workflow(saved, "Approve")
+	eq((done["docstatus"], bool(done["held_amount"]), bool(done["revised_bill"])), (1, True, True), "approved: held, and the bill revised")
+	new, old = d.get("Utility Bill", done["revised_bill"]), d.get("Utility Bill", old_bill)
+	eq((new["revises"], float(new["held_deducted"]), float(new["court_held"]), float(new["payable_within_due"]), new["status"], old["status"]),
+	   (old_bill, 2500.0, 2500.0, round(owed - 2500, 2), "Posted", "Superseded"), "the revised bill")
+	after = enquiry()
+	eq((round(float(after["balance"]), 2), after["bill"]), (round(owed - 2500, 2), new["name"]), "payment channels ask for the revised bill")
+	_reader, text = get_pdf(cashier, "download_bill", name=new["name"])
+	eq(("Less: held by court order" in text, "Held by court order, not payable" in text), (True, True), "the revised bill prints the hold")
+	total = rows_of(run_report(gm, "Arrears Ageing", society=s, as_of=date.today().isoformat()))[-1]
+	eq((float(total["held"]), round(float(total["receivable"]), 2)), (2500.0, round(float(total["total"]) + 2500, 2)),
+	   "the arrears ageing adds the held amount to the total receivable")
+	held = d.get("Held Amount", done["held_amount"])
+	eq((held["status"], float(held["amount"]), held["court_hold"]), ("Held", 2500.0, done["name"]), "the held amount, released or written off from its own form")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

@@ -142,6 +142,26 @@ def write_off(bal: dict, amount) -> dict:
 	return deltas
 
 
+HOLD_ORDER = ("arrears", "surcharge", "fees", "current")
+
+
+def hold(bal: dict, amount) -> dict:
+	"""Deltas for setting an amount aside by court order (increment 36): it leaves what is owed, oldest first (arrears, surcharge,
+	fees, then the current bill). It can't be more than the account owes."""
+	amount = D(amount)
+	if amount <= 0:
+		raise ValueError("The amount to hold must be more than zero.")
+	owed = min(sum((max(D(bal[b]), D(0)) for b in HOLD_ORDER), D(0)), total(bal))
+	if amount > owed:
+		raise ValueError(f"The account owes only {max(owed, D(0))}.")
+	deltas, left = {b: D(0) for b in ALL}, amount
+	for bucket in HOLD_ORDER:
+		take = min(left, max(D(bal[bucket]), D(0)))
+		deltas[bucket] = -take
+		left -= take
+	return deltas
+
+
 def reverse(bal: dict, deltas: dict) -> dict:
 	"""Deltas that undo an earlier entry's deltas, kept within the rules above."""
 	after = normalise(apply(bal, {b: -D(deltas.get(b)) for b in ALL}))

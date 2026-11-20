@@ -18,6 +18,8 @@
   "opening_import",
   "migration_batch",
   "gl_journal",
+  "court_hold",
+  "hold_entry",
   "decision_section",
   "decision_remarks",
   "decided_by",
@@ -127,6 +129,22 @@
    "label": "Journal (held)",
    "options": "GL Journal",
    "read_only": 1
+  },
+  {
+   "fieldname": "court_hold",
+   "fieldtype": "Link",
+   "label": "Court Hold",
+   "options": "Court Hold",
+   "read_only": 1,
+   "description": "Held after go-live by this approved court hold."
+  },
+  {
+   "fieldname": "hold_entry",
+   "fieldtype": "Link",
+   "label": "Ledger Entry (held)",
+   "options": "Customer Ledger Entry",
+   "read_only": 1,
+   "description": "The entry that took the amount out of what the account owes; its journal is made with the day's transactions."
   },
   {
    "fieldname": "decision_section",

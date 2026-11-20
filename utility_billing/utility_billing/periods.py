@@ -17,7 +17,7 @@ from utility_billing.utility_billing import rights
 CLOSERS = {"System Manager", "Billing Manager", "General Manager", "Accounts Officer"}
 REOPENERS = {"System Manager", "General Manager"}
 PENDING_DOCTYPES = ("Account Adjustment", "Refund", "Bulk Adjustment", "Write Off", "Installment Plan", "Bill Revision",
-                    "Due Date Extension", "Bill Run", "Tariff", "Tariff Adjustment")
+                    "Due Date Extension", "Bill Run", "Tariff", "Tariff Adjustment", "Court Hold")
 CACHE = "ub_closed_periods"
 
 

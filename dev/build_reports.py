@@ -124,7 +124,7 @@ GROUPS = [
 	              ("DocType", "Suspense Payment"), ("DocType", "Customer Ledger Entry")]),
 	("Messages", [("DocType", "Message Log"), ("DocType", "Broadcast"), ("DocType", "Notification Template"), ("DocType", "Messaging Provider")]),
 	("Service Requests", [("DocType", "Service Request"), ("DocType", "Service Request Type")]),
-	("Corrections", [("DocType", "Bill Revision"), ("DocType", "Due Date Extension"), ("DocType", "Bill Dispute"), ("DocType", "Held Amount"), ("DocType", "Bulk Adjustment"),
+	("Corrections", [("DocType", "Bill Revision"), ("DocType", "Due Date Extension"), ("DocType", "Bill Dispute"), ("DocType", "Court Hold"), ("DocType", "Held Amount"), ("DocType", "Bulk Adjustment"),
 	               ("DocType", "Installment Plan"), ("DocType", "Write Off")]),
 	("Recovery", [("Page", "ub-recovery", "Defaulters and Recovery"), ("DocType", "Recovery Case"), ("DocType", "Recovery Run"),
 	              ("DocType", "Recovery Notice"), ("DocType", "Recovery Target"),
