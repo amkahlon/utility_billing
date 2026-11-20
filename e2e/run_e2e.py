@@ -2505,6 +2505,42 @@ def t_migration_network_sheets(d: Desk):
 	eq((prop["area"], prop["area_unit"]), (1, "Kanal"), "a plot size without a unit takes the profile's unit")
 
 
+@case("QA-98", "Increment 34: LESCO's own workbook: its column names, reference numbers held as numbers, houses in the address, NTN, deferred and total receivable")
+def t_migration_lesco_layout(d: Desk):
+	ao = USERS["ao"]
+	s = S["mig_soc"]
+	cat = d.call("frappe.client.get_value", doctype="Consumer Category", filters={"category_name": f"Residential MIG {RUN}"}, fieldname="name")["name"]
+	p = ao.save_doc({"doctype": "Migration Profile", "profile_name": f"QA LESCO layout {RUN}", "society": s, "source_system": "LESCO",
+	                 "date_format": "Day first (31-12-2026)", "default_utility": "Electricity", "default_category": cat, "keep_old_reference": 1,
+	                 "old_number_digits": "14", "house_pattern": "(?P<house>\\d+)-(?P<block>[A-Z][A-Z0-9]*)",
+	                 "missing_house": "Use the old account number", "default_block": "MTE", "default_plot_unit": "Marla"})
+	eq(p["old_number_digits"], 14, "the profile keeps the number of digits")
+	n1, n2 = int(f"71{RUN}0000001"), int(f"71{RUN}0000002")  # 13 digits: a number column dropped the leading 0
+	r1, r2 = f"0{n1}", f"0{n2}"
+	book = {"Connections": [["Ref_no", "Customer_id", "old_ref_no", "consumer_name", "ntn", "address", "house", "block", "plot_area", "meter_no"],
+	                        [n1, int(f"41{RUN}0001"), "", "QA Lesco One", "1234567-8", f"{RUN}-C, Model Town Extension, Lahore", "", "", 5, f"QL{RUN}-1"],
+	                        [n2, int(f"41{RUN}0002"), "", "QA Lesco Two", "", "Model Town Extension, Lahore", "", "", "", f"QL{RUN}-2"]],
+	        "Readings": [["Ref_no", "meter_no", "last_import_reading", "last_export_reading", "reading_date"],
+	                     [n1, "", 8452, "", "25/10/2026"], [n2, "", 100, "", "25/10/2026"]],
+	        "Balances": [["Ref_no", "current_bill", "arrears", "surcharge", "Deferred", "credit_balance", "security_deposit",
+	                      "Remaining_instalments_amount", "installments (nos)", "solar_credit_units (balance)", "Total Receivable"],
+	                     [n1, 5355, 45, 0, 1000, 0, 3000, 0, 0, 0, 6400], [n2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+	        "History": [["Ref_no", "month", "units", "current_amount", "arrears", "adjustment", "surcharge", "bill_amount", "paid_on", "paid_amount",
+	                     "balance"], [n1, "01/10/2026", 190, 5355, 45, 0, 0, 5400, "", 0, 5400]]}
+	b = ao.save_doc({"doctype": "Migration Batch", "naming_series": "MIG-.YYYY.-.####", "society": s, "profile": p["name"], "as_of_date": "2026-10-31"})
+	ao.save_doc(dict(ao.get("Migration Batch", b["name"]), workbook=_upload_xlsx(ao, book, "Migration Batch", b["name"])))
+	res = ao.call(f"{MIG}.load", name=b["name"])
+	eq((res["loaded"], res["accounts"]), (True, 2), "LESCO's workbook loads with its own column names")
+	c1, c2 = d.get("Connection", r1), d.get("Connection", r2)
+	eq(c1["reference_no"], r1, "the 14-digit reference number, its leading 0 restored")
+	eq((d.get("Property", c1["property"])["property_no"], d.get("Property", c2["property"])["property_no"]), (f"C-{RUN}", f"MTE-{r2}"),
+	   "the house found in the address; none found: the old number and the default block")
+	eq([d.get("Consumer", c["consumer"])["tax_status"] for c in (c1, c2)], ["Filer", "Non-filer"], "the NTN decides the filer status")
+	batch = d.get("Migration Batch", b["name"])
+	eq(batch["receivable_total"], 5400, "the receivable leaves out the deferred 1,000 (court order)")
+	eq(any("set aside by court order" in x["problem"] for x in batch["problems"]), True, "the deferred amount is reported")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 
