@@ -17,7 +17,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, add_months, cint, flt, formatdate, get_first_day, get_last_day, getdate, nowdate
 
-from utility_billing.utility_billing import allocation, tariff_engine
+from utility_billing.utility_billing import allocation, held, tariff_engine
 
 REPORTS: dict[str, dict] = OrderedDict()
 
@@ -246,6 +246,7 @@ def dashboard(f):
 	arrears = sum(flt(a.arrears_balance) + flt(a.surcharge_balance) + flt(a.fees_balance) for a in accounts)
 	in_arrears = sum(1 for a in accounts if flt(a.arrears_balance) > 0)
 	credit = sum(flt(a.credit_balance) for a in accounts)
+	court = round(sum(held.held_as_of(s, nowdate()).values()), 2)  # part of the receivable, not payable (increment 36)
 	summary = [
 		{"value": cur["billed"], "label": _("Billed this month"), "datatype": "Currency", "indicator": "Blue"},
 		{"value": cur["collected"], "label": _("Collected this month"), "datatype": "Currency", "indicator": "Green"},
@@ -253,6 +254,8 @@ def dashboard(f):
 		 "indicator": "Green" if cur["rate"] >= 90 else "Orange"},
 		{"value": owed, "label": _("Total owed by consumers"), "datatype": "Currency", "indicator": "Red"},
 		{"value": arrears, "label": _("Of which arrears, surcharge and fees"), "datatype": "Currency", "indicator": "Orange"},
+		{"value": court, "label": _("Held by court order (not payable)"), "datatype": "Currency", "indicator": "Grey"},
+		{"value": round(owed + court, 2), "label": _("Total receivable (owed + held)"), "datatype": "Currency", "indicator": "Red"},
 		{"value": in_arrears, "label": _("Accounts in arrears"), "datatype": "Int", "indicator": "Orange"},
 		{"value": credit, "label": _("Credit held for consumers"), "datatype": "Currency", "indicator": "Blue"},
 	]
@@ -792,19 +795,24 @@ AGE_FILTERS = [dict(fieldname="society", label="Society", fieldtype="Link", opti
 def arrears_ageing(f):
 	s, as_of = society_of(f), getdate(f.get("as_of") or nowdate())
 	acc = OrderedDict()
+	blank = lambda r: {"block": r.block, "category": r.category, "accounts": 0, **{b: 0 for b in BANDS}, "held": 0}  # noqa: E731
 	for r, parts in aging_for(s, as_of, f.get("consumer_category"), f.get("block")):
-		k = (r.block, r.category)
-		row = acc.setdefault(k, {"block": r.block, "category": r.category, "accounts": 0, **{b: 0 for b in BANDS}})
+		row = acc.setdefault((r.block, r.category), blank(r))
 		row["accounts"] += 1
 		for age, amount in parts:
 			row[band_of(age)] += amount
+	# amounts held by court order: part of the receivable but not payable, so not aged (user, 2026-11-20; increment 36)
+	for r in held_rows(s, as_of, f.get("consumer_category"), f.get("block")):
+		acc.setdefault((r.block, r.category), blank(r))["held"] += flt(r.amount)
 	data = sorted(acc.values(), key=lambda r: (r["block"], r["category"] or ""))
 	for r in data:
 		for b in BANDS:
 			r[b] = round(r[b], 2)
 		r["total"] = round(sum(r[b] for b in BANDS), 2)
+		r["held"] = round(r["held"], 2)
+		r["receivable"] = round(r["total"] + r["held"], 2)
 	if data:
-		data.append(total_row("block", _("Total"), data, ("accounts",) + BANDS + ("total",)))
+		data.append(total_row("block", _("Total"), data, ("accounts",) + BANDS + ("total", "held", "receivable")))
 	money = lambda label, k: col(label, k, "Currency", 120)  # noqa: E731
 	labels = [("0-30 days", BANDS[0]), ("31-60 days", BANDS[1]), ("61-90 days", BANDS[2]), ("91-180 days", BANDS[3]), ("Over 180 days", BANDS[4])]
 	chart = None
@@ -813,8 +821,22 @@ def arrears_ageing(f):
 		chart = {"data": {"labels": [l for l, _k in labels], "datasets": [{"name": _("Owed"), "values": [tot[k] for _l, k in labels]}]},
 		         "type": "bar", "fieldtype": "Currency"}
 	return {"columns": [col("Block", "block", width=100), col("Category", "category", width=150), col("Accounts", "accounts", "Int", 90)] +
-	                   [money(l, k) for l, k in labels] + [money("Total Owed", "total")], "data": data, "chart": chart,
-	        "message": _("Age = days past the bill's due date (surcharge and fees from the day they were charged). Payments are taken to clear the oldest charges first, so what is still owed is aged from the newest charges.")}
+	                   [money(l, k) for l, k in labels] + [money("Total Owed", "total"), money("Held by Court Order", "held"),
+	                                                        money("Total Receivable", "receivable")], "data": data, "chart": chart,
+	        "message": _("Age = days past the bill's due date (surcharge and fees from the day they were charged). Payments are taken to clear the oldest charges first, so what is still owed is aged from the newest charges.")
+	        + " " + _("Held by court order: set aside by a court, part of the receivable but not payable until released, so not aged. Total Receivable = Total Owed + Held.")}
+
+
+def held_rows(society, as_of, category=None, block=None):
+	"""Amounts held by court order at the end of a day, per account, with block and category (increment 36)."""
+	amounts = held.held_as_of(society, as_of)
+	if not amounts:
+		return []
+	rows = sql(f"""select c.name connection, c.consumer_category, ifnull(cc.category_name, c.consumer_category) category, {BLOCK} block
+		from `tabConnection` c left join `tabProperty` p on p.name = c.property left join `tabConsumer Category` cc on cc.name = c.consumer_category
+		where c.name in %(c)s""", {"c": list(amounts)})
+	return [frappe._dict(r, amount=amounts[r.connection]) for r in rows
+	        if (not category or r.consumer_category == category) and (not block or r.block == block)]
 
 
 # ================================================================ 17. defaulters (RPT-24)
@@ -1489,12 +1511,12 @@ PENDING = (("Tariff", "tariff_title", "General Manager"), ("Tariff Adjustment", 
            ("Bill Revision", "revision_title", "Billing Manager"), ("Bulk Adjustment", "adjustment_title", "General Manager"),
            ("Installment Plan", "plan_title", "Billing Manager"), ("Write Off", "writeoff_title", "General Manager"),
            ("Bill Template", "template_name", "Billing Manager"), ("Solar Rebate Pool", "pool_title", "General Manager"),
-           ("Migration Batch", "batch_title", "General Manager"))
+           ("Migration Batch", "batch_title", "General Manager"), ("Court Hold", "hold_title", "Billing Manager"))
 
 
 @report("pending_approvals", "Pending Approvals", APPROVERS,
         [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
-         dict(fieldname="transaction", label="Transaction", fieldtype="Select", options="\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund\nBill Revision\nBulk Adjustment\nInstallment Plan\nWrite Off\nBill Template\nSolar Rebate Pool\nMigration Batch"),
+         dict(fieldname="transaction", label="Transaction", fieldtype="Select", options="\nTariff\nTariff Adjustment\nBill Run\nAccount Adjustment\nRefund\nBill Revision\nBulk Adjustment\nInstallment Plan\nWrite Off\nBill Template\nSolar Rebate Pool\nMigration Batch\nCourt Hold"),
          dict(fieldname="older_than", label="Waiting More Than (days)", fieldtype="Int", default="0")],
         "Everything waiting for approval, by type and how long it has waited.", ref_doctype="Tariff")
 def pending_approvals(f):
@@ -1686,7 +1708,7 @@ def disco_reconciliation(f):
 
 
 # ================================================================ 21. audit log (RPT-42)
-AUDITED = ("Society", "Bill Template", "Solar Rebate Pool", "Migration Batch", "Migration Profile", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Refund", "Bill Revision", "Bulk Adjustment", "Installment Plan", "Write Off", "Due Date Extension", "Bill Dispute", "Settlement File", "Suspense Payment", "Notification Template", "Messaging Provider", "Fee Type", "Charge Type", "Consumer Category",
+AUDITED = ("Society", "Bill Template", "Solar Rebate Pool", "Migration Batch", "Migration Profile", "Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Refund", "Bill Revision", "Bulk Adjustment", "Installment Plan", "Write Off", "Due Date Extension", "Bill Dispute", "Court Hold", "Held Amount", "Settlement File", "Suspense Payment", "Notification Template", "Messaging Provider", "Fee Type", "Charge Type", "Consumer Category",
            "Cash Counter", "Reason Code", "Ledger Account", "Journal Export Layout", "Consumer", "Property", "Connection", "Meter",
            "Reading Cycle", "Meter Reading", "Cashier Day", "KPI Definition")
 

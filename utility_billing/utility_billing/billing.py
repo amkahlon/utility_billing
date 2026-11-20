@@ -370,6 +370,10 @@ def build_bill(run, connection, override=None) -> dict:
 		                         _("{0} exported units × {1}").format(engine.fmt(nm.export_units), engine.fmt(nm.buyback_rate)))]
 		if nm and nm.buyback_credit else (),
 	)
+	# what the account has held by court order: part of the receivable, not payable, so printed for information (increment 36)
+	from utility_billing.utility_billing import held as court  # noqa: PLC0415
+	held_map = runcache.bulk(("court held", run.society), lambda: court.held_by_connection(run.society))
+	court_held = 0 if part.get("final") else flt(held_map.get(connection) if held_map is not None else court.held_of(connection))
 	consumption_type = reading.consumption_type
 	if frappe.utils.cint(reading.get("defective")):
 		consumption_type = _("Average billed: meter defective")  # FS-WF-08
@@ -394,7 +398,7 @@ def build_bill(run, connection, override=None) -> dict:
 		"installment_plan": plan_name if result.installment is not None else None,
 		"current_amount": flt(result.current), "arrears": flt(result.arrears),
 		"payable_within_due": flt(result.payable_within_due), "surcharge_amount": flt(result.surcharge),
-		"payable_after_due": flt(result.payable_after_due), "outstanding_amount": 0,
+		"payable_after_due": flt(result.payable_after_due), "outstanding_amount": 0, "court_held": court_held,
 	}
 	if nm:
 		bill.update({"nm_method": nm.method, "import_units": flt(nm.import_units), "export_units": flt(nm.export_units),

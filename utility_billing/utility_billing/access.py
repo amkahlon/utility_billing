@@ -18,7 +18,7 @@ APPROVER_ROLES = ("Billing Manager", "General Manager", "Management")
 ADMINS = {"System Manager", "Society Admin"}
 APPROVAL_DOCTYPES = ("Tariff", "Tariff Adjustment", "Bill Run", "Account Adjustment", "Refund", "Bill Revision", "Bulk Adjustment",
                      "Installment Plan", "Write Off", "Security Deposit", "Bill Template", "Solar Rebate Pool",
-                     "Migration Batch")
+                     "Migration Batch", "Court Hold")
 
 
 # ---------------------------------------------------------------- where users work (FS-ACC-01)

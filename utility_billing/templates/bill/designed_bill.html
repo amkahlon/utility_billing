@@ -287,10 +287,13 @@
 		<tr><td>{{ _("Arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
 		<tr><td>{{ _("Installment due with this bill") }} ({{ _("No") }} {{ bill.installment_no }})</td><td class="right">{{ money(bill.installment_due) }}</td></tr>
 		{%- else %}<tr><td>{{ lb(o, T, "Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>{% endif %}
+		{%- if bill.held_deducted %}<tr><td>{{ _("Less: held by court order") }}</td><td class="right">{{ money(-bill.held_deducted) }}</td></tr>{% endif %}
+		{%- if bill.other_since_issue %}<tr><td>{{ _("Paid and other entries since the earlier version") }}</td><td class="right">{{ money(bill.other_since_issue) }}</td></tr>{% endif %}
 		{%- endif %}
 		{%- if "within" in o.rows %}<tr class="big"><td>{{ lb(o, T, "Payable within due date") }}{% if o.show_due_date %} <span class="note">({{ due_date }})</span>{% endif %}</td><td class="right">{{ money(bill.payable_within_due) }}</td></tr>{% endif %}
 		{%- if "surcharge" in o.rows %}<tr><td>{{ lb(o, T, "Late payment surcharge") }}</td><td class="right">{{ money(bill.surcharge_amount) }}</td></tr>{% endif %}
 		{%- if "after" in o.rows %}<tr class="big"><td>{{ lb(o, T, "Payable after due date") }}</td><td class="right">{{ money(bill.payable_after_due) }}</td></tr>{% endif %}
+		{%- if bill.court_held %}<tr><td class="note">{{ _("Held by court order, not payable") }}</td><td class="right note">{{ money(bill.court_held) }}</td></tr>{% endif %}
 	</table>
 	{%- else %}
 	{%- if "current" in o.rows or "arrears" in o.rows %}
@@ -301,6 +304,8 @@
 		<tr><td>{{ _("Arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
 		<tr><td>{{ _("Installment due with this bill") }} ({{ _("No") }} {{ bill.installment_no }})</td><td class="right">{{ money(bill.installment_due) }}</td></tr>
 		{%- else %}<tr><td>{{ lb(o, T, "Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>{% endif %}
+		{%- if bill.held_deducted %}<tr><td>{{ _("Less: held by court order") }}</td><td class="right">{{ money(-bill.held_deducted) }}</td></tr>{% endif %}
+		{%- if bill.other_since_issue %}<tr><td>{{ _("Paid and other entries since the earlier version") }}</td><td class="right">{{ money(bill.other_since_issue) }}</td></tr>{% endif %}
 		{%- endif %}
 	</table>
 	{%- endif %}
@@ -309,6 +314,7 @@
 		{%- if "surcharge" in o.rows %}<tr class="surcharge"><td>{{ lb(o, T, "Late payment surcharge") }}<span class="sub2">{{ _("added if paid after the due date") }}</span></td><td class="right">{{ rs(bill.surcharge_amount) }}</td></tr>{% endif %}
 		{%- if "after" in o.rows %}<tr class="after"><td>{{ lb(o, T, "Payable after due date") }}</td><td class="right">{{ rs(bill.payable_after_due) }}</td></tr>{% endif %}
 	</table>
+	{%- if bill.court_held %}<div class="note" style="margin-top: 1mm;">{{ _("Held by court order, not payable: Rs {0}").format(money(bill.court_held)) }}</div>{% endif %}
 	{%- endif %}
 {%- elif kind == "history" %}
 	{%- set rows = history[:o.months] %}

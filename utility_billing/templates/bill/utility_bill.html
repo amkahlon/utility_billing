@@ -189,6 +189,13 @@
 			{%- else %}
 			<tr><td colspan="3">{{ t("Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>
 			{%- endif %}
+			{#- a bill revised for a court hold (increment 36) #}
+			{%- if bill.held_deducted %}
+			<tr><td colspan="3">{{ _("Less: held by court order") }}</td><td class="right">{{ money(-bill.held_deducted) }}</td></tr>
+			{%- endif %}
+			{%- if bill.other_since_issue %}
+			<tr><td colspan="3">{{ _("Paid and other entries since the earlier version") }}</td><td class="right">{{ money(bill.other_since_issue) }}</td></tr>
+			{%- endif %}
 		</table>
 		<table class="pay" style="margin-top: 1.5mm;">
 			<tr class="within"><td>{{ t("Payable within due date") }} <span style="font-weight: 400; font-size: 8pt;">({{ due_date }})</span></td><td class="right">Rs {{ money(bill.payable_within_due) }}</td></tr>
@@ -196,6 +203,10 @@
 			<tr class="surcharge"><td style="padding: 1mm 2mm;">{{ t("Late payment surcharge") }}<span class="sub2">{{ _("added if paid after the due date") }}</span></td><td class="right" style="padding: 1mm 2mm;">Rs {{ money(bill.surcharge_amount) }}</td></tr>
 			<tr class="after"><td>{{ t("Payable after due date") }}</td><td class="right">Rs {{ money(bill.payable_after_due) }}</td></tr>
 		</table>
+		{%- if bill.court_held %}
+		{#- part of the receivable, not of the amount payable (user, 2026-11-20; increment 36) #}
+		<div class="note" style="margin-top: 1mm;">{{ _("Held by court order, not payable: Rs {0}").format(money(bill.court_held)) }}</div>
+		{%- endif %}
 	</td>
 	<td class="gap"></td>
 	<td>
