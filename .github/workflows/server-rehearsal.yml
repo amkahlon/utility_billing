@@ -40,6 +40,9 @@ jobs:
           sudo apt-get purge -yq 'mysql-server*' 'mysql-client*' 'mysql-common' 2>/dev/null || true
           sudo rm -rf /var/lib/mysql /etc/mysql
           sudo apt-get autoremove -yq >/dev/null
+          # and its own Node in /usr/local, which would come before the server's Node 24 on the path
+          sudo rm -rf /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/corepack /usr/local/lib/node_modules /usr/local/include/node
+          command -v node || echo "no node left on the machine"
           echo "127.0.0.1 $DOMAIN" | sudo tee -a /etc/hosts >/dev/null
           # the app comes from this checkout instead of GitHub (no deploy key here)
           sudo cp -r "$GITHUB_WORKSPACE/app" /opt/ums-src

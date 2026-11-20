@@ -63,8 +63,21 @@ chmod 755 /home/$FUSER
 # that folder (second rehearsal run, 2026-11-19: the admin's folder isn't readable by the frappe user)
 cd /home/$FUSER
 B="sudo -u $FUSER -H env -i HOME=/home/$FUSER USER=$FUSER LOGNAME=$FUSER LANG=C.UTF-8 PATH=/home/$FUSER/.local/bin:/usr/local/bin:/usr/bin:/bin"
+# the frappe user must see Node 24: another Node in /usr/local/bin (installed by hand, or by nvm for all users) would come first and
+# bench init stops at yarn install (fourth rehearsal run, 2026-11-20)
+if ! $B node --version 2>/dev/null | grep -q '^v24'; then
+	echo "The frappe user's node is $($B bash -c 'command -v node; node --version' 2>/dev/null | tr '\n' ' '), not Node 24 from /usr/bin."
+	echo "Remove the other Node (for example /usr/local/bin/node) and run this script again."
+	exit 1
+fi
 $B bash -c "command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh"
 $B bash -c 'uv python install 3.14 && (uv tool install --python "$(uv python find 3.14)" frappe-bench || uv tool upgrade frappe-bench)'
+# a bench init that stopped halfway leaves the folder behind without a working Frappe; set it aside so a second run starts afresh
+# instead of skipping the step as done
+if [ -d "$BENCH" ] && ! $B bash -c "$BENCH/env/bin/python -c 'import frappe'" >/dev/null 2>&1; then
+	mv "$BENCH" "$BENCH.failed-$(date +%Y%m%d-%H%M%S)"
+	echo "   An unfinished bench was set aside; it is built again."
+fi
 if [ ! -d "$BENCH" ]; then
 	$B bash -c "cd /home/$FUSER && bench init --frappe-branch $FRAPPE_BRANCH --python \"\$(uv python find 3.14)\" --skip-redis-config-generation frappe-bench"
 fi
