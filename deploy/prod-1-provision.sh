@@ -114,6 +114,17 @@ $B bash -c "cd $BENCH && bench --site $DOMAIN execute utility_billing.pdf.chrome
 echo "== production processes (supervisor + Nginx)"
 $B bash -c "cd $BENCH && bench build --app utility_billing"
 cd "$BENCH" && /home/$FUSER/.local/bin/bench setup production "$FUSER" --yes
+# bench setup production should hand its process list to supervisor; on the eighth rehearsal run (2026-11-20) supervisor ended up
+# with no processes and the site answered 502. Link the list ourselves and don't finish until the processes run.
+[ -f "$BENCH/config/supervisor.conf" ] || $B bash -c "cd $BENCH && bench setup supervisor --yes"
+ln -sfn "$BENCH/config/supervisor.conf" /etc/supervisor/conf.d/frappe-bench.conf
 supervisorctl reread && supervisorctl update
+for _ in $(seq 1 30); do supervisorctl status 2>/dev/null | grep -q "web.*RUNNING" && break; sleep 2; done
+if ! supervisorctl status | grep -q "web.*RUNNING"; then
+	echo "The site's processes aren't running under supervisor:"; supervisorctl status || true
+	ls -la /etc/supervisor/conf.d/ "$BENCH/config/"; grep -n "include\|files" /etc/supervisor/supervisord.conf || true
+	exit 1
+fi
+supervisorctl status || true  # exits 3 while a worker is still starting
 systemctl reload nginx
 echo "Done. Next: prod-2-https.sh (needs DNS for $DOMAIN pointing here)."
