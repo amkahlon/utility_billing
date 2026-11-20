@@ -26,7 +26,8 @@ from frappe.utils import cint, flt, getdate
 TARGETS = {
 	"Connections": ["old_account_no", "old_customer_id", "old_collection_no", "consumer_name", "cnic", "ntn", "filer", "mobile", "address",
 	                "house", "block", "sector", "plot_area", "plot_unit", "property_type", "utility", "category", "sanctioned_load_kw", "phase",
-	                "connection_date", "status", "meter_no", "meter_make", "meter_type", "multiplier", "digits", "feeder", "transformer", "route"],
+	                "connection_date", "status", "meter_no", "meter_make", "meter_type", "multiplier", "digits", "feeder", "transformer", "route",
+	                "transformer_meter_no"],
 	"Readings": ["old_account_no", "meter_no", "last_reading", "last_export_reading", "reading_date"],
 	"Balances": ["old_account_no", "current_bill", "arrears", "surcharge", "fees", "credit", "security_deposit", "plan_remaining", "plan_installments",
 	             "solar_credit_units"],
@@ -34,7 +35,8 @@ TARGETS = {
 	            "balance"],
 	# feeders and transformers, a sheet each (increment 32, the user's request); a Network sheet with a kind column is still read
 	"Feeders": ["code", "name"],
-	"Transformers": ["code", "feeder", "kva", "location"],
+	# the transformer's own meter (LESCO has it): made a check meter, its last reading the start of the first month's units
+	"Transformers": ["code", "feeder", "kva", "location", "meter_no", "multiplier", "last_reading"],
 	"Network": ["kind", "code", "name", "feeder", "kva"],
 	# the parallel run: the previous system's bills of a month, and the payments it took
 	"Old Bills": ["old_account_no", "units", "current_bill", "arrears", "surcharge", "payable", "balance"],
@@ -189,7 +191,8 @@ def normalise(sheet, table, prof, problems):
 				problems.append(dict(sheet=sheet, row_no=i, account=str(r.get("old_account_no") or ""), severity="Error",
 				                     problem=_("{0}: {1} isn't a {2}.").format(t, v, _("date") if t in DATES else _("number"))))
 				v = None
-			if t in ("old_account_no", "meter_no", "old_customer_id", "old_collection_no", "code", "reference", "feeder", "transformer") and v not in (None, ""):
+			if t in ("old_account_no", "meter_no", "old_customer_id", "old_collection_no", "code", "reference", "feeder", "transformer",
+			         "transformer_meter_no") and v not in (None, ""):
 				v = str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)  # Excel may hand back 7402006006.0
 			r[t] = v
 		rows.append(r)
@@ -202,6 +205,30 @@ def _category(value, utility):
 		return None
 	return frappe.db.get_value("Consumer Category", {"category_name": value, "utility": utility}) or (
 		value if frappe.db.exists("Consumer Category", value) else None)
+
+
+def _account_transformer(batch, r, ref, tx_rows, network, transformers, err):
+	"""An account's transformer: from the Transformers sheet, already in the system, or (LESCO gives it on the consumer's row) made from
+	the consumers' rows that name it, with its feeder and its meter (increment 32)."""
+	code, meter = str(r.transformer), str(r.transformer_meter_no) if r.transformer_meter_no else None
+	t = tx_rows.get(code)
+	if t:
+		if meter and t.get("meter_no") and str(t.meter_no) != meter:
+			err("Connections", r, _("Transformer {0} has meter {1} here but {2} on {3} row {4}.").format(code, meter, t.meter_no, t._sheet, t._row))
+		elif meter and not t.get("meter_no"):
+			t.meter_no = meter
+		if t._sheet == "Connections" and r.feeder and str(r.feeder) != str(t.feeder):
+			err("Connections", r, _("Transformer {0} is on feeder {1} here but on {2} in row {3}.").format(code, r.feeder, t.feeder, t._row))
+	elif frappe.db.exists("Transformer", f"{batch.society}-{code}"):
+		if meter and frappe.db.get_value("Transformer", f"{batch.society}-{code}", "check_meter") != meter:
+			err("Connections", r, _("Transformer {0} is already in the system; its meter {1} on this row is left out.").format(code, meter), severity="Warning")
+	elif not r.feeder:
+		err("Connections", r, _("Transformer {0} is neither in the Transformers sheet nor in the system. Give its feeder on this row to create it.").format(code))
+	else:
+		t = frappe._dict(_sheet="Connections", _row=r._row, old_account_no=ref, kind="Transformer", code=code, feeder=str(r.feeder), meter_no=meter)
+		tx_rows[code] = t
+		network.append(t)
+		transformers.add(code)
 
 
 def analyse(batch) -> frappe._dict:
@@ -228,8 +255,10 @@ def analyse(batch) -> frappe._dict:
 			r._sheet = sheet
 			r.kind = kind or (mapped(prof, "kind", r.kind) or "").strip().title()
 			network.append(r)
-	feeders, transformers = set(), set()
+	feeders, transformers, tx_rows = set(), set(), {}
 	for r in network:
+		if r.kind == "Transformer" and r.code:
+			tx_rows.setdefault(str(r.code), r)
 		if r.kind not in ("Feeder", "Transformer"):
 			err(r._sheet, r, _("Each row needs a kind (Feeder or Transformer) and a code."))
 		elif not r.code:
@@ -348,13 +377,28 @@ def analyse(batch) -> frappe._dict:
 					r.mobile), severity="Warning")
 		if r.feeder and str(r.feeder) not in feeders and not frappe.db.exists("Feeder", f"{batch.society}-{r.feeder}"):
 			err("Connections", r, _("Feeder {0} is neither in the Feeders sheet nor in the system.").format(r.feeder))
-		if r.transformer and str(r.transformer) not in transformers and not frappe.db.exists("Transformer", f"{batch.society}-{r.transformer}"):
-			err("Connections", r, _("Transformer {0} is neither in the Transformers sheet nor in the system.").format(r.transformer))
+		if r.transformer:
+			_account_transformer(batch, r, ref, tx_rows, network, transformers, err)
 		if r.connection_date and getdate(r.connection_date) > as_of:
 			err("Connections", r, _("Connected on {0}, after the cut-over day.").format(r.connection_date))
 		if not r.plot_area:
 			err("Connections", r, _("Plot size missing."), severity="Warning")
 		accounts[ref] = r
+	# the transformers' own meters: each one new, and not a consumer's meter
+	consumer_meters, tx_meters = {str(a.meter_no) for a in accounts.values() if a.meter_no}, {}
+	for t in network:
+		if t.kind != "Transformer" or not t.get("meter_no"):
+			continue
+		m = str(t.meter_no)
+		if m in tx_meters:
+			err(t._sheet, t, _("Meter {0} is on transformers {1} and {2}.").format(m, tx_meters[m], t.code))
+		elif m in consumer_meters:
+			err(t._sheet, t, _("Meter {0} of transformer {1} is also a consumer's meter in the file.").format(m, t.code))
+		elif frappe.db.exists("Meter", m):
+			err(t._sheet, t, _("Meter {0} of transformer {1} is already in the system.").format(m, t.code))
+		if flt(t.get("last_reading")) < 0:
+			err(t._sheet, t, _("A reading can't be negative."))
+		tx_meters[m] = t.code
 	for cnic, names in cnic_names.items():
 		if len(names) > 1:
 			problems.append(dict(sheet="Connections", row_no=0, account="", severity="Warning",
@@ -566,7 +610,12 @@ def load(batch, commit=False) -> bool:
 				_new(batch, {"doctype": "Feeder", "society": batch.society, "feeder_code": str(r.code), "feeder_name": r.name or str(r.code)})
 		for r in a.network:
 			if r.kind == "Transformer" and not frappe.db.exists("Transformer", f"{batch.society}-{r.code}"):
-				_new(batch, {"doctype": "Transformer", "society": batch.society, "transformer_code": str(r.code),
+				check = None
+				if r.get("meter_no"):  # its own meter, read on the routes as a check meter
+					check = _new(batch, {"doctype": "Meter", "serial_no": str(r.meter_no), "society": batch.society,
+					                     "utility": a.prof.utility or "Electricity", "meter_type": "Bulk / Check Meter",
+					                     "multiplier": flt(r.get("multiplier")) or 1, "start_reading": flt(r.get("last_reading"))}).name
+				_new(batch, {"doctype": "Transformer", "society": batch.society, "transformer_code": str(r.code), "check_meter": check,
 				             "feeder": f"{batch.society}-{r.feeder}", "kva_rating": flt(r.kva) or None, "location": r.get("location") or None})
 		made, consumers, properties = {}, {}, set()
 		refs = list(a.accounts.items())
@@ -611,7 +660,7 @@ def load_in_background(batch: str):
 
 
 # ---------------------------------------------------------------- undo
-UNDO_ORDER = ("Connection", "Meter", "Consumer", "Property", "Transformer", "Feeder")
+UNDO_ORDER = ("Connection", "Transformer", "Feeder", "Meter", "Consumer", "Property")  # a transformer before its check meter (increment 32)
 
 
 def loaded_accounts(batch) -> int:
@@ -675,12 +724,12 @@ def template_workbook() -> bytes:
 	examples = {
 		"Connections": ["7402006006", "PV-021177", "0000054902", "Pervaiz Hussain", "35202-1234567-1", "", "Filer", "03004917056",
 		                "2413 Tulip Overseas Block", "2413", "Tulip Overseas", "", 5, "Marla", "House", "Electricity", "Residential", 5, "Single",
-		                "2025-04-01", "Active", "173753", "", "Single Phase", 1, 5, "", "", ""],
+		                "2025-04-01", "Active", "173753", "", "Single Phase", 1, 5, "", "", "", ""],
 		"Readings": ["7402006006", "173753", 1677, "", "2026-10-25"],
 		"Balances": ["7402006006", 5355, 0, 0, 0, 0, 0, 0, 0, 0],
 		"History": ["7402006006", "2026-09-01", 63, 3130, 0, 0, 0, 3130, "2026-10-10", 2570, 560],
 		"Feeders": ["F1", "Feeder 1"],
-		"Transformers": ["F1-T1", "F1", 200, "Tulip Overseas Block"],
+		"Transformers": ["F1-T1", "F1", 200, "Tulip Overseas Block", "TM-1001", 40, 52310],
 		"Old Bills": ["7402006006", 70, 3400, 560, 0, 3960, 3960],
 		"Payments": ["7402006006", "2026-11-12", 3960, "TXN-001", "Bank Transfer"],
 	}

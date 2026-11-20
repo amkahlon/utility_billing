@@ -2479,18 +2479,28 @@ def t_migration_network_sheets(d: Desk):
 	                 "default_plot_unit": "Kanal", "missing_house": "Use the old account number", "default_block": "Model Town"})
 	eq(p["default_plot_unit"], "Kanal", "the profile keeps its default plot unit")
 	feeder, ref = int(f"9{RUN}01"), f"0712{RUN}000001"  # LESCO's feeder codes are numbers: Excel hands them back as numbers
-	book = {"Connections": [["old_account_no", "consumer_name", "meter_no", "plot_area", "feeder", "transformer"],
-	                        [ref, "QA LESCO Net", f"QN{RUN}-1", 1, feeder, f"T{RUN}-1"]],
+	ref2 = f"0712{RUN}000002"  # its transformer and the transformer's meter are on the consumer's row, as LESCO gives them
+	book = {"Connections": [["old_account_no", "consumer_name", "meter_no", "plot_area", "feeder", "transformer", "transformer_meter_no"],
+	                        [ref, "QA LESCO Net", f"QN{RUN}-1", 1, feeder, f"T{RUN}-1", ""],
+	                        [ref2, "QA LESCO Net Two", f"QN{RUN}-2", "", feeder, f"T{RUN}-2", f"QTM{RUN}-2"]],
 	        "Feeders": [["code", "name"], [feeder, "QA feeder"]],
-	        "Transformers": [["code", "feeder", "kva", "location"], [f"T{RUN}-1", feeder, 200, "Park corner"]]}
+	        "Transformers": [["code", "feeder", "kva", "location", "meter_no", "multiplier", "last_reading"],
+	                         [f"T{RUN}-1", feeder, 200, "Park corner", f"QTM{RUN}-1", "40", "52310"]]}
 	b = ao.save_doc({"doctype": "Migration Batch", "naming_series": "MIG-.YYYY.-.####", "society": s, "profile": p["name"], "as_of_date": "2026-10-31"})
 	ao.save_doc(dict(ao.get("Migration Batch", b["name"]), workbook=_upload_xlsx(ao, book, "Migration Batch", b["name"])))
 	res = ao.call(f"{MIG}.load", name=b["name"])
-	eq((res["loaded"], res["accounts"]), (True, 1), "loaded from the Feeders and Transformers sheets")
+	eq((res["loaded"], res["accounts"]), (True, 2), "loaded from the Feeders and Transformers sheets")
 	c = d.get("Connection", d.call("frappe.client.get_value", doctype="Connection", filters={"legacy_account_no": ref}, fieldname="name")["name"])
 	eq((c["feeder"], c["transformer"]), (f"{s}-{feeder}", f"{s}-T{RUN}-1"), "the account is on the new feeder and transformer")
 	t = d.get("Transformer", c["transformer"])
-	eq((t["feeder"], t["kva_rating"], t["location"]), (f"{s}-{feeder}", 200, "Park corner"), "the transformer hangs on its feeder")
+	eq((t["feeder"], t["kva_rating"], t["location"], t["check_meter"]), (f"{s}-{feeder}", 200, "Park corner", f"QTM{RUN}-1"),
+	   "the transformer hangs on its feeder, with its own meter")
+	m = d.get("Meter", f"QTM{RUN}-1")
+	eq((m["meter_type"], m["multiplier"], m["start_reading"]), ("Bulk / Check Meter", 40, 52310), "the transformer's meter: a check meter from its last reading")
+	c2 = d.get("Connection", d.call("frappe.client.get_value", doctype="Connection", filters={"legacy_account_no": ref2}, fieldname="name")["name"])
+	t2 = d.get("Transformer", c2["transformer"])
+	eq((t2["transformer_code"], t2["feeder"], t2["check_meter"]), (f"T{RUN}-2", f"{s}-{feeder}", f"QTM{RUN}-2"),
+	   "a transformer given on the consumer's row is made from it, with its meter")
 	prop = d.get("Property", c["property"])
 	eq((prop["area"], prop["area_unit"]), (1, "Kanal"), "a plot size without a unit takes the profile's unit")
 
