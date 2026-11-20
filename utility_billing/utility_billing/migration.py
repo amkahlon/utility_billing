@@ -32,12 +32,16 @@ TARGETS = {
 	             "solar_credit_units"],
 	"History": ["old_account_no", "month", "units", "current_amount", "arrears", "adjustment", "surcharge", "bill_amount", "paid_on", "paid_amount",
 	            "balance"],
+	# feeders and transformers, a sheet each (increment 32, the user's request); a Network sheet with a kind column is still read
+	"Feeders": ["code", "name"],
+	"Transformers": ["code", "feeder", "kva", "location"],
 	"Network": ["kind", "code", "name", "feeder", "kva"],
 	# the parallel run: the previous system's bills of a month, and the payments it took
 	"Old Bills": ["old_account_no", "units", "current_bill", "arrears", "surcharge", "payable", "balance"],
 	"Payments": ["old_account_no", "paid_on", "amount", "reference", "mode"],
 }
-LOAD_SHEETS = ("Connections", "Readings", "Balances", "History", "Network")
+LOAD_SHEETS = ("Connections", "Readings", "Balances", "History", "Feeders", "Transformers", "Network")
+PLOT_UNITS = ("Marla", "Kanal", "Sq Ft", "Sq Yd", "Sq M")
 REQUIRED_SHEETS = ("Connections",)
 NUMBERS = {"sanctioned_load_kw", "multiplier", "digits", "plot_area", "last_reading", "last_export_reading", "current_bill", "arrears", "surcharge",
            "fees", "credit", "security_deposit", "plan_remaining", "plan_installments", "solar_credit_units", "units", "current_amount", "adjustment",
@@ -72,7 +76,7 @@ def profile_of(name) -> frappe._dict:
 	"""The profile as lookups; with no profile, our own column names and day-first dates."""
 	if not name:
 		return frappe._dict(name=None, society=None, columns={}, valuemap={}, pattern=None, dayfirst=True, yearfirst=False, utility=None, category=None,
-		                    house_default=False, default_block=None, keep_reference=False)
+		                    house_default=False, default_block=None, keep_reference=False, plot_unit=None)
 	p = frappe.get_doc("Migration Profile", name)
 	cols = defaultdict(dict)
 	for c in p.columns:
@@ -85,7 +89,7 @@ def profile_of(name) -> frappe._dict:
 	                    dayfirst=fmt.startswith("Day"), yearfirst=fmt.startswith("Year"), utility=p.default_utility, category=p.default_category,
 	                    # increment 31: what the previous system doesn't have is filled in, and its numbers can stay
 	                    house_default=(p.get("missing_house") or "").startswith("Use"), default_block=(p.get("default_block") or "").strip() or None,
-	                    keep_reference=bool(cint(p.get("keep_old_reference"))))
+	                    keep_reference=bool(cint(p.get("keep_old_reference"))), plot_unit=p.get("default_plot_unit") or None)
 
 
 def mapped(prof, target, v):
@@ -185,7 +189,7 @@ def normalise(sheet, table, prof, problems):
 				problems.append(dict(sheet=sheet, row_no=i, account=str(r.get("old_account_no") or ""), severity="Error",
 				                     problem=_("{0}: {1} isn't a {2}.").format(t, v, _("date") if t in DATES else _("number"))))
 				v = None
-			if t in ("old_account_no", "meter_no", "old_customer_id", "old_collection_no", "code", "reference") and v not in (None, ""):
+			if t in ("old_account_no", "meter_no", "old_customer_id", "old_collection_no", "code", "reference", "feeder", "transformer") and v not in (None, ""):
 				v = str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)  # Excel may hand back 7402006006.0
 			r[t] = v
 		rows.append(r)
@@ -217,19 +221,30 @@ def analyse(batch) -> frappe._dict:
 		problems.append(dict(sheet=sheet, row_no=r._row if r else 0, account=account or (r.get("old_account_no") if r else "") or "",
 		                     severity=severity, problem=text))
 
-	# the network
+	# the network: the Feeders and Transformers sheets, and an older workbook's Network sheet with a kind column
+	network = []
+	for sheet, kind in (("Feeders", "Feeder"), ("Transformers", "Transformer"), ("Network", None)):
+		for r in data[sheet]:
+			r._sheet = sheet
+			r.kind = kind or (mapped(prof, "kind", r.kind) or "").strip().title()
+			network.append(r)
 	feeders, transformers = set(), set()
-	for r in data["Network"]:
-		kind = (mapped(prof, "kind", r.kind) or "").strip().title()
-		r.kind = kind
-		if kind not in ("Feeder", "Transformer") or not r.code:
-			err("Network", r, _("Each row needs a kind (Feeder or Transformer) and a code."))
-		elif kind == "Feeder":
+	for r in network:
+		if r.kind not in ("Feeder", "Transformer"):
+			err(r._sheet, r, _("Each row needs a kind (Feeder or Transformer) and a code."))
+		elif not r.code:
+			err(r._sheet, r, _("The {0} code is missing.").format(_(r.kind.lower())))
+		elif str(r.code) in (feeders if r.kind == "Feeder" else transformers):
+			err(r._sheet, r, _("{0} {1} is in the file twice.").format(_(r.kind), r.code))
+		elif r.kind == "Feeder":
 			feeders.add(str(r.code))
 		else:
 			if not r.feeder:
-				err("Network", r, _("Transformer {0} needs its feeder.").format(r.code))
+				err(r._sheet, r, _("Transformer {0} needs its feeder.").format(r.code))
 			transformers.add(str(r.code))
+	for r in network:
+		if r.kind == "Transformer" and r.feeder and str(r.feeder) not in feeders and not frappe.db.exists("Feeder", f"{batch.society}-{r.feeder}"):
+			err(r._sheet, r, _("Feeder {0} of transformer {1} is neither in the Feeders sheet nor in the system.").format(r.feeder, r.code))
 	# accounts
 	accounts, cnic_names = {}, defaultdict(set)
 	seen_meters = Counter(str(r.meter_no) for r in data["Connections"] if r.meter_no)
@@ -283,8 +298,13 @@ def analyse(batch) -> frappe._dict:
 		if r.property_type not in ("House", "Apartment", "Plot", "Shop", "Office", "Commercial Building", "Other"):
 			err("Connections", r, _("Property type {0} isn't one of ours.").format(r.property_type))
 		r.plot_unit = mapped(prof, "plot_unit", r.plot_unit) or None
-		if r.plot_unit and r.plot_unit not in ("Marla", "Kanal", "Sq Ft", "Sq Yd", "Sq M"):
+		if r.plot_unit and r.plot_unit not in PLOT_UNITS:
 			err("Connections", r, _("Plot unit {0} isn't one of ours.").format(r.plot_unit))
+		if r.plot_area and not r.plot_unit:
+			# a source without units (LESCO, increment 32): the profile's unit, or the size is kept without one and reported
+			r.plot_unit = prof.get("plot_unit")
+			if not r.plot_unit:
+				err("Connections", r, _("Plot size {0} has no unit: set a Default Plot Unit in the profile.").format(r.plot_area), severity="Warning")
 		r.filer = mapped(prof, "filer", r.filer) or None
 		if r.filer and r.filer not in ("Filer", "Non-filer"):
 			err("Connections", r, _("Filer status {0}: use Filer or Non-filer.").format(r.filer), severity="Warning")
@@ -327,9 +347,9 @@ def analyse(batch) -> frappe._dict:
 				err("Connections", r, _("Mobile number {0} doesn't look like one (03XX-XXXXXXX or +92 3XX XXXXXXX); it is kept as it is.").format(
 					r.mobile), severity="Warning")
 		if r.feeder and str(r.feeder) not in feeders and not frappe.db.exists("Feeder", f"{batch.society}-{r.feeder}"):
-			err("Connections", r, _("Feeder {0} is neither in the Network sheet nor in the system.").format(r.feeder))
+			err("Connections", r, _("Feeder {0} is neither in the Feeders sheet nor in the system.").format(r.feeder))
 		if r.transformer and str(r.transformer) not in transformers and not frappe.db.exists("Transformer", f"{batch.society}-{r.transformer}"):
-			err("Connections", r, _("Transformer {0} is neither in the Network sheet nor in the system.").format(r.transformer))
+			err("Connections", r, _("Transformer {0} is neither in the Transformers sheet nor in the system.").format(r.transformer))
 		if r.connection_date and getdate(r.connection_date) > as_of:
 			err("Connections", r, _("Connected on {0}, after the cut-over day.").format(r.connection_date))
 		if not r.plot_area:
@@ -390,7 +410,7 @@ def analyse(batch) -> frappe._dict:
 		seen.add((ref, r.month))
 		history.append(r)
 	receivable = sum(flt(b.current_bill) + flt(b.arrears) + flt(b.surcharge) + flt(b.fees) - flt(b.credit) for b in balances.values())
-	return frappe._dict(prof=prof, problems=problems, network=data["Network"], accounts=accounts, balances=balances, history=history,
+	return frappe._dict(prof=prof, problems=problems, network=network, accounts=accounts, balances=balances, history=history,
 	                    receivable=round(receivable, 2))
 
 
@@ -547,7 +567,7 @@ def load(batch, commit=False) -> bool:
 		for r in a.network:
 			if r.kind == "Transformer" and not frappe.db.exists("Transformer", f"{batch.society}-{r.code}"):
 				_new(batch, {"doctype": "Transformer", "society": batch.society, "transformer_code": str(r.code),
-				             "feeder": f"{batch.society}-{r.feeder}", "kva_rating": flt(r.kva) or None})
+				             "feeder": f"{batch.society}-{r.feeder}", "kva_rating": flt(r.kva) or None, "location": r.get("location") or None})
 		made, consumers, properties = {}, {}, set()
 		refs = list(a.accounts.items())
 		for k in range(0, len(refs), CHUNK):
@@ -659,11 +679,14 @@ def template_workbook() -> bytes:
 		"Readings": ["7402006006", "173753", 1677, "", "2026-10-25"],
 		"Balances": ["7402006006", 5355, 0, 0, 0, 0, 0, 0, 0, 0],
 		"History": ["7402006006", "2026-09-01", 63, 3130, 0, 0, 0, 3130, "2026-10-10", 2570, 560],
-		"Network": ["Feeder", "F1", "Feeder 1", "", ""],
+		"Feeders": ["F1", "Feeder 1"],
+		"Transformers": ["F1-T1", "F1", 200, "Tulip Overseas Block"],
 		"Old Bills": ["7402006006", 70, 3400, 560, 0, 3960, 3960],
 		"Payments": ["7402006006", "2026-11-12", 3960, "TXN-001", "Bank Transfer"],
 	}
 	for sheet, cols in TARGETS.items():
+		if sheet not in examples:  # Network: the older layout, read but no longer offered
+			continue
 		ws = wb.create_sheet(sheet)
 		ws.append(cols)
 		for c in ws[1]:

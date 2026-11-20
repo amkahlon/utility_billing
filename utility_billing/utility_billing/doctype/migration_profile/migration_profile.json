@@ -16,6 +16,7 @@
   "house_pattern",
   "missing_house",
   "default_block",
+  "default_plot_unit",
   "columns_section",
   "columns",
   "values_section",
@@ -105,6 +106,13 @@
    "description": "The block for rows that have none (for example the area's name)."
   },
   {
+   "fieldname": "default_plot_unit",
+   "fieldtype": "Select",
+   "label": "Default Plot Unit",
+   "options": "\nMarla\nKanal\nSq Ft\nSq Yd\nSq M",
+   "description": "The unit of a plot size given without one (LESCO data has none)."
+  },
+  {
    "fieldname": "columns_section",
    "fieldtype": "Section Break",
    "label": "Columns",
@@ -131,7 +139,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-11-18 22:00:00.000000",
+ "modified": "2026-11-20 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Migration Profile",

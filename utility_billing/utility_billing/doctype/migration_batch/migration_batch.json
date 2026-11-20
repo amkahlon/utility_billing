@@ -106,7 +106,7 @@
    "fieldname": "workbook",
    "fieldtype": "Attach",
    "label": "Workbook (Excel)",
-   "description": "One .xlsx file with the sheets Connections, Readings, Balances, History and (optional) Network. Download Template gives an empty one."
+   "description": "One .xlsx file with the sheets Connections, Readings, Balances, History and (optional) Feeders and Transformers. Download Template gives an empty one."
   },
   {
    "fieldname": "load_status",
@@ -361,7 +361,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-11-18 19:00:00.000000",
+ "modified": "2026-11-20 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Migration Batch",

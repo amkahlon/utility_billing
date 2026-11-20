@@ -130,8 +130,48 @@ class IntegrationTestMigration(IntegrationTestCase):
 			            ["MIG-1001", "01-09-2026", 63, 3130, 0, 0, 0, 3130, "10-10-2026", 2570, 560],
 			            ["MIG-1001", "01-10-2026", 70, 4795, 560, 0, 0, 5355, "", 0, 5355],
 			            ["MIG-1003", "01-10-2026", 20, 900, 0, 0, 0, 900, "05-10-2026", 900, 0]],
-			"Network": [["kind", "code", "name", "feeder", "kva"], ["Feeder", "MF1", "Main feeder", "", ""], ["Transformer", "MT1", "", "MF1", 200]],
+			"Feeders": [["code", "name"], ["MF1", "Main feeder"]],
+			"Transformers": [["code", "feeder", "kva", "location"], ["MT1", "MF1", 200, "C Block park"]],
 		}
+
+	# ---- increment 32: feeders and transformers on sheets of their own; a plot size without a unit
+	def test_feeders_and_transformers_have_sheets_of_their_own(self):
+		b = self.loaded()
+		self.assertEqual(frappe.db.get_value("Transformer", f"{SOC}-MT1", ["feeder", "kva_rating", "location"]), (f"{SOC}-MF1", 200, "C Block park"))
+		self.assertEqual(frappe.db.get_value("Feeder", f"{SOC}-MF1", "feeder_name"), "Main feeder")
+		self.assertEqual(frappe.db.count("Transformer", {"migration_batch": b.name}), 1)
+		# problems are reported on the sheet they are on: a code twice, a transformer without its feeder or on an unknown one
+		book = self.good_book()
+		book["Feeders"] += [["MF1", "Again"]]
+		book["Transformers"] += [["MT2", "", 100, ""], ["MT3", "NOPE", 100, ""], [None, "MF1", 50, ""]]
+		b2 = self.batch(book)
+		migration.check(b2)
+		errors = {(p.sheet, p.row_no, p.problem) for p in b2.problems if p.severity == "Error"}
+		self.assertIn(("Feeders", 3, "Feeder MF1 is in the file twice."), errors)
+		self.assertIn(("Transformers", 3, "Transformer MT2 needs its feeder."), errors)
+		self.assertIn(("Transformers", 4, "Feeder NOPE of transformer MT3 is neither in the Feeders sheet nor in the system."), errors)
+		self.assertIn(("Transformers", 5, "The transformer code is missing."), errors)
+
+	def test_an_older_network_sheet_is_still_read(self):
+		book = self.good_book()
+		del book["Feeders"], book["Transformers"]
+		book["Network"] = [["kind", "code", "name", "feeder", "kva"], ["Feeder", "MF1", "Main feeder", "", ""], ["Transformer", "MT1", "", "MF1", 200]]
+		b = self.batch(book)
+		self.assertTrue(migration.load(b), [p.problem for p in b.problems if p.severity == "Error"])
+		self.assertEqual(frappe.db.get_value("Transformer", f"{SOC}-MT1", "feeder"), f"{SOC}-MF1")
+
+	def test_a_plot_size_without_a_unit_takes_the_profile_unit(self):
+		book = self.good_book()
+		book["Connections"][1][12] = ""  # MIG-1001: 5, no unit (LESCO has none)
+		b = self.batch(book)
+		migration.check(b)
+		self.assertIn("Plot size 5 has no unit: set a Default Plot Unit in the profile.", [p.problem for p in b.problems if p.severity == "Warning"])
+		self.profile.default_plot_unit = "Marla"
+		self.profile.save()
+		b = self.batch(book)
+		self.assertTrue(migration.load(b), [p.problem for p in b.problems if p.severity == "Error"])
+		prop = frappe.db.get_value("Connection", self.conn("MIG-1001"), "property")
+		self.assertEqual(frappe.db.get_value("Property", prop, ["area", "area_unit"]), (5, "Marla"))
 
 	def batch(self, book, **kw):
 		return frappe.get_doc({"doctype": "Migration Batch", "society": SOC, "profile": self.profile.name, "as_of_date": AS_OF,
@@ -377,7 +417,9 @@ class IntegrationTestMigration(IntegrationTestCase):
 		from openpyxl import load_workbook  # noqa: PLC0415
 
 		wb = load_workbook(io.BytesIO(migration.template_workbook()))
-		self.assertEqual(wb.sheetnames, list(migration.TARGETS))
+		# every sheet but the older Network layout, which is still read but no longer offered (increment 32)
+		self.assertEqual(wb.sheetnames, [s for s in migration.TARGETS if s != "Network"])
+		self.assertEqual([c.value for c in wb["Transformers"][1]], ["code", "feeder", "kva", "location"])
 		self.assertEqual([c.value for c in wb["Readings"][1]], migration.TARGETS["Readings"])
 
 	# ---- the parallel run

@@ -2469,6 +2469,32 @@ def t_migration_keep_numbers(d: Desk):
 	expect_error(lambda: cashier.call("utility_billing.utility_billing.account.enquiry", reference_no=c1["consumer"]), "has 2 accounts")
 
 
+@case("QA-97", "Increment 32: feeders and transformers on sheets of their own; a plot size without a unit takes the profile's unit")
+def t_migration_network_sheets(d: Desk):
+	ao = USERS["ao"]
+	s = S["mig_soc"]
+	cat = d.call("frappe.client.get_value", doctype="Consumer Category", filters={"category_name": f"Residential MIG {RUN}"}, fieldname="name")["name"]
+	p = ao.save_doc({"doctype": "Migration Profile", "profile_name": f"QA LESCO net {RUN}", "society": s, "source_system": "LESCO",
+	                 "date_format": "Day first (31-12-2026)", "default_utility": "Electricity", "default_category": cat,
+	                 "default_plot_unit": "Kanal", "missing_house": "Use the old account number", "default_block": "Model Town"})
+	eq(p["default_plot_unit"], "Kanal", "the profile keeps its default plot unit")
+	feeder, ref = int(f"9{RUN}01"), f"0712{RUN}000001"  # LESCO's feeder codes are numbers: Excel hands them back as numbers
+	book = {"Connections": [["old_account_no", "consumer_name", "meter_no", "plot_area", "feeder", "transformer"],
+	                        [ref, "QA LESCO Net", f"QN{RUN}-1", 1, feeder, f"T{RUN}-1"]],
+	        "Feeders": [["code", "name"], [feeder, "QA feeder"]],
+	        "Transformers": [["code", "feeder", "kva", "location"], [f"T{RUN}-1", feeder, 200, "Park corner"]]}
+	b = ao.save_doc({"doctype": "Migration Batch", "naming_series": "MIG-.YYYY.-.####", "society": s, "profile": p["name"], "as_of_date": "2026-10-31"})
+	ao.save_doc(dict(ao.get("Migration Batch", b["name"]), workbook=_upload_xlsx(ao, book, "Migration Batch", b["name"])))
+	res = ao.call(f"{MIG}.load", name=b["name"])
+	eq((res["loaded"], res["accounts"]), (True, 1), "loaded from the Feeders and Transformers sheets")
+	c = d.get("Connection", d.call("frappe.client.get_value", doctype="Connection", filters={"legacy_account_no": ref}, fieldname="name")["name"])
+	eq((c["feeder"], c["transformer"]), (f"{s}-{feeder}", f"{s}-T{RUN}-1"), "the account is on the new feeder and transformer")
+	t = d.get("Transformer", c["transformer"])
+	eq((t["feeder"], t["kva_rating"], t["location"]), (f"{s}-{feeder}", 200, "Park corner"), "the transformer hangs on its feeder")
+	prop = d.get("Property", c["property"])
+	eq((prop["area"], prop["area_unit"]), (1, "Kanal"), "a plot size without a unit takes the profile's unit")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 
