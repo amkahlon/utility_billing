@@ -35,6 +35,9 @@ if ! node --version 2>/dev/null | grep -q '^v24'; then
 	apt-get install -yq nodejs
 fi
 command -v yarn >/dev/null || npm install -g yarn
+# the services bench relies on run now and after every reboot: a package already on the machine but switched off (Nginx on the
+# rehearsal machine) isn't started by apt-get install, and bench setup production stops at "reload nginx" (seventh run, 2026-11-20)
+systemctl enable --now mariadb redis-server supervisor nginx
 
 echo "== MariaDB (utf8mb4, local only)"
 cat > /etc/mysql/mariadb.conf.d/90-ums.cnf <<'EOF'
