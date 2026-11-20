@@ -54,6 +54,11 @@ fi
 echo "== user $FUSER and bench"
 id "$FUSER" >/dev/null 2>&1 || adduser --disabled-password --gecos "" "$FUSER"
 chmod 755 /home/$FUSER
+# bench restarts its processes with "sudo supervisorctl" after installing an app, already during bench init; bench setup production
+# grants the frappe user that later (sudoers), so until then allow just this one command (fifth rehearsal run, 2026-11-20)
+echo "$FUSER ALL=(root) NOPASSWD: /usr/bin/supervisorctl" > /etc/sudoers.d/ums-supervisorctl
+chmod 440 /etc/sudoers.d/ums-supervisorctl
+visudo -cf /etc/sudoers.d/ums-supervisorctl >/dev/null
 # Frappe 16 needs Python 3.14; Ubuntu 24.04 ships 3.12. uv installs 3.14 and the bench CLI for the frappe user without touching
 # the system Python (as on the development laptop, server/wsl-3-bench-erpnext.sh). Until 2026-11-18 this script used the system
 # Python through pipx, which would have failed at bench init.
