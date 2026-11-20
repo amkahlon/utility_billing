@@ -11,8 +11,11 @@
   "date_format",
   "default_utility",
   "default_category",
+  "keep_old_reference",
   "house_section",
   "house_pattern",
+  "missing_house",
+  "default_block",
   "columns_section",
   "columns",
   "values_section",
@@ -68,6 +71,13 @@
    "description": "Used where the file has no category column."
   },
   {
+   "fieldname": "keep_old_reference",
+   "fieldtype": "Check",
+   "label": "Keep the Old Account Number as the Reference Number",
+   "default": "0",
+   "description": "Migrated accounts keep the number their consumers and banks already know (for example a 14-digit DISCO reference number) as their permanent reference number. New accounts opened later get our own 10-digit numbers. The number must be 4 to 20 letters, digits or hyphens and not yet used on this site."
+  },
+  {
    "fieldname": "house_section",
    "fieldtype": "Section Break",
    "label": "House Numbers",
@@ -77,8 +87,22 @@
    "fieldname": "house_pattern",
    "fieldtype": "Data",
    "label": "House Number Pattern",
-   "description": "Examples: (?P<house>\\d+)-?(?P<block>[A-Z][A-Z0-9]*) for 59-C or 987-M3; (?P<block>[A-Z]+)\\s*(?P<house>\\d+) for N 2308; (?P<house>\\d+)\\s+(?P<block>.+) for 2413 Tulip Overseas Block. Empty: the house column is used as it is.",
+   "description": "Examples: (?P&lt;house&gt;\\d+)-?(?P&lt;block&gt;[A-Z][A-Z0-9]*) for 59-C or 987-M3; (?P&lt;block&gt;[A-Z]+)\\s*(?P&lt;house&gt;\\d+) for N 2308; (?P&lt;house&gt;\\d+)\\s+(?P&lt;block&gt;.+) for 2413 Tulip Overseas Block. Empty: the house column is used as it is.",
    "ignore_xss_filter": 1
+  },
+  {
+   "fieldname": "missing_house",
+   "fieldtype": "Select",
+   "label": "When the House Number Is Missing",
+   "options": "Report it as an error\nUse the old account number",
+   "default": "Report it as an error",
+   "description": "For a previous system that holds an address but no house number: each account then gets a property of its own, numbered by its old account number, to be corrected later."
+  },
+  {
+   "fieldname": "default_block",
+   "fieldtype": "Data",
+   "label": "Default Block",
+   "description": "The block for rows that have none (for example the area's name)."
   },
   {
    "fieldname": "columns_section",
@@ -96,7 +120,7 @@
    "fieldname": "values_section",
    "fieldtype": "Section Break",
    "label": "Values",
-   "description": "Codes in the source that mean one of our values, for example Res \u2192 Residential."
+   "description": "Codes in the source that mean one of our values, for example Res → Residential."
   },
   {
    "fieldname": "value_maps",

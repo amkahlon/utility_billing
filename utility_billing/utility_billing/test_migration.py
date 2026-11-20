@@ -146,6 +146,101 @@ class IntegrationTestMigration(IntegrationTestCase):
 	def conn(self, old):
 		return frappe.db.get_value("Connection", {"legacy_account_no": old})
 
+	# ---- increment 31: data the previous system doesn't have, its numbers kept, accounts found by consumer ID
+	def test_a_missing_house_and_block_take_the_profile_defaults(self):
+		book = self.good_book()
+		book["Connections"][1][5] = ""  # MIG-1001 without a house number
+		book["Connections"][2][5] = "60"  # MIG-1002 with a house but no block
+		self.profile.house_pattern = r"(?P<house>\d+)-?(?P<block>[A-Z][A-Z0-9]*)?"
+		self.profile.save()
+		b = self.batch(book)
+		migration.check(b)
+		self.assertIn("House number (none) doesn't match the profile's pattern", "\n".join(p.problem for p in b.problems if p.severity == "Error"))
+		self.profile.update({"missing_house": "Use the old account number", "default_block": "Gulberg"})
+		self.profile.save()
+		b = self.batch(book)
+		self.assertTrue(migration.load(b), [p.problem for p in b.problems if p.severity == "Error"])
+		prop = lambda old: frappe.db.get_value("Property", frappe.db.get_value("Connection", self.conn(old), "property"), ["property_no", "block"])  # noqa: E731
+		self.assertEqual(prop("MIG-1001"), ("Gulberg-MIG-1001", "Gulberg"))  # a property of its own, numbered by the old account number
+		self.assertEqual(prop("MIG-1002"), ("Gulberg-60", "Gulberg"))  # its own house, the default block
+		self.assertEqual(prop("MIG-1003"), ("B-12", "B"))  # a row that has both keeps them
+
+	def test_the_old_number_can_stay_the_reference_number(self):
+		self.profile.keep_old_reference = 1
+		self.profile.save()
+		book = self.good_book()
+		lesco = {"MIG-1001": "07111231234567", "MIG-1002": "07111231234568", "MIG-1003": "07111231234569"}  # 14 digits, as on a DISCO bill
+		for sheet in book.values():
+			for row in sheet[1:]:
+				row[0] = lesco.get(row[0], row[0])
+		b = self.batch(book, control_accounts=3, control_receivable=5805)
+		self.assertTrue(migration.load(b), [p.problem for p in b.problems if p.severity == "Error"])
+		c1 = frappe.get_doc("Connection", "07111231234567")  # the old number is the account's ID and reference number
+		self.assertEqual((c1.reference_no, c1.legacy_account_no), ("07111231234567", "07111231234567"))
+		self.assertEqual(frappe.get_doc("Opening Balance Import", b.opening_import).rows[0].reference_no, "07111231234567")
+		bill = frappe._dict(society=SOC, connection=c1.name, billing_month="2026-11-01", issue_date="2026-11-05", consumer_name="Pervaiz Hussain")
+		snap = bill_print.build_snapshot(bill)["connection"]
+		self.assertEqual((snap["reference_no"], snap["legacy_account_no"]), ("07111231234567", None))  # not printed twice
+		legacy.set_window(SOC, add_days(nowdate(), -200))  # the six months are over: the number still works, it is the reference now
+		self.assertEqual(account.connection_of("07111231234567"), c1.name)
+		# a number that can't serve as a reference, and one already taken on the site, are refused before anything is loaded
+		bad = self.good_book()
+		bad["Connections"] = [CONN_HEAD, ["A/1", "", "Slash", "", "", "70-C", "", "RES", 5, "TST-MIG-M7", "", 5, "Marla"],
+		                      ["07111231234568", "", "Taken", "", "", "71-C", "", "RES", 5, "TST-MIG-M8", "", 5, "Marla"]]
+		bad["Readings"], bad["Balances"], bad["History"] = bad["Readings"][:1], bad["Balances"][:1], bad["History"][:1]
+		frappe.db.set_value("Connection", "07111231234568", "legacy_account_no", None)  # as if it came from another society
+		b2 = self.batch(bad)
+		migration.check(b2)
+		text = "\n".join(p.problem for p in b2.problems if p.severity == "Error")
+		self.assertIn("A/1 can't be kept as the reference number", text)
+		self.assertIn("07111231234568 is already the reference number of an account", text)
+
+	def test_our_own_numbers_skip_a_kept_old_number(self):
+		from utility_billing.utility_billing.reference import make_reference  # noqa: PLC0415
+
+		b = self.loaded()
+		c1 = frappe.get_doc("Connection", self.conn("MIG-1001"))
+		code = int(frappe.db.get_value("Utility Type", "Electricity", "reference_code"))
+		current = frappe.db.sql("select current from `tabSeries` where name = %s", f"UB-REF-{code}")[0][0]
+		coming = make_reference(code, int(current) + 1)  # the number our series would hand out next
+		frappe.rename_doc("Connection", self.conn("MIG-1003"), coming, force=True)  # as if a migrated account had kept it
+		self.assertTrue(frappe.db.exists("Connection", coming))
+		new = c1.new_reference_no()
+		self.assertNotEqual(new, coming)
+		self.assertEqual(new, make_reference(code, int(current) + 2))
+		self.assertEqual(b.load_status, "Loaded")
+
+	def test_an_account_is_found_by_its_consumer_id(self):
+		from utility_billing.utility_billing import cashdesk  # noqa: PLC0415
+
+		self.loaded()
+		c1, c2, c3 = (self.conn(x) for x in ("MIG-1001", "MIG-1002", "MIG-1003"))
+		one, two = (frappe.db.get_value("Connection", c, "consumer") for c in (c3, c1))
+		# a consumer with one account: our consumer ID and the previous system's customer ID both find it
+		self.assertEqual(account.connection_of(one), c3)
+		self.assertEqual(account.connection_of("C-3"), c3)
+		self.assertEqual(account.enquiry("C-3")["connection"], c3)
+		self.assertEqual(cashdesk.lookup("C-3")["connection"], c3)
+		# a consumer with two accounts: not guessed; the counter offers both, a channel is told to use the reference number
+		self.assertIsNone(account.connection_of("C-1"))
+		with self.assertRaises(frappe.ValidationError) as cm:
+			account.enquiry("C-1")
+		self.assertIn("has 2 accounts", str(cm.exception))
+		pick = cashdesk.lookup(two)
+		self.assertEqual([r["reference"] for r in pick["choose"]], sorted([c1, c2]))
+		self.assertEqual(pick["consumer_name"], "Pervaiz Hussain")
+		self.assertEqual(cashdesk.lookup(pick["choose"][0]["reference"])["connection"], pick["choose"][0]["reference"])
+		# a closed account doesn't count: the consumer then has one open account
+		frappe.db.set_value("Connection", c2, "status", "Closed")
+		self.assertEqual(account.connection_of("C-1"), c1)
+		# the previous system's customer ID stops with the old numbers; our own consumer ID always works
+		legacy.set_window(SOC, add_days(nowdate(), -200))
+		self.assertIsNone(account.connection_of("C-3"))
+		self.assertEqual(account.connection_of(one), c3)
+		with self.assertRaises(frappe.ValidationError) as cm:
+			account.enquiry("NO-SUCH-ID")
+		self.assertIn("No account with reference number or consumer ID", str(cm.exception))
+
 	# ---- check
 	def test_check_lists_every_problem_and_writes_nothing(self):
 		book = self.good_book()

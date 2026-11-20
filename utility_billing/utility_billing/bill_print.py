@@ -124,7 +124,8 @@ def build_snapshot(bill) -> dict:
 			"category": category, "sanctioned_load_kw": flt(conn.sanctioned_load_kw), "phase": conn.phase,
 			"route": conn.route, "connection_date": str(conn.get("connection_date") or "") or None,
 			# the previous system's account number, printed while the society still accepts old numbers on the issue date (increment 29)
-			"legacy_account_no": conn.get("legacy_account_no") if conn.get("legacy_account_no") and legacy_accepted(g("society"), g("issue_date")) else None,
+			"legacy_account_no": conn.get("legacy_account_no") if conn.get("legacy_account_no") and conn.get("legacy_account_no") != conn.reference_no
+			and legacy_accepted(g("society"), g("issue_date")) else None,
 		},
 		"reading": dict(reading, previous_reading_date=str(reading.previous_reading_date or ""),
 		                reading_date=str(reading.reading_date or "")) if reading else None,

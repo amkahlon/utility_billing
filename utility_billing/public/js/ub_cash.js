@@ -70,7 +70,7 @@ window.UtilityBillingCashCounter = class UtilityBillingCashCounter {
 				${s.stale ? `<span class="ub-pill red">${__("This day is for {0}: close it and open today's", [moment(s.business_date).format("D MMM")])}</span>` : ""}</div>
 			<div class="ub-cash-grid">
 				<section class="ub-card"><h2>${__("Receive payment")}</h2>
-					<div class="ub-cash-scan"><input class="ub-select ub-cash-ref" placeholder="${__("Scan the bill barcode or type the reference number")}" autocomplete="off" autofocus>
+					<div class="ub-cash-scan"><input class="ub-select ub-cash-ref" placeholder="${__("Scan the bill barcode, or type the reference number or consumer ID")}" autocomplete="off" autofocus>
 						<button class="ub-btn ub-cash-find">${__("Find")}</button></div>
 					<div class="ub-cash-acc"></div>
 					<div class="ub-cash-pay"></div>
@@ -103,6 +103,25 @@ window.UtilityBillingCashCounter = class UtilityBillingCashCounter {
 		frappe
 			.xcall("utility_billing.utility_billing.cashdesk.lookup", { reference: ref })
 			.then((a) => {
+				if (a.choose) {
+					// a consumer ID with several accounts: the cashier picks the one being paid (increment 31)
+					this.acc = null;
+					this.$root.find(".ub-cash-pay").html("");
+					out.html(`<div class="ub-cash-who"><b>${this.esc(a.consumer_name || a.consumer)}</b>
+						<div class="sub">${__("{0} accounts. Choose the one being paid.", [a.choose.length])}</div></div>
+						<table class="ub-table ub-cash-choose">${a.choose.map((c) => `<tr>
+							<td><b>${this.esc(c.reference)}</b></td><td>${this.esc(__(c.utility || ""))}</td>
+							<td>${c.property_no ? __("House") + " " + this.esc(c.property_no) : ""}</td>
+							<td>${c.status !== "Active" ? `<span class="ub-pill amber">${this.esc(__(c.status))}</span>` : ""}</td>
+							<td class="text-right">${this.rs(Math.max(c.amount_due, 0))}</td>
+							<td class="text-right"><button class="ub-btn ub-cash-pick" data-ref="${this.esc(c.reference)}">${__("Choose")}</button></td></tr>`).join("")}</table>`);
+					out.find(".ub-cash-pick").on("click", (ev) => {
+						const picked = $(ev.currentTarget).attr("data-ref");
+						this.$root.find(".ub-cash-ref").val(picked);
+						this.lookup(picked);
+					});
+					return;
+				}
 				this.acc = a;
 				const due = a.due_date ? moment(a.due_date) : null;
 				const within = due && !due.isBefore(moment(), "day");
