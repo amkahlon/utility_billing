@@ -13,7 +13,7 @@
    "fieldname": "sheet",
    "fieldtype": "Select",
    "label": "Sheet",
-   "options": "Connections\nReadings\nBalances\nHistory\nNetwork\nOld Bills\nPayments",
+   "options": "Connections\nReadings\nBalances\nHistory\nFeeders\nTransformers\nNetwork\nOld Bills\nPayments",
    "reqd": 1,
    "in_list_view": 1
   },
@@ -35,7 +35,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-11-18 19:00:00.000000",
+ "modified": "2026-11-20 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Migration Column",
