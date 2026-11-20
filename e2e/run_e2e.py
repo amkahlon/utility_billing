@@ -2549,10 +2549,11 @@ def t_held_amounts(d: Desk):
 	ao, gm, bm, bo = USERS["ao"], USERS["gm"], USERS["bm"], USERS["bo"]
 	s, lesco = S["mig_soc"], S["lesco"]
 	for code, name, kind in (("1201", "Receivables (migrated)", "Receivable"), ("1250", "Held receivables (court orders)", "Receivable"),
-	                         ("3900", "Opening balance equity", "Equity"), ("6100", "Bad debts", "Expense")):
+	                         ("3900", "Opening balance equity", "Equity"), ("6100", "Bad debts", "Expense"),
+	                         ("2201", "Security deposits held (migrated)", "Liability")):  # LESCO's sample account has a deposit
 		ao.save_doc({"doctype": "Ledger Account", "account_code": acct(code), "account_name": name, "account_type": kind})
 	d.save_doc(dict(d.get("Society", s), receivables_account=acct("1201"), opening_balance_account=acct("3900"),
-	                held_receivables_account=acct("1250"), write_off_account=acct("6100")))
+	                held_receivables_account=acct("1250"), write_off_account=acct("6100"), deposit_liability_account=acct("2201")))
 	imp = ao.workflow(d.get("Opening Balance Import", lesco["import"]), "Submit for Approval")
 	imp = gm.workflow(imp, "Approve")
 	eq((imp["docstatus"], bool(imp["held_journal"])), (1, True), "the opening balances are posted, with a journal for the held amount")
