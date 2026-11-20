@@ -6,6 +6,8 @@ An issued bill is never edited (FS-BIL-10). It is corrected in one of two ways:
   recalculated from the corrected reading or category, replaces the earlier version under the same reference number, and
   both stay visible (the old one marked Superseded). Payment channels always show the latest version (FS-BIL-11);
 - after that, a credit or debit note (Account Adjustment), or a **Bulk Adjustment** for a whole group.
+A court hold, an approved installment plan and a due date extension each **reissue the latest bill** as a revised bill without
+recalculating it (reissue_bill; user's decision 2026-11-20), even when it is part-paid or past its due date.
 Also here: a **due date extension** within limits, a **bill dispute** that holds the surcharge and the disputed amount from
 recovery, and the charge and cash-only flag that follow a **dishonoured cheque**."""
 
@@ -131,6 +133,78 @@ def revise_bill(rev):
 	return new
 
 
+# ---------------------------------------------------------------- reissued bills (increment 36)
+def due_date_for(society, issue_date):
+	"""The approval date plus the Society's days to the due date."""
+	return add_days(issue_date, cint(frappe.get_cached_value("Society", society, "days_to_due_date")) or 14)
+
+
+def reissue_bill(old, today, due_date, reason, *, court_hold=None, held_deducted=0, plan=None, plan_deferred=0, surcharge_entry=None):
+	"""Reissue the account's latest bill as a revised bill after a transaction changed what it asks for: a court hold, an installment plan
+	or a due date extension (user's decisions, 2026-11-20). Unlike a bill revision its charges are not recalculated, and it is issued
+	even when the bill is part-paid or past its due date. Same reference number; the earlier version is kept, Superseded.
+
+	It shows the bill's own current bill and arrears, then what changed: the amount held by court order and the arrears under the plan
+	(not yet due) taken off, and anything paid or charged since the earlier version. It asks for what the account owes now, less the
+	arrears under a plan; its surcharge is worked out on the current bill still payable, after its own due date. `surcharge_entry`: a
+	surcharge already charged that still stands (then it is part of what is payable, and no other is added)."""
+	from utility_billing.utility_billing import bill_engine, held  # noqa: PLC0415
+
+	old.reload()  # the transaction may have just changed it (its surcharge, its extended due date)
+	soc = frappe.get_cached_doc("Society", old.society)
+	bal = account.balances(old.connection)
+	payable = max(round(account.arrears_for_new_bill(old.connection, bal) - flt(plan_deferred), 2), 0)
+	current_left = min(max(flt(bal["current"]), 0), payable)
+	surcharge = 0
+	if payable > 0 and not surcharge_entry:
+		surcharge = flt(bill_engine.surcharge_for(current_left, payable - current_left,
+		                                          {"basis": soc.surcharge_basis, "rate": soc.surcharge_rate, "fixed_amount": soc.surcharge_fixed_amount,
+		                                           "cap": soc.surcharge_cap}, soc.rounding_rule or bill_engine.NEAREST))
+	new = frappe.copy_doc(old)
+	new.docstatus = 0  # the copy of a posted bill is posted again below
+	for row in new.get_all_children():
+		row.docstatus = 0
+	new.update({
+		"revises": old.name, "revision_no": cint(old.revision_no or 1) + 1, "superseded_by": None, "status": "Draft", "reissue_reason": reason[:140],
+		"issue_date": today, "due_date": due_date, "extended_due_date": None,
+		"court_hold": court_hold, "held_deducted": flt(held_deducted), "court_held": held.held_of(old.connection),
+		"installment_plan": plan, "installment_due": 0, "installment_no": 0, "plan_deferred": flt(plan_deferred),
+		"other_since_issue": round(payable - (flt(old.current_amount) + flt(old.arrears) - flt(held_deducted) - flt(plan_deferred)), 2),
+		"payable_within_due": payable, "surcharge_amount": surcharge, "payable_after_due": round(payable + surcharge, 2), "outstanding_amount": payable,
+		"ledger_entry": old.ledger_entry, "surcharge_status": "Posted" if surcharge_entry else "Not due yet", "surcharge_entry": surcharge_entry,
+		"duplicate_count": 0, "last_duplicate_on": None, "delivery_status": None, "delivery_date": None, "distributor": None, "delivery_log": [],
+	})
+	old.flags.from_bill_run = old.flags.ignore_permissions = old.flags.superseding = old.flags.ignore_links = True  # the transaction links to it
+	old.cancel()
+	new.flags.from_bill_run = new.flags.ignore_permissions = new.flags.ignore_links = True
+	new.insert()
+	new.status = "Posted"
+	new.print_snapshot = json.dumps(bill_print.build_snapshot(new))
+	new.submit()
+	frappe.db.set_value("Utility Bill", old.name, "superseded_by", new.name, update_modified=False)
+	notify.bill_revised(new)
+	return new
+
+
+def reissue_latest(connection, today, reason, **kw):
+	"""Reissue the account's latest posted bill (see reissue_bill), with a new due date; None when it has no posted bill."""
+	name = latest_posted_bill(connection)
+	if not name:
+		return None
+	bill = frappe.get_doc("Utility Bill", name)
+	return reissue_bill(bill, today, kw.pop("due_date", None) or due_date_for(bill.society, today), reason, **kw)
+
+
+def reissue_for_plan(plan, today):
+	"""An approved installment plan: the latest bill is reissued with the arrears under the plan (the installments still scheduled) not
+	yet due (user's decision, 2026-11-20). Each later bill then adds one installment, as before."""
+	deferred = round(sum(flt(r.amount) for r in plan.schedule if r.status == "Scheduled"), 2)
+	new = reissue_latest(plan.connection, getdate(today), _("Installment plan {0}").format(plan.name), plan=plan.name, plan_deferred=deferred)
+	if new:
+		plan.db_set("revised_bill", new.name)
+	return new
+
+
 # ---------------------------------------------------------------- due date extension (WF-03)
 def check_extension(ext):
 	name = latest_posted_bill(ext.connection)
@@ -155,10 +229,12 @@ def check_extension(ext):
 
 
 def apply_extension(ext, bill, old, days):
-	"""Move the bill's due date and settle the surcharge: one already charged is reversed (to be charged again after the new
-	date if the account is still unpaid), one not yet due simply follows the new date."""
+	"""Settle the surcharge, then reissue the bill with the new due date (user's decision, 2026-11-20: a due date extension generates a
+	revised bill). A surcharge already charged is reversed (charged again after the new date if the account is still unpaid); one not
+	yet due follows the new date. The earlier version keeps the extended date beside it, for the record."""
 	ext.bill, ext.old_due_date, ext.days_extended = bill.name, old, days
 	frappe.db.set_value("Utility Bill", bill.name, "extended_due_date", ext.new_due_date, update_modified=False)
+	standing = None
 	posted = bill.surcharge_entry and bill.surcharge_status == "Posted" and not frappe.db.get_value("Customer Ledger Entry", bill.surcharge_entry, "reversed_by")
 	if posted:
 		new_deadline = add_days(ext.new_due_date, cint(frappe.db.get_value("Society", bill.society, "grace_days")))
@@ -166,9 +242,16 @@ def apply_extension(ext, bill, old, days):
 			account.lock(bill.connection)
 			account.reverse_entry(bill.surcharge_entry, "Utility Bill", bill.name, remarks=_("Due date extended to {0}").format(formatdate(ext.new_due_date)))
 			frappe.db.set_value("Utility Bill", bill.name, "surcharge_status", "Not due yet", update_modified=False)
-			return _("The surcharge already charged was reversed; it is charged again after the new due date if the account is still unpaid.")
-		return _("The new due date is already past, so the surcharge already charged stands.")
-	return _("No surcharge had been charged; it now falls due after the new due date.")
+			message = _("The surcharge already charged was reversed; it is charged again after the new due date if the account is still unpaid.")
+		else:
+			standing = bill.surcharge_entry
+			message = _("The new due date is already past, so the surcharge already charged stands.")
+	else:
+		message = _("No surcharge had been charged; it now falls due after the new due date.")
+	new = reissue_bill(bill, getdate(nowdate()), getdate(ext.new_due_date), _("Due date extended to {0} ({1})").format(formatdate(ext.new_due_date), ext.name),
+	                   surcharge_entry=standing)
+	ext.db_set("revised_bill", new.name)
+	return message
 
 
 # ---------------------------------------------------------------- bill dispute (WF-10)

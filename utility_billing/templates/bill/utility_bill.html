@@ -193,6 +193,9 @@
 			{%- if bill.held_deducted %}
 			<tr><td colspan="3">{{ _("Less: held by court order") }}</td><td class="right">{{ money(-bill.held_deducted) }}</td></tr>
 			{%- endif %}
+			{%- if bill.plan_deferred %}
+			<tr><td colspan="3">{{ _("Less: arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(-bill.plan_deferred) }}</td></tr>
+			{%- endif %}
 			{%- if bill.other_since_issue %}
 			<tr><td colspan="3">{{ _("Paid and other entries since the earlier version") }}</td><td class="right">{{ money(bill.other_since_issue) }}</td></tr>
 			{%- endif %}

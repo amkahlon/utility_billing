@@ -274,8 +274,8 @@ def image_data_uri(file_url, max_px=480):
 
 
 def watermark_of(bill, duplicate):
-	if bill.docstatus == 2:
-		return _("CANCELLED")
+	if bill.docstatus == 2:  # a version replaced by a revised bill is superseded, not cancelled (increment 37)
+		return _("SUPERSEDED") if bill.get("status") == "Superseded" else _("CANCELLED")
 	if bill.docstatus == 0:
 		return _("DRAFT")
 	return _("DUPLICATE") if duplicate else None

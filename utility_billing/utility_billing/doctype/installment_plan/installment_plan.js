@@ -9,6 +9,9 @@ frappe.ui.form.on("Installment Plan", {
 
 	refresh(frm) {
 		utility_billing.setup_approval_form(frm);
+		if (frm.doc.revised_bill) {
+			frm.add_custom_button(__("Revised Bill"), () => frappe.set_route("Form", "Utility Bill", frm.doc.revised_bill));
+		}
 		if (frm.doc.docstatus === 0 && !frm.is_new()) {
 			frm.dashboard.set_headline_alert(
 				__("The account owes {0} in arrears, surcharge and fees. Down payment {1}, then {2} installments of {3}. Save to refresh after changing the terms.", [

@@ -17,11 +17,9 @@ A held amount "is part of total receivables but it is not part of payable amount
 it for information and the receivables reports add it to what is owed.
 """
 
-import json
-
 import frappe
 from frappe import _
-from frappe.utils import add_days, cint, flt, getdate, now_datetime, nowdate
+from frappe.utils import flt, getdate, now_datetime, nowdate
 
 from utility_billing.utility_billing import account, gl, periods
 from utility_billing.utility_billing import account_engine as engine
@@ -137,7 +135,9 @@ def write_off(doc, remarks):
 
 # ---------------------------------------------------------------- after go-live: a Court Hold (increment 36)
 def due_date_for(society, issue_date):
-	return add_days(issue_date, cint(frappe.get_cached_value("Society", society, "days_to_due_date")) or 14)
+	from utility_billing.utility_billing import corrections  # noqa: PLC0415
+
+	return corrections.due_date_for(society, issue_date)
 
 
 def _standing_surcharge(bill):
@@ -200,47 +200,12 @@ def place_hold(doc):
 	ha = frappe.get_doc({"doctype": "Held Amount", "connection": doc.connection, "consumer_name": doc.consumer_name, "society": doc.society,
 	                     "status": "Held", "amount": flt(doc.amount), "held_on": today, "court_order": doc.court_order,
 	                     "court_hold": doc.name, "hold_entry": entry.name}).insert(ignore_permissions=True)
-	revised = revise_for_hold(p.bill, doc, today) if p.bill else None
+	revised = None
+	if p.bill:  # the latest bill reissued without the held amount (corrections.reissue_bill); no plan is active (hold_plan refuses one)
+		from utility_billing.utility_billing import corrections  # noqa: PLC0415
+
+		revised = corrections.reissue_bill(p.bill, today, due_date_for(doc.society, today), _("Court hold {0} ({1})").format(doc.name, doc.court_order),
+		                                   court_hold=doc.name, held_deducted=doc.amount)
 	doc.db_set({"held_amount": ha.name, "ledger_entry": entry.name, "revised_bill": revised.name if revised else None,
 	            "surcharge_reversed": p.surcharge_reversed})
 	return revised
-
-
-def revise_for_hold(old, doc, today):
-	"""The latest bill reissued without the held amount, under the same reference number, the earlier version kept as Superseded. Unlike
-	a bill revision it is issued even when the bill is part-paid or past its due date (the court order decides), with a new due date. Its
-	charges are the bill's own; it shows the amount taken off, anything paid or charged since the earlier version, and asks for what the
-	account owes now."""
-	from utility_billing.utility_billing import bill_engine, bill_print, notify  # noqa: PLC0415
-
-	soc = frappe.get_cached_doc("Society", old.society)
-	bal = account.balances(old.connection)
-	payable = max(round(account.arrears_for_new_bill(old.connection, bal), 2), 0)
-	current_left = min(max(flt(bal["current"]), 0), payable)
-	surcharge = flt(bill_engine.surcharge_for(current_left, payable - current_left,
-	                                          {"basis": soc.surcharge_basis, "rate": soc.surcharge_rate, "fixed_amount": soc.surcharge_fixed_amount,
-	                                           "cap": soc.surcharge_cap}, soc.rounding_rule or bill_engine.NEAREST)) if payable > 0 else 0
-	new = frappe.copy_doc(old)
-	new.docstatus = 0  # the copy of a posted bill is posted again below
-	for row in new.get_all_children():
-		row.docstatus = 0
-	new.update({
-		"revises": old.name, "revision_no": cint(old.revision_no or 1) + 1, "superseded_by": None, "status": "Draft",
-		"issue_date": today, "due_date": due_date_for(old.society, today), "extended_due_date": None,
-		"court_hold": doc.name, "held_deducted": flt(doc.amount), "court_held": held_of(old.connection),
-		"other_since_issue": round(payable - (flt(old.current_amount) + flt(old.arrears) - flt(doc.amount)), 2),
-		"installment_due": 0, "installment_no": 0, "installment_plan": None,  # no plan is active (hold_plan refuses one)
-		"payable_within_due": payable, "surcharge_amount": surcharge, "payable_after_due": round(payable + surcharge, 2), "outstanding_amount": payable,
-		"ledger_entry": old.ledger_entry, "surcharge_status": "Not due yet", "surcharge_entry": None,
-		"duplicate_count": 0, "last_duplicate_on": None, "delivery_status": None, "delivery_date": None, "distributor": None, "delivery_log": [],
-	})
-	old.flags.from_bill_run = old.flags.ignore_permissions = old.flags.superseding = old.flags.ignore_links = True  # the hold links to it
-	old.cancel()
-	new.flags.from_bill_run = new.flags.ignore_permissions = new.flags.ignore_links = True
-	new.insert()
-	new.status = "Posted"
-	new.print_snapshot = json.dumps(bill_print.build_snapshot(new))
-	new.submit()
-	frappe.db.set_value("Utility Bill", old.name, "superseded_by", new.name, update_modified=False)
-	notify.bill_revised(new)
-	return new

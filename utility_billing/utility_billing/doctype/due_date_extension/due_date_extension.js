@@ -7,7 +7,10 @@ frappe.ui.form.on("Due Date Extension", {
 
 	refresh(frm) {
 		if (frm.is_new()) {
-			frm.dashboard.set_headline(__("The bill itself is not changed: its extended due date is kept beside it and the surcharge follows the new date."));
+			frm.dashboard.set_headline(__("The latest bill is reissued as a revised bill with the new due date; the surcharge follows the new date."));
+		}
+		if (frm.doc.revised_bill) {
+			frm.add_custom_button(__("Revised Bill"), () => frappe.set_route("Form", "Utility Bill", frm.doc.revised_bill));
 		}
 	},
 });

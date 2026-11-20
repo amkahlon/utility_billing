@@ -427,7 +427,7 @@ def enquiry_of(connection):
 	conn = frappe.db.get_value("Connection", connection, ["consumer_name", "society", "status"], as_dict=True)
 	bill = frappe.db.get_value(
 		"Utility Bill", {"connection": connection, "docstatus": 1},
-		["name", "billing_month", "due_date", "extended_due_date", "payable_within_due", "payable_after_due", "surcharge_status", "issue_date", "installment_due"],
+		["name", "billing_month", "due_date", "extended_due_date", "payable_within_due", "payable_after_due", "surcharge_status", "issue_date", "installment_due", "plan_deferred", "revises", "creation"],
 		order_by="billing_month desc, creation desc", as_dict=True,
 	)
 	bal = balances(connection)
@@ -451,9 +451,11 @@ def enquiry_of(connection):
 def _amount_due(connection, bill, owed) -> float:
 	"""What to collect today: the whole balance, or under an installment plan the latest bill's payable amount less what has been
 	paid since it was issued (the rest of the arrears isn't due yet)."""
-	if bill and flt(bill.installment_due):
-		paid = flt(frappe.db.sql("""select -sum(amount) from `tabCustomer Ledger Entry` where connection = %s and entry_type = 'Payment'
-		                            and ifnull(reversed_by, '') = '' and posting_date >= %s""", (connection, bill.issue_date))[0][0])
+	if bill and (flt(bill.installment_due) or flt(bill.get("plan_deferred"))):  # a bill reissued for a plan asks for its payable too
+		# a reissued bill already counts what was paid before it was made (the down payment, often the same day): only later payments
+		since = ("posted_on > %s", bill.creation) if bill.get("revises") else ("posting_date >= %s", bill.issue_date)
+		paid = flt(frappe.db.sql(f"""select -sum(amount) from `tabCustomer Ledger Entry` where connection = %s and entry_type = 'Payment'
+		                            and ifnull(reversed_by, '') = '' and {since[0]}""", (connection, since[1]))[0][0])
 		return max(min(flt(owed), flt(bill.payable_within_due) - paid), 0)
 	return max(owed, 0)
 

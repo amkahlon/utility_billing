@@ -195,9 +195,16 @@ class IntegrationTestCorrections(BillingCase):
 		self.assertEqual((str(ext.old_due_date), ext.days_extended, ext.bill, ext.granted_by), ("2026-11-15", 5, self.bill_doc.name, BILLING_MANAGER))
 		self.assertIn("falls due after the new due date", ext.surcharge_action)
 		self.bill_doc.reload()
-		self.assertEqual(str(self.bill_doc.extended_due_date), "2026-11-20")
-		self.assertEqual(str(self.bill_doc.due_date), "2026-11-15")  # the issued bill itself is untouched (FS-BIL-10)
-		self.assertEqual(account.enquiry(self.conn)["due_date"], "2026-11-20")
+		# the issued bill itself is untouched (FS-BIL-10): it is reissued as a revised bill with the new due date (increment 37)
+		self.assertEqual((str(self.bill_doc.extended_due_date), str(self.bill_doc.due_date), self.bill_doc.status), ("2026-11-20", "2026-11-15", "Superseded"))
+		new = frappe.get_doc("Utility Bill", ext.revised_bill)
+		self.assertEqual((new.revises, new.revision_no, str(new.issue_date), str(new.due_date), new.extended_due_date, new.current_amount, new.arrears,
+		                  new.payable_within_due, new.surcharge_amount, new.other_since_issue, new.ledger_entry),
+		                 (self.bill_doc.name, 2, "2026-11-10", "2026-11-20", None, 22_260, 1_104, 23_364, 1_781, 0, self.bill_doc.ledger_entry))
+		self.assertIn("Due date extended to", new.reissue_reason)
+		self.assertEqual((account.enquiry(self.conn)["due_date"], account.enquiry(self.conn)["bill"]), ("2026-11-20", new.name))
+		self.assertIn("SUPERSEDED", bill_print.bill_html(self.bill_doc.name))  # the earlier version reprints, marked superseded
+		self.assertIn("(Revised, version 2)", bill_print.bill_html(new.name))
 		self.assertEqual(account.apply_surcharges(as_of="2026-11-16", society=SOC), 0)  # not due yet
 		self.assertEqual(account.apply_surcharges(as_of="2026-11-21", society=SOC), 1)  # after the new date
 
@@ -207,7 +214,8 @@ class IntegrationTestCorrections(BillingCase):
 		with today("2026-11-17"):
 			ext = self.extension("2026-11-22")
 		self.assertIn("reversed", ext.surcharge_action)
-		self.assertEqual(frappe.db.get_value("Utility Bill", self.bill_doc.name, "surcharge_status"), "Not due yet")
+		self.assertEqual(frappe.db.get_value("Utility Bill", ext.revised_bill, ["surcharge_status", "surcharge_entry", "due_date"]),
+		                 ("Not due yet", None, frappe.utils.getdate("2026-11-22")))
 		self.assertEqual(self.balance(), with_surcharge - self.bill_doc.surcharge_amount)
 		self.assertEqual(account.apply_surcharges(as_of="2026-11-23", society=SOC), 1)
 		self.assertEqual(self.balance(), with_surcharge)
@@ -415,8 +423,8 @@ class IntegrationTestCorrections(BillingCase):
 			cols, data, *_ = mis.run("pending_approvals", {"society": SOC})
 			self.assertIn(("Bill Revision", rev.name, "Billing Manager"), [(r["doctype"], r["document"], r["waiting_for"]) for r in data])
 			act(rev, "Approve", BILLING_MANAGER)
-			self.extension("2026-11-18")
-		self.dispute(bill=frappe.get_doc("Utility Bill", rev.revised_bill))
+			ext = self.extension("2026-11-18")
+		self.dispute(bill=frappe.get_doc("Utility Bill", ext.revised_bill))  # the extension reissued the bill again (increment 37)
 		self.bulk(500)
 		cols, data, *_ = mis.run("corrections_register", {"society": SOC, "from_date": "2026-01-01", "to_date": "2030-12-31"})
 		self.assertEqual(sorted({r["kind"] for r in data}), ["Bill dispute", "Bill revision", "Bulk adjustment", "Due date extension"])

@@ -18,6 +18,7 @@
   "remarks",
   "effect_section",
   "surcharge_action",
+  "revised_bill",
   "granted_by"
  ],
  "fields": [
@@ -113,6 +114,15 @@
    "fieldtype": "Small Text",
    "label": "Surcharge",
    "read_only": 1
+  },
+  {
+   "fieldname": "revised_bill",
+   "fieldtype": "Link",
+   "label": "Revised Bill",
+   "options": "Utility Bill",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "The bill reissued with the new due date."
   },
   {
    "fieldname": "granted_by",
