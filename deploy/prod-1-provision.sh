@@ -16,7 +16,10 @@ BENCH=/home/$FUSER/frappe-bench
 echo "== packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -yq git curl build-essential python3-dev python3-venv python3-pip pipx mariadb-server mariadb-client redis-server \
+# pkg-config and libmariadb-dev: Frappe's database driver (mysqlclient) is compiled during bench init and stops without them
+# (third rehearsal run, 2026-11-19); libcups2 and the x fonts: as on the CI machine, for Chromium and wkhtmltopdf
+apt-get install -yq git curl ca-certificates build-essential pkg-config python3-dev python3-venv python3-pip pipx \
+	mariadb-server mariadb-client libmariadb-dev redis-server libcups2 xfonts-75dpi xfonts-base \
 	nginx supervisor xvfb libfontconfig1 fontconfig fonts-noto-core cron gnupg logrotate unattended-upgrades jq \
 	libnss3 libnspr4 libasound2t64  # headless Chromium makes every PDF (bills, receipts, reports) and can't start without them
 # wkhtmltopdf with patched Qt: only the fallback if Chromium can't start (the Chromium move, 2026-11-18)
