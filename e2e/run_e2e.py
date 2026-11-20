@@ -2524,7 +2524,7 @@ def t_migration_lesco_layout(d: Desk):
 	                     [n1, "", 8452, "", "25/10/2026"], [n2, "", 100, "", "25/10/2026"]],
 	        "Balances": [["Ref_no", "current_bill", "arrears", "surcharge", "Deferred", "credit_balance", "security_deposit",
 	                      "Remaining_instalments_amount", "installments (nos)", "solar_credit_units (balance)", "Total Receivable"],
-	                     [n1, 5355, 45, 0, 1000, 0, 3000, 0, 0, 0, 6400], [n2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+	                     [n1, 5355, 45, 0, 1000, 0, 3000, 0, 0, 0, 6400], [n2, 0, 0, 0, 0, 150, 0, 0, 0, 0, -150]],  # n2 in credit
 	        "History": [["Ref_no", "month", "units", "current_amount", "arrears", "adjustment", "surcharge", "bill_amount", "paid_on", "paid_amount",
 	                     "balance"], [n1, "01/10/2026", 190, 5355, 45, 0, 0, 5400, "", 0, 5400]]}
 	b = ao.save_doc({"doctype": "Migration Batch", "naming_series": "MIG-.YYYY.-.####", "society": s, "profile": p["name"], "as_of_date": "2026-10-31"})
@@ -2537,9 +2537,10 @@ def t_migration_lesco_layout(d: Desk):
 	   "the house found in the address; none found: the old number and the default block")
 	eq([d.get("Consumer", c["consumer"])["tax_status"] for c in (c1, c2)], ["Filer", "Non-filer"], "the NTN decides the filer status")
 	batch = d.get("Migration Batch", b["name"])
-	eq(batch["receivable_total"], 6400, "the receivable includes the deferred 1,000, as LESCO's total does (increment 35)")
+	eq(batch["receivable_total"], 6250, "the receivable includes the deferred 1,000, as LESCO's total does (increment 35)")
 	imp = d.get("Opening Balance Import", batch["opening_import"])
-	eq((float(imp["total_receivable"]), float(imp["total_held"])), (5400.0, 1000.0), "the deferred amount goes to the opening balances as held")
+	eq((float(imp["total_receivable"]), float(imp["total_held"]), imp["error_count"]), (5250.0, 1000.0, 0),
+	   "the deferred amount goes to the opening balances as held")
 	S["lesco"] = {"import": imp["name"], "refs": (r1, r2)}
 
 
