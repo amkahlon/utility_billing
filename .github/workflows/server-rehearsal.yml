@@ -1,0 +1,149 @@
+# Server build rehearsal: the production scripts in deploy/ run on a clean Ubuntu 24.04 machine, as root, the way they will run on a
+# client's server: build (prod-1), backup (prod-4), restore test (prod-5), monitoring (prod-6) and hardening (prod-7).
+# Not rehearsed here, because they need a real domain and real accounts: the HTTPS certificate (prod-2), outgoing e-mail (prod-3) and
+# the copy to S3 (the backup goes to a local folder instead).
+# Runs when a script in deploy/ changes, and on demand.
+name: Server rehearsal
+
+on:
+  pull_request:
+    paths:
+      - "deploy/**"
+      - ".github/workflows/server-rehearsal.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: rehearsal-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rehearse:
+    name: Build a server from the scripts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DOMAIN: ums-rehearsal.localhost
+      BACKUP_DEST: /var/backups/ums   # a local folder in place of the S3 bucket
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: app
+
+      - name: Make the machine look like a fresh server
+        run: |
+          # GitHub's machines come with MySQL and other servers installed; a client's server doesn't
+          sudo systemctl stop mysql 2>/dev/null || true
+          sudo apt-get purge -yq 'mysql-server*' 'mysql-client*' 'mysql-common' 2>/dev/null || true
+          sudo rm -rf /var/lib/mysql /etc/mysql
+          sudo apt-get autoremove -yq >/dev/null
+          # and its own Node in /usr/local, which would come before the server's Node 24 on the path
+          sudo rm -rf /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/corepack /usr/local/lib/node_modules /usr/local/include/node
+          command -v node || echo "no node left on the machine"
+          echo "127.0.0.1 $DOMAIN" | sudo tee -a /etc/hosts >/dev/null
+          # the app comes from this checkout instead of GitHub (no deploy key here)
+          sudo cp -r "$GITHUB_WORKSPACE/app" /opt/ums-src
+          sudo git -C /opt/ums-src checkout -q -b rehearsal
+          sudo chmod -R a+rX /opt/ums-src
+          sudo git config --system --add safe.directory '*'
+          # prod-7 refuses to switch off password logins unless some user has an SSH key
+          sudo mkdir -p /root/.ssh && echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIrehearsalOnlyNotARealKeyxxxxxxxxxxxxxxxxxxxx rehearsal" | sudo tee -a /root/.ssh/authorized_keys >/dev/null
+
+      - name: Settings file (throwaway values; real ones live in the client's password manager)
+        run: |
+          sudo mkdir -p /etc/ums
+          sudo tee /etc/ums/secrets.env >/dev/null <<EOF
+          DOMAIN=$DOMAIN
+          SITE_ADMIN_PASSWORD=$(openssl rand -hex 12)
+          MARIADB_ROOT_PASSWORD=$(openssl rand -hex 12)
+          APP_REPO=/opt/ums-src
+          APP_BRANCH=rehearsal
+          FRAPPE_BRANCH=version-16
+          SMTP_HOST=smtp.invalid
+          SMTP_PORT=587
+          SMTP_USER=billing@example.com
+          SMTP_PASSWORD=not-used
+          SMTP_FROM="Utility Management System <billing@example.com>"
+          ALERT_EMAIL=it@example.com
+          S3_PROVIDER=AWS
+          S3_ENDPOINT=
+          S3_REGION=me-central-1
+          S3_BUCKET=not-used
+          S3_ACCESS_KEY_ID=not-used
+          S3_SECRET_ACCESS_KEY=not-used
+          BACKUP_PASSPHRASE=$(openssl rand -hex 16)
+          KEEP_DAILY=30
+          KEEP_MONTHLY=12
+          EOF
+          sudo sed -i 's/^ *//' /etc/ums/secrets.env
+          sudo chown root:root /etc/ums/secrets.env && sudo chmod 600 /etc/ums/secrets.env
+
+      - name: "Step 1: build the server (prod-1-provision.sh)"
+        run: sudo bash app/deploy/prod-1-provision.sh
+
+      - name: The site answers through Nginx, and its processes run
+        run: |
+          sudo supervisorctl status
+          for _ in $(seq 1 30); do curl -fsS -H "Host: $DOMAIN" http://127.0.0.1/api/method/ping && break; sleep 2; done
+          curl -fsS -H "Host: $DOMAIN" http://127.0.0.1/api/method/ping | grep -q pong
+          curl -fsS -o /dev/null -H "Host: $DOMAIN" http://127.0.0.1/login
+          sudo -u frappe -H bash -lc "cd ~/frappe-bench && bench --site $DOMAIN list-apps"
+
+      - name: PDFs are drawn by Chromium on this server
+        run: |
+          sudo -u frappe -H bash -lc "cd ~/frappe-bench && bench --site $DOMAIN execute utility_billing.pdf.engine" | tee /tmp/engine.txt
+          grep -q chrome /tmp/engine.txt
+
+      - name: A society on the site, so the backup has data for the restore test to find
+        run: |
+          # a client's site has its societies; this fresh one has none, and prod-5 rightly refuses an empty restore
+          sudo -u frappe -H bash -lc "cd ~/frappe-bench && bench --site $DOMAIN console" <<'EOF' | tee /tmp/society.txt
+          import frappe
+          if not frappe.db.exists("Society", "REH"):
+              frappe.get_doc({"doctype": "Society", "society_name": "Rehearsal Society", "short_name": "REH", "billing_cycle": "Monthly", "days_to_due_date": 14, "payment_posting_order": "Oldest first", "surcharge_basis": "Percentage of current bill", "surcharge_rate": 10}).insert(ignore_permissions=True)
+
+          frappe.db.commit()
+          print("societies on the site:", frappe.db.count("Society"))
+          EOF
+          grep -q "societies on the site: [1-9]" /tmp/society.txt
+
+      - name: "Step 4: backup, to a local folder (prod-4-backup.sh --install)"
+        run: |
+          sudo -E BACKUP_DEST="$BACKUP_DEST" bash app/deploy/prod-4-backup.sh --install
+          ls -la "$BACKUP_DEST/daily"
+          cat /etc/cron.d/ums-backup
+
+      - name: "Step 5: restore the backup into a throwaway site (prod-5-restore-test.sh)"
+        run: sudo -E BACKUP_DEST="$BACKUP_DEST" bash app/deploy/prod-5-restore-test.sh
+
+      - name: "Step 7: hardening (prod-7-hardening.sh)"
+        run: |
+          sudo bash app/deploy/prod-7-hardening.sh
+          sudo ufw status verbose
+          sudo fail2ban-client status
+
+      - name: "Step 6: monitoring (prod-6-monitoring.sh), after everything else"
+        run: |
+          sudo bash app/deploy/prod-6-monitoring.sh --install | tee /tmp/monitor.txt
+          sudo bash app/deploy/prod-6-monitoring.sh | tee -a /tmp/monitor.txt
+          cat /etc/cron.d/ums-monitor
+          # without a certificate the HTTPS check must fail here; nothing else may
+          if grep -E "MariaDB is down|Redis is down|Nginx is down|supervisor: no running|Chromium for PDFs|no backup has been taken|disk [0-9]+% full" /tmp/monitor.txt; then
+            echo "::error::the monitoring check reports a problem a healthy rehearsal server shouldn't have"; exit 1
+          fi
+
+      - name: The site still answers after hardening
+        run: |
+          curl -fsS -H "Host: $DOMAIN" http://127.0.0.1/api/method/ping | grep -q pong
+          sudo supervisorctl status
+
+      - name: What the server looked like, when something failed
+        if: failure()
+        run: |
+          sudo supervisorctl status || true
+          sudo tail -40 /home/frappe/frappe-bench/logs/*.log 2>/dev/null | tail -120 || true
+          sudo tail -30 /var/log/nginx/error.log 2>/dev/null || true
+          sudo systemctl --no-pager status mariadb redis-server nginx supervisor 2>/dev/null | head -60 || true
