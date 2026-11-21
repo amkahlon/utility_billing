@@ -851,15 +851,20 @@ def defaulters(f):
 	last_paid = {r.connection: r.d for r in sql("""select connection, max(posting_date) d from `tabCustomer Ledger Entry`
 	             where society = %(s)s and entry_type = 'Payment' and ifnull(reversed_by, '') = '' and posting_date <= %(a)s group by connection""",
 	                                          {"s": s, "a": as_of})}
+	# held by court order: part of the receivable, shown beside what is owed, but not payable, so it doesn't make an account a defaulter
+	# (user, 2026-11-21: "add held amounts to the defaulters report too"; increment 39)
+	court = held.held_as_of(s, as_of)
 	data = []
 	for r, parts in aging_for(s, as_of, f.get("consumer_category"), f.get("block")):
 		overdue = [(age, amt) for age, amt in parts if age > 0]
 		oldest = max((age for age, _amt in overdue), default=0)
 		if flt(r.balance) < min_amount or oldest < min_days:
 			continue
+		held_now = flt(court.get(r.connection))
 		data.append({"connection": r.connection, "consumer_name": r.consumer_name, "property_no": r.property_no, "block": r.block,
 		             "category": r.category, "mobile_no": r.mobile_no, "owed": flt(r.balance),
-		             "overdue": round(sum(a for _age, a in overdue), 2), "oldest": oldest, "last_paid": last_paid.get(r.connection)})
+		             "overdue": round(sum(a for _age, a in overdue), 2), "oldest": oldest, "last_paid": last_paid.get(r.connection),
+		             "held": held_now, "receivable": round(flt(r.balance) + held_now, 2)})
 	from utility_billing.utility_billing import recovery
 
 	state = {r["connection"]: r for r in recovery.accounts(s, as_of, f.get("block"), f.get("consumer_category"), include_all=True)}
@@ -869,15 +874,17 @@ def defaulters(f):
 		         assigned_to=st.get("assigned_to"), hold=st.get("hold"))
 	data.sort(key=lambda r: (-r["owed"], -r["oldest"]))
 	if data:
-		data.append(total_row("connection", _("Total"), data, ("owed", "overdue")))
+		data.append(total_row("connection", _("Total"), data, ("owed", "overdue", "held", "receivable")))
 	return {"columns": [col("Account", "connection", "Link", 110, "Connection"), col("Consumer", "consumer_name", width=160),
 	                    col("Property", "property_no", width=80), col("Block", "block", width=80), col("Category", "category", width=120),
 	                    col("Mobile", "mobile_no", width=110), col("Total Owed", "owed", "Currency", 110),
-	                    col("Of Which Overdue", "overdue", "Currency", 120), col("Oldest Overdue (days)", "oldest", "Int", 130),
+	                    col("Of Which Overdue", "overdue", "Currency", 120), col("Held by Court Order", "held", "Currency", 130),
+	                    col("Total Receivable", "receivable", "Currency", 130), col("Oldest Overdue (days)", "oldest", "Int", 130),
 	                    col("Last Payment", "last_paid", "Date", 100), col("Latest Stage", "last_stage", width=130),
 	                    col("Next Stage Due", "next_stage", width=130), col("Case", "case_status", width=110),
 	                    col("Assigned To", "assigned_to", "Link", 150, "User"), col("On Hold", "hold", width=170)], "data": data,
-	        "message": _("Latest stage, case and hold come from Defaulters and Recovery. Stage rules and the defaulter amount and days are set on the Society.")}
+	        "message": _("Latest stage, case and hold come from Defaulters and Recovery. Stage rules and the defaulter amount and days are set on the Society.")
+	        + " " + _("Held by court order: part of the receivable but not payable until released, so it isn't counted in Total Owed or in choosing the defaulters. Total Receivable = Total Owed + Held.")}
 
 
 # ================================================================ 17b. recovery (RPT-24: disconnection lists, recovery against target)
