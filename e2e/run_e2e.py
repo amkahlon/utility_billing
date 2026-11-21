@@ -1489,7 +1489,9 @@ def t_corrections(d: Desk):
 	latest = latest_bill(conn)
 
 	# dispute: opened by a Billing Officer, decided by a manager
-	dp = {"doctype": "Bill Dispute", "connection": conn, "bill": latest, "disputed_amount": "1000", "reason": "The consumer says the meter ran slow"}
+	# the revised bill asks for what is still owed, so the disputed amount is kept within it (increment 37)
+	dp = {"doctype": "Bill Dispute", "connection": conn, "bill": latest,
+	      "disputed_amount": str(min(1000, int(float(d.get("Utility Bill", latest)["payable_within_due"])))), "reason": "The consumer says the meter ran slow"}
 	opened = bo.save_doc(dict(dp))
 	eq(opened["status"], "Open", "dispute opened")
 	expect_error(lambda: bo.save_doc(dict(dp)), "already disputes")
