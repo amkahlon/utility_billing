@@ -276,15 +276,16 @@ def t_one_banner_per_message(s: Session):
 	s.go(f"court-hold/{rows[0]['name']}")
 	s.page.locator(".form-layout").first.wait_for(state="visible", timeout=20000)
 	s.idle()
-	texts = s.page.evaluate("""async () => {
+	shown = "() => [...cur_frm.layout.message[0].querySelectorAll('.form-message')].map(x => x.innerText.trim())"
+	texts = s.page.evaluate(f"""() => {{
 		cur_frm.dashboard.set_headline_alert('Browser test banner', 'blue');
 		cur_frm.dashboard.set_headline_alert('Browser test banner', 'blue');
 		cur_frm.dashboard.set_headline_alert('Another browser test banner', 'orange');
-		await cur_frm.refresh(); await cur_frm.refresh();
-		return [...cur_frm.layout.message[0].querySelectorAll('.form-message')].map(x => x.innerText.trim());
-	}""")
+		return ({shown})();
+	}}""")
 	assert texts.count("Browser test banner") == 1, f"the same banner is shown {texts.count('Browser test banner')} times"
 	assert "Another browser test banner" in texts, "a different banner was removed"
+	texts = s.page.evaluate(f"async () => {{ await cur_frm.refresh(); await cur_frm.refresh(); return ({shown})(); }}")
 	assert len(texts) == len(set(texts)), f"a banner is repeated after two refreshes: {texts}"
 
 
