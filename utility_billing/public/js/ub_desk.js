@@ -271,14 +271,36 @@ utility_billing.can = (action) => frappe.user.has_role("System Manager") || (fra
 	patch_about();
 	$(document).on("startup", patch_about);
 
+	// ---------------------------------------------------------------- 7. one banner per message (increment 43)
+	// User, 2026-11-21: the Court Hold form showed its "On approval ..." banner twice. Frappe's set_headline_alert adds a banner each
+	// time it is called and a form refreshes more than once (after saving, after the approval panel loads), so a form that sets its
+	// banner in refresh stacked copies. A banner with the same text now replaces the earlier one, on every form.
+	function patch_headline() {
+		const D = frappe.ui.form && frappe.ui.form.Dashboard;
+		if (!D || D.prototype.__ub_headline) return;
+		D.prototype.__ub_headline = true;
+		const set_headline_alert = D.prototype.set_headline_alert;
+		D.prototype.set_headline_alert = function (text, ...args) {
+			const box = this.frm && this.frm.layout && this.frm.layout.message;
+			if (text && box) {
+				const same = $("<div>").html(text).text().trim();
+				box.children(".form-message").filter((_i, el) => $(el).text().trim() === same).remove();
+			}
+			return set_headline_alert.call(this, text, ...args);
+		};
+	}
+
 	// the form code is loaded with the first form, after this file: patch it then, and place the button for that first form
 	$(document).on("form-refresh", (e, frm) => {
+		patch_headline();
 		patch_toolbar();
 		bind_choices();
 		cancel_button(frm);
 		if (CHOICES[frm.doctype]) fill_choices(frm);
 		cascade_form(frm);
 	});
+	$(patch_headline);
+	$(document).on("startup", patch_headline);
 	$(patch_page_fields);
 	$(document).on("startup", patch_page_fields);
 	$(patch_toolbar);
