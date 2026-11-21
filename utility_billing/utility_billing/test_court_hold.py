@@ -60,7 +60,7 @@ class IntegrationTestCourtHold(BillingCase):
 			doc = self.hold(1_000)
 			self.assertEqual((doc.owed_now, doc.surcharge_reversed, doc.held_from_arrears, doc.held_from_current, doc.payable_after),
 			                 (23_364, 0, 1_000, 0, 22_364))
-			self.assertEqual((doc.bill, str(doc.new_due_date), doc.consumer_name, doc.society), (self.october.name, "2026-11-24", doc.consumer_name, SOC))
+			self.assertEqual((doc.bill, str(doc.new_due_date), doc.consumer_name, doc.society), (self.october.name, "2026-11-15", doc.consumer_name, SOC))
 			self.approved(doc)
 			info = account.enquiry(self.conn)
 		# out of what is owed, into the held amounts: part of the receivable, not payable
@@ -71,10 +71,10 @@ class IntegrationTestCourtHold(BillingCase):
 		ha = frappe.get_doc("Held Amount", doc.held_amount)
 		self.assertEqual((ha.status, ha.amount, ha.court_order, ha.court_hold, ha.hold_entry, str(ha.held_on)),
 		                 ("Held", 1_000, "WP 4471/2025 (LHC)", doc.name, e.name, "2026-11-10"))
-		# the revised bill: same charges, the held amount taken off, a new due date; the earlier version stays, Superseded
+		# the revised bill: same charges, the held amount taken off, the same due date (user, 2026-11-21); the earlier version stays, Superseded
 		new, old = frappe.get_doc("Utility Bill", doc.revised_bill), frappe.get_doc("Utility Bill", self.october.name)
 		self.assertEqual((new.revises, new.revision_no, new.court_hold, new.connection, str(new.issue_date), str(new.due_date)),
-		                 (old.name, 2, doc.name, self.conn, "2026-11-10", "2026-11-24"))
+		                 (old.name, 2, doc.name, self.conn, "2026-11-10", "2026-11-15"))
 		self.assertEqual((new.current_amount, new.arrears, new.held_deducted, new.other_since_issue, new.payable_within_due,
 		                  new.surcharge_amount, new.payable_after_due, new.court_held, new.ledger_entry),
 		                 (22_260, 1_104, 1_000, 0, 22_364, 1_781, 24_145, 1_000, old.ledger_entry))
@@ -100,10 +100,13 @@ class IntegrationTestCourtHold(BillingCase):
 		new = frappe.get_doc("Utility Bill", doc.revised_bill)
 		# the 5,000 paid shows as an entry since the earlier version; the surcharge is 8% of the current bill still payable (15,364)
 		self.assertEqual((new.held_deducted, new.other_since_issue, new.payable_within_due, new.surcharge_amount, str(new.due_date),
-		                  new.surcharge_status, new.surcharge_entry), (3_000, -5_000, 15_364, 1_229, "2026-12-04", "Not due yet", None))
+		                  new.surcharge_status, new.surcharge_entry), (3_000, -5_000, 15_364, 1_229, "2026-11-15", "Not due yet", None))
 		self.assertEqual(account.balance(self.conn), 15_364)
-		# not surcharged before the new due date
-		self.assertEqual(account.apply_surcharges(as_of="2026-12-04", society=SOC), 0)
+		# the due date is unchanged and already past, so the next daily run charges the revised bill's own, lower surcharge
+		self.assertEqual(account.apply_surcharges(as_of="2026-11-21", society=SOC), 1)
+		new.reload()
+		self.assertEqual((new.surcharge_status, frappe.db.get_value("Customer Ledger Entry", new.surcharge_entry, "amount")), ("Posted", 1_229))
+		self.assertEqual(account.balance(self.conn), 15_364 + 1_229)
 
 	def test_released_it_comes_back_into_the_arrears(self):
 		with today("2026-11-10"):
@@ -138,13 +141,27 @@ class IntegrationTestCourtHold(BillingCase):
 	def test_the_defaulters_report_shows_the_held_amount_beside_what_is_owed(self):
 		"""Increment 39 (user, 2026-11-21): the held amount is shown, but only what is payable decides who is a defaulter."""
 		with today("2026-11-10"):
-			self.approved(self.hold(1_000))  # the revised bill is due 24-11-2026
+			self.approved(self.hold(1_000))  # the revised bill keeps the due date, 15-11-2026
 		f = frappe._dict(society=SOC, as_of="2026-12-10", min_amount=1, min_days=1)
 		row = [r for r in mis.defaulters(f)["data"] if r.get("connection") == self.conn][0]
 		self.assertEqual((row["owed"], row["held"], row["receivable"]), (22_364, 1_000, 23_364))
 		total = mis.defaulters(f)["data"][-1]
 		self.assertEqual((total["held"], total["receivable"]), (1_000, round(total["owed"] + 1_000, 2)))
 		self.assertFalse([r for r in mis.defaulters(frappe._dict(f, min_amount=22_365))["data"] if r.get("connection") == self.conn])  # held isn't counted
+
+	def test_the_defaulters_and_recovery_page_shows_the_held_amount(self):
+		"""Increment 40 (user, 2026-11-21): beside what is owed on each account, and in a summary card; not recovered."""
+		from utility_billing.utility_billing import recovery  # noqa: PLC0415
+
+		frappe.db.set_value("Society", SOC, {"defaulter_min_amount": 1, "defaulter_min_days": 1})
+		frappe.clear_document_cache("Society", SOC)
+		with today("2026-11-10"):
+			self.approved(self.hold(1_000))
+		row = [r for r in recovery.accounts(SOC, "2026-12-10", include_all=True) if r["connection"] == self.conn][0]
+		self.assertEqual((row["owed"], row["held"]), (22_364, 1_000))
+		page = recovery.get_recovery(society=SOC, as_of="2026-12-10", show="all")
+		self.assertEqual((page["cards"]["held"], page["cards"]["held_accounts"]), (1_000, 1))
+		self.assertEqual([r["held"] for r in page["rows"] if r["connection"] == self.conn], [1_000])
 
 	def test_what_is_refused(self):
 		with today("2026-11-10"):

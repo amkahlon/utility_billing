@@ -99,7 +99,7 @@ window.UtilityBillingRecovery = class UtilityBillingRecovery {
 				${d.can_run ? `<button class="ub-btn ub-run">${__("Run recovery stages")}</button>` : ""}
 			</div>
 		</div>
-		<div class="ub-kpis">
+		<div class="ub-kpis ub-kpis5">
 			${kpi(__("Defaulters"), c.defaulters.toLocaleString("en-US"), __("{0} accounts overdue in all", [c.overdue_accounts]))}
 			${kpi(__("Outstanding"), this.big(c.outstanding), __("{0} owed by defaulters", [this.big(c.defaulter_amount)]))}
 			${kpi(__("Recovered this month"), this.big(p.recovered),
@@ -107,6 +107,8 @@ window.UtilityBillingRecovery = class UtilityBillingRecovery {
 					: d.can_target ? `<a class="ub-target">${__("Set a target")}</a>` : __("No target set"), p.reached ? "green" : "")}
 			${kpi(__("On installment plans"), c.plans, c.missed_installments ? __("{0} missed an installment", [c.missed_installments]) : __("none missed"),
 				c.missed_installments ? "red" : "")}
+			${kpi(__("Held by court order"), this.big(c.held || 0),
+				__("{0} accounts · not payable, so not recovered", [c.held_accounts || 0]))}
 		</div>
 		<div class="ub-card">
 			<div class="ub-cardhead"><h2>${d.show === "defaulters" ? __("Defaulters") : __("Accounts overdue")} (${d.total_rows})</h2>
@@ -137,6 +139,7 @@ window.UtilityBillingRecovery = class UtilityBillingRecovery {
 				<td><a class="ub-c360" data-c="${esc(r.connection)}"><b>${esc(r.consumer_name)}</b></a><div class="sub">${__("Ref.")} ${esc(r.connection)}</div></td>
 				<td>${esc(r.property_no || "")}<div class="sub">${esc(r.block || "")}</div></td>
 				<td class="num">${Math.round(r.owed).toLocaleString("en-US")}</td>
+				<td class="num">${r.held ? Math.round(r.held).toLocaleString("en-US") : '<span class="sub">—</span>'}</td>
 				<td class="num">${r.oldest} ${__("days")}</td>
 				<td>${r.last_payment ? esc(moment(r.last_payment).format("D MMM YYYY")) : `<span class="sub">${__("none")}</span>`}</td>
 				<td><span class="ub-pill ${r.stage_tone}">${esc(r.stage_label)}</span>${r.case_status ? `<div class="sub">${esc(__(r.case_status))}${r.assigned_to ? " · " + esc(r.assigned_to) : ""}</div>` : ""}</td>
@@ -144,6 +147,7 @@ window.UtilityBillingRecovery = class UtilityBillingRecovery {
 			.join("");
 		return `<div style="overflow-x:auto"><table class="ub-tbl"><thead><tr>
 			<th>${d.can_run ? '<input type="checkbox" class="ub-pick-all">' : ""}</th><th>${__("Consumer")}</th><th>${__("House")}</th><th class="num">${__("Arrears (Rs)")}</th>
+			<th class="num" title="${__("Held by court order: part of the receivable, not payable until released")}">${__("Held (Rs)")}</th>
 			<th class="num">${__("Age")}</th><th>${__("Last payment")}</th><th>${__("Stage")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 	}
 

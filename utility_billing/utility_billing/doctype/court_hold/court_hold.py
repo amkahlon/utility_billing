@@ -5,7 +5,7 @@ bill", and the held amount "is part of total receivables but it is not part of p
 
 A Billing Officer or Billing Manager makes it, a Billing Manager or General Manager other than the maker approves it. On approval
 (held.place_hold) the amount leaves what the account owes, a Held Amount records it, and the latest bill is reissued as a revised bill
-without it, with a new due date. Releasing or writing off the Held Amount is done on the Held Amount, as for the go-live holds."""
+without it, keeping its due date (only a due date extension changes one: user, 2026-11-21). Releasing or writing off the Held Amount is done on the Held Amount, as for the go-live holds."""
 
 import frappe
 from frappe import _
