@@ -163,6 +163,39 @@ class IntegrationTestCourtHold(BillingCase):
 		self.assertEqual((page["cards"]["held"], page["cards"]["held_accounts"]), (1_000, 1))
 		self.assertEqual([r["held"] for r in page["rows"] if r["connection"] == self.conn], [1_000])
 
+	def test_the_mis_reports_show_the_held_amount(self):
+		"""Increment 41 (user, 2026-11-21: "add held amounts to the MIS reports too")."""
+		with today("2026-11-10"):
+			doc = self.approved(self.hold(1_000))
+		with today("2026-11-25"), patch.object(held, "now_datetime", return_value=frappe.utils.get_datetime("2026-11-25 11:00:00")):
+			frappe.set_user(BILLING_MANAGER)
+			frappe.get_doc("Held Amount", doc.held_amount).release("The court dismissed the petition")
+			frappe.set_user("Administrator")
+		# the register: still held on the 20th, released by the 30th
+		reg = lambda as_of, **kw: mis.held_register(frappe._dict(society=SOC, as_of=as_of, **kw))  # noqa: E731
+		r = [x for x in reg("2026-11-20")["data"] if x.get("name") == doc.held_amount][0]
+		self.assertEqual((r["connection"], r["amount"], r["status"], r["still_held"], r["days"], r["source"], r["decided_on"]),
+		                 (self.conn, 1_000, "Held", 1_000, 10, f"Court hold {doc.name}", None))
+		cards = {c["label"]: c["value"] for c in reg("2026-11-20")["summary"]}
+		self.assertEqual((cards["Still held (part of the receivable, not payable)"], cards["Accounts with an amount held"]), (1_000, 1))
+		later = reg("2026-11-30")
+		r = [x for x in later["data"] if x.get("name") == doc.held_amount][0]
+		self.assertEqual((r["status"], r["still_held"], r["days"], str(r["decided_on"])), ("Released", 0, 15, "2026-11-25"))
+		self.assertEqual({c["label"]: c["value"] for c in later["summary"]}["Released into the arrears"], 1_000)
+		self.assertFalse(reg("2026-11-30", status="Held")["data"])
+		self.assertFalse(reg("2026-11-09")["data"])  # not yet held
+		# the corrections register: the court hold and its release
+		cr = mis.corrections_register(frappe._dict(society=SOC, from_date="2026-11-01", to_date="2026-11-30"))["data"]
+		self.assertEqual(sorted((x["kind"], x["amount"]) for x in cr if x["kind"] in ("Court hold", "Hold released")),
+		                 [("Court hold", -1_000), ("Hold released", 1_000)])
+		# the consumer statement: held, beside what is owed on all accounts, while it is held
+		consumer = frappe.db.get_value("Connection", self.conn, "consumer")
+		st = lambda to: {c["label"]: c["value"] for c in mis.consumer_statement(frappe._dict(consumer=consumer, to_date=to))["summary"]}  # noqa: E731
+		on_20th = st("2026-11-20")
+		self.assertEqual((on_20th["Held by court order (not payable)"], on_20th["Total receivable (owed + held)"]),
+		                 (1_000, round(on_20th["Owed on all accounts"] + 1_000, 2)))
+		self.assertNotIn("Held by court order (not payable)", st("2026-11-30"))
+
 	def test_what_is_refused(self):
 		with today("2026-11-10"):
 			self.assertRaises(frappe.ValidationError, self.hold, 30_000)  # more than is owed
