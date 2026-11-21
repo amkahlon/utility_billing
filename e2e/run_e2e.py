@@ -2710,8 +2710,12 @@ def _notice_pdf(desk, run):
 
 # ---------------------------------------------------------------- runner
 def main():
+	global RUN
 	d = Desk()
 	d.login()
+	# a run number no earlier run used (2026-11-21: a random repeat, 5060, found its records already there and 87 cases failed)
+	while d.call("frappe.client.get_count", doctype="Society", filters=json.dumps([["name", "like", f"%{RUN}%"]])):
+		RUN = f"{random.randint(1000, 9999)}"
 	make_user(d, "bm", ["Billing Manager"])
 	make_user(d, "gm", ["General Manager"])
 	make_user(d, "bmgm", ["Billing Manager", "General Manager"])
