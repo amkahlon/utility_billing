@@ -2680,6 +2680,10 @@ def t_landing_and_identity(d: Desk):
 	eq(bool(_re.search(r'"home_page":\s*"ub-cash"', html)), True, "/desk opens the cashier's own screen, not the apps screen")
 	eq(("<title>Utility Management System</title>" in html, "utility-billing-logo.svg" in html, "frappe-favicon" in html),
 	   (True, True, False), "the product's name and icon, not the platform's")
+	# opening the desk gives the session a CSRF token, which the browser then sends with every call: so do we
+	token = _re.search(r'csrf_token\s*=\s*"([^"]+)"', html)
+	if token:
+		cashier.s.headers["X-Frappe-CSRF-Token"] = token.group(1)
 	apps = [a["name"] for a in cashier.call("frappe.apps.get_apps")]
 	eq(apps, ["utility_billing"], "the apps a cashier is offered")
 	for page in (f"{URL}/login", f"{URL}/no-such-page"):
