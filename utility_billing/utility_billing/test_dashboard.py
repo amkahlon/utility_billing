@@ -122,6 +122,16 @@ class IntegrationTestDashboard(BillingCase):
 		self.assertEqual(dashboard.data_label("DEMO"), "Demo data")
 		self.assertIsNone(dashboard.data_label("DHA-LHR"))
 
+	def test_the_society_on_screen_is_in_the_picker_past_200_societies(self):
+		# found 2026-11-21: with over 200 societies the picker's list ended before older ones, and the dashboard then opened
+		# on the wrong society
+		self.october_posted()
+		with patch.object(dashboard.access, "visible_societies", return_value=[frappe._dict(name="QA-OTHER", society_name="Other")]):
+			self.assertEqual(dashboard.default_society([frappe._dict(name="QA-OTHER")]),
+			                 frappe.db.get_value("Utility Bill", {"docstatus": 1}, "society", order_by="creation desc"))
+			d = self.get(month="2026-10-01")
+		self.assertEqual([s["name"] for s in d["societies"]][:2], [SOC, "QA-OTHER"])
+
 	def test_opens_on_the_society_with_the_latest_bill(self):
 		self.october_posted()
 		expected = frappe.db.get_value("Utility Bill", {"docstatus": 1}, "society", order_by="creation desc")

@@ -37,9 +37,22 @@ def latest_billing_month(society):
 
 
 def default_society(societies) -> str:
-	"""The society that has the latest posted bill, so the dashboard opens on live figures; else the newest society."""
-	name = frappe.db.get_value("Utility Bill", {"docstatus": 1}, "society", order_by="creation desc")
-	return name if name and any(s.name == name for s in societies) else societies[0].name
+	"""The society that has the latest posted bill among those the user may see, so the dashboard opens on live figures;
+	else the newest society. Judged against the user's societies, not the picker's list, which holds at most 200."""
+	filters = {"docstatus": 1}
+	mine = access.societies_of()
+	if mine is not None:
+		filters["society"] = ["in", mine]
+	name = frappe.db.get_value("Utility Bill", filters, "society", order_by="creation desc")
+	return name or societies[0].name
+
+
+def picker(societies, society) -> list[dict]:
+	"""The society picker's entries; the society on screen is always one of them, even past the list's 200."""
+	rows = [{"name": s.name, "label": s.society_name or s.name} for s in societies]
+	if not any(r["name"] == society for r in rows):
+		rows.insert(0, {"name": society, "label": frappe.db.get_value("Society", society, "society_name") or society})
+	return rows
 
 
 def data_label(society) -> str | None:
@@ -302,7 +315,7 @@ def get_dashboard(society: str | None = None, month: str | None = None):
 	energy = frappe.db.get_value("Society", society, "enable_electricity")
 	return {
 		"society": society, "society_name": frappe.db.get_value("Society", society, "society_name"),
-		"societies": [{"name": s.name, "label": s.society_name or s.name} for s in societies],
+		"societies": picker(societies, society),
 		"data_label": data_label(society), "month": str(month), "month_label": getdate(month).strftime("%B %Y"),
 		"months": [{"value": str(m), "label": getdate(m).strftime("%B %Y")} for m in mis.last_months(month if month > today else today, 13)][::-1],
 		"subtitle": _("{0} · {1} billing cycle").format(_("Electricity") if energy else _("Billing"), getdate(month).strftime("%B %Y")),
