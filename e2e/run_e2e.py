@@ -2654,6 +2654,18 @@ def t_court_hold(d: Desk):
 	eq(revised["due_date"], old["due_date"], "the court hold kept the bill's due date (user, 2026-11-21)")
 	held = d.get("Held Amount", done["held_amount"])
 	eq((held["status"], float(held["amount"]), held["court_hold"]), ("Held", 2500.0, done["name"]), "the held amount, released or written off from its own form")
+	# increment 41 (user, 2026-11-21: "add held amounts to the MIS reports too")
+	reg = [r for r in rows_of(run_report(gm, "Held Amounts Register", society=s, as_of=date.today().isoformat())) if r.get("name") == held["name"]]
+	eq([(r["connection"], float(r["amount"]), r["status"], float(r["still_held"]), r["court_order"]) for r in reg],
+	   [(conn, 2500.0, "Held", 2500.0, hold["court_order"])], "the held amounts register lists it, still held")
+	reg_bo = rows_of(run_report(bo, "Held Amounts Register", society=s, as_of=date.today().isoformat(), status="Released"))
+	eq([r for r in reg_bo if r.get("name") == held["name"]], [], "filtered to released, it isn't listed")
+	cr = [r for r in rows_of(run_report(gm, "Corrections Register", society=s, from_date=date.today().replace(day=1).isoformat(),
+	                                    to_date=date.today().isoformat(), kind="Court hold")) if r.get("name") == done["name"]]
+	eq([(r["kind"], float(r["amount"]), r["status"]) for r in cr], [("Court hold", -2500.0, "Approved")], "the corrections register lists the court hold")
+	for name, field in (("Disconnection List", "held"), ("Security Deposits Held", "court_held")):
+		cols = {c["fieldname"]: c["label"] for c in run_report(gm, name, society=s)["columns"] if isinstance(c, dict)}
+		eq(cols.get(field), "Held by Court Order", f"{name} has a Held by Court Order column")
 
 
 def _notice_pdf(desk, run):

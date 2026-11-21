@@ -887,6 +887,63 @@ def defaulters(f):
 	        + " " + _("Held by court order: part of the receivable but not payable until released, so it isn't counted in Total Owed or in choosing the defaulters. Total Receivable = Total Owed + Held.")}
 
 
+# ================================================================ 17a. held amounts register (increment 41)
+HELD_ROLES = sorted(set(RECOVERY + FINANCE + ["Billing Officer"]))
+
+
+@report("held_register", "Held Amounts Register", HELD_ROLES,
+        [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
+         dict(fieldname="as_of", label="As Of", fieldtype="Date", default="@today"),
+         dict(fieldname="status", label="Status", fieldtype="Select", options="\nHeld\nReleased\nWritten off"),
+         dict(fieldname="block", label="Block", fieldtype="Data"),
+         dict(fieldname="consumer_category", label="Category", fieldtype="Link", options="Consumer Category")],
+        "Every amount held by court order: when and why it was held, and whether it is still held, released into the arrears or written off.",
+        ref_doctype="Held Amount")
+def held_register(f):
+	"""User, 2026-11-21: "add held amounts to the MIS reports too". Each Held Amount (at go-live or by a Court Hold), with its status as at
+	the day: still held (part of the receivable, not payable), released (billed with the arrears) or written off."""
+	s, as_of = society_of(f), getdate(f.get("as_of") or nowdate())
+	rows = sql(f"""select h.name, h.connection, h.consumer_name, h.amount, h.held_on, h.court_order, h.court_hold, h.opening_import, h.status,
+	                      h.decided_on, h.decided_by, h.decision_remarks, c.consumer_category, ifnull(cc.category_name, c.consumer_category) category,
+	                      {BLOCK} block
+	               from `tabHeld Amount` h join `tabConnection` c on c.name = h.connection left join `tabProperty` p on p.name = c.property
+	               left join `tabConsumer Category` cc on cc.name = c.consumer_category
+	               where h.society = %(s)s and h.held_on <= %(a)s order by h.held_on, h.name""", {"s": s, "a": as_of})
+	data, totals = [], {"Held": 0.0, "Released": 0.0, "Written off": 0.0}
+	accounts = set()
+	for r in rows:
+		if (f.get("block") and r.block != f.block) or (f.get("consumer_category") and r.consumer_category != f.consumer_category):
+			continue
+		status = held.status_as_of(r, as_of)
+		if f.get("status") and status != f.status:
+			continue
+		amount = flt(r.amount)
+		totals[status] += amount
+		if status == "Held":
+			accounts.add(r.connection)
+		decided = getdate(r.decided_on) if status != "Held" else None
+		data.append({"name": r.name, "connection": r.connection, "consumer_name": r.consumer_name, "block": r.block, "category": r.category,
+		             "held_on": r.held_on, "source": _("Court hold {0}").format(r.court_hold) if r.court_hold
+		             else _("At go-live ({0})").format(r.opening_import) if r.opening_import else None,
+		             "court_order": r.court_order, "amount": amount, "status": _(status), "still_held": amount if status == "Held" else 0,
+		             "decided_on": decided, "decided_by": r.decided_by if decided else None,
+		             "remarks": r.decision_remarks if decided else None, "days": ((decided or as_of) - getdate(r.held_on)).days})
+	if data:
+		data.append(total_row("name", _("Total"), data, ("amount", "still_held")))
+	summary = [{"value": round(totals["Held"], 2), "label": _("Still held (part of the receivable, not payable)"), "datatype": "Currency", "indicator": "Grey"},
+	           {"value": len(accounts), "label": _("Accounts with an amount held"), "datatype": "Int", "indicator": "Grey"},
+	           {"value": round(totals["Released"], 2), "label": _("Released into the arrears"), "datatype": "Currency", "indicator": "Orange"},
+	           {"value": round(totals["Written off"], 2), "label": _("Written off"), "datatype": "Currency", "indicator": "Red"}]
+	return {"columns": [col("Held Amount", "name", "Link", 140, "Held Amount"), col("Account", "connection", "Link", 110, "Connection"),
+	                    col("Consumer", "consumer_name", width=160), col("Block", "block", width=80), col("Category", "category", width=120),
+	                    col("Held On", "held_on", "Date", 100), col("Source", "source", width=200), col("Court Order", "court_order", width=160),
+	                    col("Amount", "amount", "Currency", 110), col("Status", "status", width=100), col("Still Held", "still_held", "Currency", 110),
+	                    col("Days Held", "days", "Int", 90), col("Decided On", "decided_on", "Date", 100), col("Decided By", "decided_by", "Link", 150, "User"),
+	                    col("Decision", "remarks", width=220)],
+	        "data": data, "summary": summary,
+	        "message": _("Status as at the day chosen. Still held: part of the receivable but not payable, not billed, surcharged or recovered. Released: added to the account's arrears and billed with the next bill. Written off: taken off the receivable; the account's ledger is untouched.")}
+
+
 # ================================================================ 17b. recovery (RPT-24: disconnection lists, recovery against target)
 @report("disconnection_list", "Disconnection List", RECOVERY,
         [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
@@ -901,15 +958,20 @@ def disconnection_list(f):
 	              where n.society = %(s)s and n.stage = 'Disconnection Order' and n.status in ('Awaiting Approval', 'Issued')
 	                and (%(st)s = '' or n.status = %(st)s) order by n.block, n.owed desc""", {"s": s, "st": f.get("status") or ""})
 	data = [dict(r) for r in rows]
+	court = held.held_as_of(s, nowdate())  # shown beside what is owed; not payable, so not why the account is disconnected (increment 41)
+	for r in data:
+		r["held"] = flt(court.get(r["connection"]))
 	if data:
-		data.append(total_row("connection", _("Total"), data, ("owed",)))
+		data.append(total_row("connection", _("Total"), data, ("owed", "held")))
 	return {"columns": [col("Order", "name", "Link", 130, "Recovery Notice"), col("Account", "connection", "Link", 110, "Connection"),
 	                    col("Consumer", "consumer_name", width=160), col("Block", "block", width=80), col("Category", "category", width=120),
-	                    col("Mobile", "mobile_no", width=110), col("Owed", "owed", "Currency", 110), col("Overdue (days)", "oldest_days", "Int", 110),
+	                    col("Mobile", "mobile_no", width=110), col("Owed", "owed", "Currency", 110),
+	                    col("Held by Court Order", "held", "Currency", 130), col("Overdue (days)", "oldest_days", "Int", 110),
 	                    col("Ordered On", "issue_date", "Date", 100), col("Status", "status", width=130),
 	                    col("Approved By", "approved_by", "Link", 150, "User"), col("Connection Status", "connection_status", width=130)],
 	        "data": data,
-	        "message": _("An order marked Awaiting Approval has not been approved by a second user yet. Carrying out the disconnection in the field comes with the work-order workflow.")}
+	        "message": _("An order marked Awaiting Approval has not been approved by a second user yet. Carrying out the disconnection in the field comes with the work-order workflow.")
+	        + " " + _("Held by court order: what the account has held today, not payable until released, so not part of what the order recovers.")}
 
 
 @report("recovery_vs_target", "Recovery against Target", RECOVERY,
@@ -1078,8 +1140,8 @@ def refunds_register(f):
         [dict(fieldname="society", label="Society", fieldtype="Link", options="Society"),
          dict(fieldname="from_date", label="From", fieldtype="Date", default="@month_start"),
          dict(fieldname="to_date", label="To", fieldtype="Date", default="@today"),
-         dict(fieldname="kind", label="Kind", fieldtype="Select", options="\nBill revision\nDue date extension\nBill dispute\nBulk adjustment\nInstallment plan\nWrite-off")],
-        "Revised bills, due date extensions, bill disputes and bulk adjustments: what was corrected, by whom, and the effect.", ref_doctype="Bill Revision")
+         dict(fieldname="kind", label="Kind", fieldtype="Select", options="\nBill revision\nDue date extension\nBill dispute\nBulk adjustment\nInstallment plan\nWrite-off\nCourt hold\nHold released\nHold written off")],
+        "Revised bills, due date extensions, bill disputes, bulk adjustments, court holds and held amounts released or written off: what was corrected, by whom, and the effect.", ref_doctype="Bill Revision")
 def corrections_register(f):
 	s = society_of(f)
 	start, end = period(f, get_first_day(nowdate()))
@@ -1112,6 +1174,20 @@ def corrections_register(f):
 	               from `tabWrite Off` where society = %(s)s and docstatus < 2 and date(creation) between %(a)s and %(b)s""", v):
 		data.append({"kind": "Write-off", "name": r.name, "date": r.d, "connection": r.connection, "consumer_name": r.consumer_name, "amount": -flt(r.amount),
 		             "detail": f"Board resolution {r.resolution_no}", "status": r.workflow_state, "by_user": r.requested_by, "reason": r.reason_code})
+	# court holds and what was decided on held amounts (increment 41; user, 2026-11-21: "add held amounts to the MIS reports too")
+	for r in sql("""select name, date(creation) d, connection, consumer_name, amount, court_order, bill, revised_bill, workflow_state, requested_by
+	               from `tabCourt Hold` where society = %(s)s and docstatus < 2 and date(creation) between %(a)s and %(b)s""", v):
+		data.append({"kind": "Court hold", "name": r.name, "date": r.d, "connection": r.connection, "consumer_name": r.consumer_name, "amount": -flt(r.amount),
+		             "detail": f"Held by court order {r.court_order}: {r.bill or 'no bill'} → {r.revised_bill or 'not yet revised'}",
+		             "status": r.workflow_state, "by_user": r.requested_by, "reason": None})
+	for r in sql("""select name, date(decided_on) d, connection, consumer_name, amount, status, decided_by, decision_remarks from `tabHeld Amount`
+	               where society = %(s)s and status in ('Released', 'Written off') and date(decided_on) between %(a)s and %(b)s""", v):
+		released = r.status == "Released"
+		data.append({"kind": "Hold released" if released else "Hold written off", "name": r.name, "date": r.d, "connection": r.connection,
+		             "consumer_name": r.consumer_name, "amount": flt(r.amount) if released else None,
+		             "detail": (f"Added to the arrears: {r.decision_remarks}" if released
+		                        else f"Rs {flt(r.amount):,.0f} written off from the held receivables, not the account: {r.decision_remarks}"),
+		             "status": r.status, "by_user": r.decided_by, "reason": None})
 	if f.get("kind"):
 		data = [d for d in data if d["kind"] == f.kind]
 	data.sort(key=lambda d: (d["date"], d["name"]))
@@ -1119,7 +1195,8 @@ def corrections_register(f):
 	                    col("Account", "connection", "Link", 110, "Connection"), col("Consumer", "consumer_name", width=170),
 	                    col("Amount (+ owed, - credited)", "amount", "Currency", 150), col("What", "detail", width=300), col("Status", "status", width=130),
 	                    col("By", "by_user", "Link", 150, "User"), col("Reason", "reason", "Link", 120, "Reason Code")], "data": data,
-	        "message": _("For a revision the amount is the change in the current bill; for a dispute, the amount held; for a bulk adjustment, the total across the accounts.")}
+	        "message": _("For a revision the amount is the change in the current bill; for a dispute, the amount held; for a bulk adjustment, the total across the accounts.")
+	        + " " + _("A court hold takes its amount out of what is owed (still part of the receivable); a hold released adds it back to the arrears; a hold written off leaves the account's ledger as it is.")}
 
 
 # ================================================================ 17e. taxes (increment 14; FS-REC-17, tax register)
@@ -1265,13 +1342,20 @@ def consumer_statement(f):
 		last[r["connection"]] = flt(r["balance"])
 	data = [{"posting_date": r["posting_date"], "connection": r["connection"], "entry": _(r["entry_type"]), "voucher": r["voucher_no"],
 	         "remarks": r["remarks"], "amount": flt(r["amount"]), "balance": flt(r["balance"])} for r in rows]
+	owed = round(sum(last.values()), 2)
 	summary = [{"value": len(last), "label": _("Accounts"), "datatype": "Int"},
-	           {"value": round(sum(last.values()), 2), "label": _("Owed on all accounts"), "datatype": "Currency", "indicator": "Red" if sum(last.values()) > 0 else "Green"}]
+	           {"value": owed, "label": _("Owed on all accounts"), "datatype": "Currency", "indicator": "Red" if owed > 0 else "Green"}]
+	# held by court order at the end of the statement (increment 41): part of what the consumer owes in all, not payable
+	court = round(sum(held.held_as_of(None, f.get("to_date") or nowdate(), frappe.get_all("Connection", filters={"consumer": f.consumer}, pluck="name")).values()), 2)
+	if court:
+		summary += [{"value": court, "label": _("Held by court order (not payable)"), "datatype": "Currency", "indicator": "Grey"},
+		            {"value": round(owed + court, 2), "label": _("Total receivable (owed + held)"), "datatype": "Currency", "indicator": "Red"}]
 	return {"columns": [col("Date", "posting_date", "Date", 100), col("Account", "connection", "Link", 130, "Connection"), col("Entry", "entry", width=150),
 	                    col("Document", "voucher", width=150), col("Remarks", "remarks", width=200), col("Amount", "amount", "Currency", 120),
 	                    col("Account Balance", "balance", "Currency", 130)],
 	        "data": data, "summary": summary,
-	        "message": _("Each account keeps its own balance; Owed on all accounts adds the last balance of each.")}
+	        "message": _("Each account keeps its own balance; Owed on all accounts adds the last balance of each.")
+	        + (" " + _("Held by court order: taken out of the balance by a court hold, still owed but not payable until released.") if court else "")}
 
 
 @report("deposits_held", "Security Deposits Held", FINANCE + ["Billing Officer"],
@@ -1290,17 +1374,20 @@ def deposits_held(f):
 	              from `tabSecurity Deposit` d where d.society = %(s)s and d.docstatus = 1 and d.posting_date <= %(d)s group by d.connection order by d.connection""",
 	           {"s": s, "d": as_of})
 	data = []
+	court = held.held_as_of(s, as_of)  # increment 41
 	for r in rows:
-		held = round(flt(r.received) - flt(r.refunded) - flt(r.offset_amount), 2)
+		deposit = round(flt(r.received) - flt(r.refunded) - flt(r.offset_amount), 2)
 		owed = flt(sql("select sum(amount) v from `tabCustomer Ledger Entry` where connection = %(c)s and posting_date <= %(d)s", {"c": r.connection, "d": as_of})[0].v)
 		data.append({"connection": r.connection, "consumer_name": r.consumer_name, "received": flt(r.received), "refunded": flt(r.refunded),
-		             "offset": flt(r.offset_amount), "held": held, "owed": round(owed, 2), "last_date": r.last_date})
+		             "offset": flt(r.offset_amount), "held": deposit, "owed": round(owed, 2), "court_held": flt(court.get(r.connection)), "last_date": r.last_date})
 	if data:
-		data.append(total_row("connection", _("Total"), data, ("received", "refunded", "offset", "held", "owed")))
+		data.append(total_row("connection", _("Total"), data, ("received", "refunded", "offset", "held", "owed", "court_held")))
 	return {"columns": [col("Account", "connection", "Link", 130, "Connection"), col("Consumer", "consumer_name", width=170), col("Received", "received", "Currency", 110),
 	                    col("Refunded", "refunded", "Currency", 110), col("Offset", "offset", "Currency", 110), col("Held", "held", "Currency", 110),
-	                    col("Account Owes", "owed", "Currency", 120), col("Last Movement", "last_date", "Date", 110)], "data": data,
-	        "message": _("Held is the society's liability to the consumers; it should agree with the Security Deposits Held account in the journals.")}
+	                    col("Account Owes", "owed", "Currency", 120), col("Held by Court Order", "court_held", "Currency", 130),
+	                    col("Last Movement", "last_date", "Date", 110)], "data": data,
+	        "message": _("Held is the society's liability to the consumers; it should agree with the Security Deposits Held account in the journals.")
+	        + " " + _("Held by Court Order is owed by the consumer but not payable until released, so it isn't in Account Owes.")}
 
 
 # ================================================================ 17h. network (increment 18; FS-MST-25, 26, 27)

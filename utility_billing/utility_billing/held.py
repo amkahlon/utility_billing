@@ -41,16 +41,28 @@ def held_by_connection(society) -> dict:
 	return out
 
 
-def held_as_of(society, as_of) -> dict:
-	"""{account: amount held at the end of a day}: held by then and not yet released or written off by then (the reports)."""
+def held_as_of(society, as_of, connections=None) -> dict:
+	"""{account: amount held at the end of a day}: held by then and not yet released or written off by then (the reports). With
+	`connections`, only those accounts (society may then be None)."""
 	as_of = getdate(as_of)
+	filters = {"held_on": ["<=", as_of]}
+	if society:
+		filters["society"] = society
+	if connections is not None:
+		if not connections:
+			return {}
+		filters["connection"] = ["in", list(connections)]
 	out = {}
-	for r in frappe.get_all("Held Amount", filters={"society": society, "held_on": ["<=", as_of]},
-	                        fields=["connection", "amount", "status", "decided_on"]):
-		if r.status != "Held" and r.decided_on and getdate(r.decided_on) <= as_of:
+	for r in frappe.get_all("Held Amount", filters=filters, fields=["connection", "amount", "status", "decided_on"]):
+		if status_as_of(r, as_of) != "Held":
 			continue
 		out[r.connection] = round(out.get(r.connection, 0) + flt(r.amount), 2)
 	return out
+
+
+def status_as_of(r, as_of) -> str:
+	"""A held amount's status at the end of a day: Held until the day it was released or written off."""
+	return r.status if r.status != "Held" and r.decided_on and getdate(r.decided_on) <= getdate(as_of) else "Held"
 
 
 def _journal(society, posting_date, narration, lines, entry_count=1):
