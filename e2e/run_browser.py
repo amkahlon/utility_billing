@@ -269,6 +269,26 @@ def t_phone_width(s: Session):
 		p.set_viewport_size({"width": 1366, "height": 850})
 
 
+def t_one_banner_per_message(s: Session):
+	"""User, 2026-11-21: the Court Hold form showed its banner twice (Frappe adds a banner each time a form refreshes)."""
+	rows = s.page.evaluate("""() => frappe.db.get_list('Court Hold', {fields: ['name'], order_by: 'creation desc', limit: 1})""")
+	assert rows, "the QA site has no court hold: run the HTTP suite first"
+	s.go(f"court-hold/{rows[0]['name']}")
+	s.page.locator(".form-layout").first.wait_for(state="visible", timeout=20000)
+	s.idle()
+	shown = "() => [...cur_frm.layout.message[0].querySelectorAll('.form-message')].map(x => x.innerText.trim())"
+	texts = s.page.evaluate(f"""() => {{
+		cur_frm.dashboard.set_headline_alert('Browser test banner', 'blue');
+		cur_frm.dashboard.set_headline_alert('Browser test banner', 'blue');
+		cur_frm.dashboard.set_headline_alert('Another browser test banner', 'orange');
+		return ({shown})();
+	}}""")
+	assert texts.count("Browser test banner") == 1, f"the same banner is shown {texts.count('Browser test banner')} times"
+	assert "Another browser test banner" in texts, "a different banner was removed"
+	texts = s.page.evaluate(f"async () => {{ await cur_frm.refresh(); await cur_frm.refresh(); return ({shown})(); }}")
+	assert len(texts) == len(set(texts)), f"a banner is repeated after two refreshes: {texts}"
+
+
 CASES = (
 	("BR-01", "Sign in through the login form", t_sign_in),
 	("BR-02", "Sidebar lists the main screens, Migration and the Net Metering Register", t_sidebar),
@@ -283,6 +303,7 @@ CASES = (
 	("BR-11", "A posted bill opens", t_open_a_bill),
 	("BR-12", "Reports open with no script error", t_reports),
 	("BR-13", "Phone width: the main pages don't scroll sideways", t_phone_width),
+	("BR-14", "A form shows each banner once, however often it refreshes", t_one_banner_per_message),
 )
 
 
