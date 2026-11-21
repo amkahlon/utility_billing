@@ -55,6 +55,9 @@ def boot_session(bootinfo):
 	bootinfo.ub_home = home_page()
 	if bootinfo.get("home_page") != "setup-wizard":
 		bootinfo.home_page = desk_home(bootinfo.ub_home)
+	from utility_billing import menu  # noqa: PLC0415
+
+	menu.apply(bootinfo)  # each role's sidebar lists the screens it works in (increment 44)
 	if "System Manager" not in frappe.get_roles():
 		# the sidebar's app switcher lists only this app: not the platform ("Framework") or another app installed beside it
 		for app in bootinfo.get("app_data") or []:

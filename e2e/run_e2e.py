@@ -2680,6 +2680,10 @@ def t_landing_and_identity(d: Desk):
 	eq(bool(_re.search(r'"home_page":\s*"ub-cash"', html)), True, "/desk opens the cashier's own screen, not the apps screen")
 	eq(("<title>Utility Management System</title>" in html, "utility-billing-logo.svg" in html, "frappe-favicon" in html),
 	   (True, True, False), "the product's name and icon, not the platform's")
+	# increment 44: the cashier's sidebar lists the counter's screens, not every list the role may read
+	in_menu = lambda target: bool(_re.search(r'"link_to":\s*"' + _re.escape(target) + '"', html))  # noqa: E731
+	eq((in_menu("ub-cash"), in_menu("Payment Receipt"), in_menu("Bill Run"), in_menu("User"), in_menu("ub-dashboard")),
+	   (True, True, False, False, False), "the cashier's sidebar: Cash Counter and receipts, not Bill Run, Users or the dashboard")
 	# opening the desk gives the session a CSRF token, which the browser then sends with every call: so do we
 	token = _re.search(r'csrf_token\s*=\s*"([^"]+)"', html)
 	if token:
