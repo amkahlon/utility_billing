@@ -734,6 +734,11 @@ def owed(desk):
 	return USERS["bo"].call(f"{ACC}.account_summary", connection=S["conn"]["name"])
 
 
+def latest_bill(conn):
+	"""The account's bill now: QA-69's due date extension and QA-71's installment plan reissue it (increment 37)."""
+	return USERS["cashier"].call(f"{ACC}.enquiry", reference_no=USERS["bo"].get("Connection", conn)["reference_no"])["bill"]
+
+
 @case("QA-43", "FS-CFG-24/26: fee schedule, duplicate bill fee, cash counter; default reason codes present")
 def t_fee_setup(d: Desk):
 	fee = d.save_doc({"doctype": "Fee Type", "society": S["society"], "fee_name": "Duplicate Bill", "amount": "100"})
@@ -1471,14 +1476,22 @@ def t_corrections(d: Desk):
 	expect_error(lambda: cashier.save_doc(dict(ext)))
 	saved = bm.save_doc(dict(ext))
 	eq((int(saved["days_extended"]), saved["bill"]), (5, S["bill"]), "extension")
-	eq(d.get("Utility Bill", S["bill"])["extended_due_date"], (due + timedelta(days=5)).isoformat(), "extended due date kept beside the bill")
-	eq(d.get("Utility Bill", S["bill"])["due_date"], bill["due_date"], "the issued bill is not edited")
+	old = d.get("Utility Bill", S["bill"])
+	eq((old["extended_due_date"], old["due_date"], old["status"]), ((due + timedelta(days=5)).isoformat(), bill["due_date"], "Superseded"),
+	   "the issued bill is not edited: kept, superseded, with the extended date beside it")
+	new = d.get("Utility Bill", saved["revised_bill"])  # increment 37: a revised bill with the new due date
+	eq((new["revises"], new["due_date"], new["status"]), (S["bill"], (due + timedelta(days=5)).isoformat(), "Posted"), "the revised bill")
+	eq(USERS["cashier"].call("utility_billing.utility_billing.account.enquiry", reference_no=S["conn"]["reference_no"])["bill"], new["name"],
+	   "payment channels show the revised bill")
 	too_long = dict(ext, new_due_date=(due + timedelta(days=14)).isoformat())
 	expect_error(lambda: bm.save_doc(dict(too_long)), "General Manager")
 	eq(int(gm.save_doc(dict(too_long))["days_extended"]), 9, "a General Manager may exceed the limit")
+	latest = latest_bill(conn)
 
 	# dispute: opened by a Billing Officer, decided by a manager
-	dp = {"doctype": "Bill Dispute", "connection": conn, "bill": S["bill"], "disputed_amount": "1000", "reason": "The consumer says the meter ran slow"}
+	# the revised bill asks for what is still owed, so the disputed amount is kept within it (increment 37)
+	dp = {"doctype": "Bill Dispute", "connection": conn, "bill": latest,
+	      "disputed_amount": str(min(1000, int(float(d.get("Utility Bill", latest)["payable_within_due"])))), "reason": "The consumer says the meter ran slow"}
 	opened = bo.save_doc(dict(dp))
 	eq(opened["status"], "Open", "dispute opened")
 	expect_error(lambda: bo.save_doc(dict(dp)), "already disputes")
@@ -1487,7 +1500,7 @@ def t_corrections(d: Desk):
 	eq(d.get("Bill Dispute", opened["name"])["status"], "Withdrawn", "dispute decided")
 
 	# a revised bill is refused once payments came after the bill: use a credit or debit note instead
-	rev = bo.save_doc({"doctype": "Bill Revision", "original_bill": S["bill"], "kind": "Corrected reading", "reason_code": "READ-WRONG",
+	rev = bo.save_doc({"doctype": "Bill Revision", "original_bill": latest, "kind": "Corrected reading", "reason_code": "READ-WRONG",
 	                   "remarks": "The reader mistyped the present reading", "new_present_reading": "1"})
 	expect_error(lambda: bo.workflow(rev, "Submit for Approval"))
 
@@ -1573,6 +1586,8 @@ def t_arrangements(d: Desk):
 	bm.workflow(saved, "Approve")
 	active = d.get("Installment Plan", saved["name"])
 	eq((active["docstatus"], active["plan_status"]), (1, "Active"), "plan active")
+	rb = d.get("Utility Bill", active["revised_bill"])  # increment 37: the latest bill reissued with the plan's arrears not yet due
+	eq((rb["installment_plan"], float(rb["plan_deferred"]), rb["status"]), (saved["name"], 100.0, "Posted"), "the bill reissued for the plan")
 
 	# write-off: the amount decides who approves (up to 1,000 a Billing Manager, above that a General Manager)
 	wo = {"doctype": "Write Off", "connection": conn, "amount": "500", "reason_code": "IRRECOV", "resolution_no": f"BR-{RUN}",
@@ -1614,7 +1629,7 @@ def t_period_controls(d: Desk):
 	expect_error(lambda: bo.call(f"{P}.delivery.mark", run=run, status="Handed to Distributor"), "distributor")
 	eq(bo.call(f"{P}.delivery.mark", run=run, status="Handed to Distributor", distributor="Ali Khan")["changed"], 1, "handed over")
 	bo.call(f"{P}.delivery.mark", run=run, status="Delivered", remarks="Left with the guard")
-	bill = bo.get("Utility Bill", S["bill"])
+	bill = bo.get("Utility Bill", latest_bill(S["conn"]["name"]))  # the bill reissued for QA-69's extension and QA-71's plan
 	eq((bill["delivery_status"], bill["distributor"], [e["status"] for e in bill["delivery_log"]][-2:]), ("Delivered", "Ali Khan", ["Handed to Distributor", "Delivered"]), "delivery")  # the message sent at posting comes first
 	expect_error(lambda: USERS["cashier"].call(f"{P}.delivery.mark", run=run, status="Delivered"))
 	rep = rows_of(run_report(bo, "Bill Delivery Status", bill_run=run))
@@ -2212,8 +2227,9 @@ def t_bill_designer_print(d: Desk):
 	pages = PdfReader(io.BytesIO(r.content)).pages
 	text = " ".join(" ".join(p.extract_text() for p in pages).split())
 	eq((len(pages), ref in text, "Office Copy" in text), (1, True, True), "the exact PDF, one page")
-	_, text = get_pdf(USERS["cashier"], "download_bill", name=S["bill"])
-	eq(text, S["bill_text"], "the bill issued before the template still reprints exactly")
+	_, text = get_pdf(USERS["cashier"], "download_bill", name=S["bill"])  # superseded since QA-69 (increment 37): marked so, otherwise exact
+	eq((" ".join(text.replace("SUPERSEDED", " ").split()), "SUPERSEDED" in text), (S["bill_text"], True),
+	   "the bill issued before the template still reprints exactly, marked superseded")
 	expect_error(lambda: USERS["iso"].call(f"{BD}.preview", society="QA-ISO", layout=json.dumps(st["layout"])), "access")
 	r = Desk().s.post(f"{URL}/api/method/{BD}.preview", data={"society": S["society"], "layout": json.dumps(st["layout"])})
 	eq(r.status_code in (401, 403), True, "a visitor can't preview")

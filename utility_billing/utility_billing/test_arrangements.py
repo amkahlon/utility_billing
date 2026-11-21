@@ -152,6 +152,23 @@ class IntegrationTestArrangements(BillingCase):
 
 		self.assertIn("Installment due with this bill", bill_print.bill_html(nov.name))
 
+	def test_an_approved_plan_reissues_the_latest_bill_with_the_plans_arrears_not_yet_due(self):
+		"""Increment 37 (user, 2026-11-20): the October bill is reissued. Owed 22,260 + 1,104 + 9,000 - 2,000 (down payment) = 30,364;
+		8,104 of it is under the plan, so 22,260 is payable now."""
+		plan = self.approved_plan()
+		old, new = frappe.get_doc("Utility Bill", self.october_bill.name), frappe.get_doc("Utility Bill", plan.revised_bill)
+		self.assertEqual((old.status, old.superseded_by), ("Superseded", new.name))
+		self.assertEqual((new.revises, new.installment_plan, new.installment_due, new.plan_deferred, new.payable_within_due, new.other_since_issue,
+		                  str(new.issue_date), str(new.due_date)), (old.name, plan.name, 0, 8_104, 22_260, 7_000, TODAY, "2026-11-24"))
+		self.assertIn("Installment plan", new.reissue_reason)
+		info = account.enquiry(self.conn)
+		self.assertEqual((info["bill"], info["amount_due"], info["balance"]), (new.name, 22_260, 30_364))  # the down payment isn't counted twice
+		from utility_billing.utility_billing import bill_print  # noqa: PLC0415
+
+		self.assertIn("Less: arrears under the installment plan (not yet due)", bill_print.bill_html(new.name))
+		nov = self.november()  # the next bill adds the first installment, as before
+		self.assertEqual((nov.installment_due, nov.installment_no), (2_026, 1))
+
 	def test_the_counter_asks_for_the_bill_not_the_whole_balance(self):
 		self.approved_plan()
 		nov = self.november()

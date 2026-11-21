@@ -288,6 +288,7 @@
 		<tr><td>{{ _("Installment due with this bill") }} ({{ _("No") }} {{ bill.installment_no }})</td><td class="right">{{ money(bill.installment_due) }}</td></tr>
 		{%- else %}<tr><td>{{ lb(o, T, "Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>{% endif %}
 		{%- if bill.held_deducted %}<tr><td>{{ _("Less: held by court order") }}</td><td class="right">{{ money(-bill.held_deducted) }}</td></tr>{% endif %}
+		{%- if bill.plan_deferred %}<tr><td>{{ _("Less: arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(-bill.plan_deferred) }}</td></tr>{% endif %}
 		{%- if bill.other_since_issue %}<tr><td>{{ _("Paid and other entries since the earlier version") }}</td><td class="right">{{ money(bill.other_since_issue) }}</td></tr>{% endif %}
 		{%- endif %}
 		{%- if "within" in o.rows %}<tr class="big"><td>{{ lb(o, T, "Payable within due date") }}{% if o.show_due_date %} <span class="note">({{ due_date }})</span>{% endif %}</td><td class="right">{{ money(bill.payable_within_due) }}</td></tr>{% endif %}
@@ -305,6 +306,7 @@
 		<tr><td>{{ _("Installment due with this bill") }} ({{ _("No") }} {{ bill.installment_no }})</td><td class="right">{{ money(bill.installment_due) }}</td></tr>
 		{%- else %}<tr><td>{{ lb(o, T, "Arrears") }}</td><td class="right">{{ money(bill.arrears) }}</td></tr>{% endif %}
 		{%- if bill.held_deducted %}<tr><td>{{ _("Less: held by court order") }}</td><td class="right">{{ money(-bill.held_deducted) }}</td></tr>{% endif %}
+		{%- if bill.plan_deferred %}<tr><td>{{ _("Less: arrears under the installment plan (not yet due)") }}</td><td class="right">{{ money(-bill.plan_deferred) }}</td></tr>{% endif %}
 		{%- if bill.other_since_issue %}<tr><td>{{ _("Paid and other entries since the earlier version") }}</td><td class="right">{{ money(bill.other_since_issue) }}</td></tr>{% endif %}
 		{%- endif %}
 	</table>

@@ -2,8 +2,9 @@
 """Installment Plan: arrears, surcharge and fees split into a down payment and monthly installments (FS-WF-05, FS-BIL-14, FS-CFG-18).
 
 A Billing Officer, Billing Manager or Recovery Officer makes it; the approver the Society's levels name for its amount (default a
-Billing Manager) approves it, and only once the down payment has been received. From the first month, each bill adds one
-installment; a missed installment cancels the plan (see plans.py)."""
+Billing Manager) approves it, and only once the down payment has been received. On approval the latest bill is reissued as a revised
+bill with the arrears under the plan not yet due (increment 36). From the first month, each bill adds one installment; a missed
+installment cancels the plan (see plans.py)."""
 
 import frappe
 from frappe import _
@@ -69,7 +70,15 @@ class InstallmentPlan(Document):
 
 	def on_submit(self):
 		self.db_set("plan_status", "Active")
+		# the latest bill is reissued with the arrears under the plan not yet due (user's decision, 2026-11-20)
+		from utility_billing.utility_billing import corrections  # noqa: PLC0415
+
+		corrections.reissue_for_plan(self, nowdate())
 		approval.notify(self, DEFAULT_APPROVER)
+
+	def before_cancel(self):
+		# the bills that carried its installments, and the bill reissued for it, stay as they were issued (increment 37)
+		self.ignore_linked_doctypes = ("Utility Bill",)
 
 	def on_cancel(self):
 		for row in self.schedule:  # in memory too: db_update_all below writes these rows back
