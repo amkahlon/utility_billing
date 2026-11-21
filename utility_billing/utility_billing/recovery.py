@@ -88,6 +88,9 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 	flagged = flags.held(society, flags.HOLD_RECOVERY, as_of)
 	see = access.sees_personal()
 	blocks = access.blocks_of(society=society)  # a recovery officer limited to some blocks sees only those (FS-ACC-01)
+	from utility_billing.utility_billing import held as court  # noqa: PLC0415
+
+	court_held = court.held_as_of(society, as_of)  # shown beside what is owed; not payable, so not recovered (user, 2026-11-21)
 	rows = []
 	for r, parts in mis.aging_for(society, as_of, category, block):
 		overdue, oldest = overdue_view(parts)
@@ -112,6 +115,7 @@ def accounts(society, as_of=None, block=None, category=None, include_all=False) 
 		rows.append({
 			"connection": r.connection, "consumer_name": r.consumer_name, "property_no": r.property_no, "block": r.block,
 			"category": r.category, "mobile_no": r.mobile_no if see else access.mask(r.mobile_no), "owed": flt(r.balance), "overdue": overdue, "oldest": oldest,
+			"held": flt(court_held.get(r.connection)),
 			"defaulter": engine.is_defaulter(r.balance, oldest, rules.min_amount, rules.min_days),
 			"last_stage": next((s for s in reversed(engine.STAGES) if s in done), None), "stages_done": done,
 			"next_stage": nxt[0] if nxt else None, "next_channel": nxt[1] if nxt else None, "hold": hold,
@@ -293,6 +297,9 @@ def get_recovery(society: str | None = None, as_of: str | None = None, block: st
 	rules = rules_of(society)
 	rows = accounts(society, as_of, block or None, category or None, include_all=False)
 	defaulters = [r for r in rows if r["defaulter"]]
+	# held by court order in the blocks and category shown (and the officer's own blocks): part of the receivable, not recovered
+	officer_blocks = access.blocks_of(society=society)
+	court = [h for h in mis.held_rows(society, as_of, category or None, block or None) if not officer_blocks or (h.block or "") in officer_blocks]
 	shown = defaulters if show == "defaulters" else rows
 	due = defaultdict(int)
 	for r in rows:
@@ -324,7 +331,8 @@ def get_recovery(society: str | None = None, as_of: str | None = None, block: st
 			"overdue_accounts": len(rows), "notices_due": sum(due.values()), "due_by_stage": dict(due),
 			"on_hold": sum(1 for r in rows if r["hold"]), "broken_promises": sum(1 for r in rows if r["promise"] == "Broken"),
 			"open_cases": open_n, "issued_this_month": {x.stage: cint(x.n) for x in issued_month},
-			"outstanding": round(sum(r["owed"] for r in rows), 2), "plans": cint(plans.plans), "missed_installments": cint(plans.missed)},
+			"outstanding": round(sum(r["owed"] for r in rows), 2), "plans": cint(plans.plans), "missed_installments": cint(plans.missed),
+			"held": round(sum(flt(h.amount) for h in court), 2), "held_accounts": len(court)},
 		"progress": progress, "month_label": month.strftime("%B %Y"),
 		"blocks": sorted({r["block"] for r in mis.account_rows(society, as_of) if r.block}),
 		"categories": frappe.get_all("Consumer Category", pluck="name", order_by="name"),

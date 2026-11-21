@@ -133,10 +133,15 @@ def revise_bill(rev):
 	return new
 
 
-# ---------------------------------------------------------------- reissued bills (increment 36)
-def due_date_for(society, issue_date):
-	"""The approval date plus the Society's days to the due date."""
-	return add_days(issue_date, cint(frappe.get_cached_value("Society", society, "days_to_due_date")) or 14)
+# ---------------------------------------------------------------- reissued bills (increments 36, 37, 40)
+SURCHARGE_SETTLED = ("Not charged (paid in time)", "Not charged (flagged)", "Reversed (paid in time)")
+
+
+def standing_surcharge(bill):
+	"""The bill's surcharge entry when it was charged and still stands, else None."""
+	if bill.surcharge_entry and bill.surcharge_status == "Posted" and not frappe.db.get_value("Customer Ledger Entry", bill.surcharge_entry, "reversed_by"):
+		return bill.surcharge_entry
+	return None
 
 
 def reissue_bill(old, today, due_date, reason, *, court_hold=None, held_deducted=0, plan=None, plan_deferred=0, surcharge_entry=None):
@@ -146,11 +151,20 @@ def reissue_bill(old, today, due_date, reason, *, court_hold=None, held_deducted
 
 	It shows the bill's own current bill and arrears, then what changed: the amount held by court order and the arrears under the plan
 	(not yet due) taken off, and anything paid or charged since the earlier version. It asks for what the account owes now, less the
-	arrears under a plan; its surcharge is worked out on the current bill still payable, after its own due date. `surcharge_entry`: a
-	surcharge already charged that still stands (then it is part of what is payable, and no other is added)."""
+	arrears under a plan.
+
+	Due date (user, 2026-11-21: "Due date is to be updated only for due date extension cases, otherwise no due date is changed for any
+	transaction"): `due_date` is given only by a due date extension; otherwise the bill keeps its own (an extended one included).
+	Surcharge: one already charged that still stands (`surcharge_entry`, or the bill's own) carries over: it is part of what is payable
+	and no other is added. Otherwise the surcharge is worked out on the current bill still payable and charged after the due date, unless
+	the bill keeping its due date was already settled as not to be charged."""
 	from utility_billing.utility_billing import bill_engine, held  # noqa: PLC0415
 
 	old.reload()  # the transaction may have just changed it (its surcharge, its extended due date)
+	keep_due = due_date is None
+	due_date = due_date_of(old) if keep_due else getdate(due_date)
+	surcharge_entry = surcharge_entry or standing_surcharge(old)
+	surcharge_status = "Posted" if surcharge_entry else (old.surcharge_status if keep_due and old.surcharge_status in SURCHARGE_SETTLED else "Not due yet")
 	soc = frappe.get_cached_doc("Society", old.society)
 	bal = account.balances(old.connection)
 	payable = max(round(account.arrears_for_new_bill(old.connection, bal) - flt(plan_deferred), 2), 0)
@@ -171,7 +185,7 @@ def reissue_bill(old, today, due_date, reason, *, court_hold=None, held_deducted
 		"installment_plan": plan, "installment_due": 0, "installment_no": 0, "plan_deferred": flt(plan_deferred),
 		"other_since_issue": round(payable - (flt(old.current_amount) + flt(old.arrears) - flt(held_deducted) - flt(plan_deferred)), 2),
 		"payable_within_due": payable, "surcharge_amount": surcharge, "payable_after_due": round(payable + surcharge, 2), "outstanding_amount": payable,
-		"ledger_entry": old.ledger_entry, "surcharge_status": "Posted" if surcharge_entry else "Not due yet", "surcharge_entry": surcharge_entry,
+		"ledger_entry": old.ledger_entry, "surcharge_status": surcharge_status, "surcharge_entry": surcharge_entry,
 		"duplicate_count": 0, "last_duplicate_on": None, "delivery_status": None, "delivery_date": None, "distributor": None, "delivery_log": [],
 	})
 	old.flags.from_bill_run = old.flags.ignore_permissions = old.flags.superseding = old.flags.ignore_links = True  # the transaction links to it
@@ -187,12 +201,11 @@ def reissue_bill(old, today, due_date, reason, *, court_hold=None, held_deducted
 
 
 def reissue_latest(connection, today, reason, **kw):
-	"""Reissue the account's latest posted bill (see reissue_bill), with a new due date; None when it has no posted bill."""
+	"""Reissue the account's latest posted bill (see reissue_bill), keeping its due date; None when it has no posted bill."""
 	name = latest_posted_bill(connection)
 	if not name:
 		return None
-	bill = frappe.get_doc("Utility Bill", name)
-	return reissue_bill(bill, today, kw.pop("due_date", None) or due_date_for(bill.society, today), reason, **kw)
+	return reissue_bill(frappe.get_doc("Utility Bill", name), today, None, reason, **kw)
 
 
 def reissue_for_plan(plan, today):

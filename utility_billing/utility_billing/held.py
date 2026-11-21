@@ -134,23 +134,16 @@ def write_off(doc, remarks):
 
 
 # ---------------------------------------------------------------- after go-live: a Court Hold (increment 36)
-def due_date_for(society, issue_date):
-	from utility_billing.utility_billing import corrections  # noqa: PLC0415
-
-	return corrections.due_date_for(society, issue_date)
-
-
 def _standing_surcharge(bill):
 	"""The latest bill's surcharge entry when it still stands, else None."""
-	if bill and bill.surcharge_entry and bill.surcharge_status == "Posted" and not frappe.db.get_value(
-			"Customer Ledger Entry", bill.surcharge_entry, "reversed_by"):
-		return bill.surcharge_entry
-	return None
+	from utility_billing.utility_billing import corrections  # noqa: PLC0415
+
+	return corrections.standing_surcharge(bill) if bill else None
 
 
 def hold_plan(connection, amount) -> frappe._dict:
 	"""What a court hold of `amount` does to the account, without saving anything. The latest bill's surcharge, if charged, is reversed
-	(the revised bill has a new due date and its own surcharge); then the amount leaves what is owed, oldest first: arrears, surcharge,
+	(the revised bill's own surcharge, on what is still payable, is charged after its due date, which doesn't change); then the amount leaves what is owed, oldest first: arrears, surcharge,
 	fees, then the current bill."""
 	from utility_billing.utility_billing import corrections, holders, plans  # noqa: PLC0415
 
@@ -183,7 +176,9 @@ def fill_hold_preview(doc):
 	doc.owed_now, doc.surcharge_reversed, doc.held_from_arrears, doc.held_from_current = p.owed_now, p.surcharge_reversed, p.from_arrears, p.from_current
 	doc.payable_after = p.payable
 	doc.bill = p.bill.name if p.bill else None
-	doc.new_due_date = due_date_for(doc.society, nowdate()) if p.bill else None
+	from utility_billing.utility_billing import corrections  # noqa: PLC0415
+
+	doc.new_due_date = corrections.due_date_of(p.bill) if p.bill else None  # the bill keeps its due date (user, 2026-11-21)
 
 
 def place_hold(doc):
@@ -204,7 +199,7 @@ def place_hold(doc):
 	if p.bill:  # the latest bill reissued without the held amount (corrections.reissue_bill); no plan is active (hold_plan refuses one)
 		from utility_billing.utility_billing import corrections  # noqa: PLC0415
 
-		revised = corrections.reissue_bill(p.bill, today, due_date_for(doc.society, today), _("Court hold {0} ({1})").format(doc.name, doc.court_order),
+		revised = corrections.reissue_bill(p.bill, today, None, _("Court hold {0} ({1})").format(doc.name, doc.court_order),
 		                                   court_hold=doc.name, held_deducted=doc.amount)
 	doc.db_set({"held_amount": ha.name, "ledger_entry": entry.name, "revised_bill": revised.name if revised else None,
 	            "surcharge_reversed": p.surcharge_reversed})

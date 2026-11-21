@@ -140,7 +140,7 @@
    "fieldtype": "Currency",
    "label": "Latest Bill's Surcharge Reversed",
    "read_only": 1,
-   "description": "A surcharge already charged on the latest bill is reversed: the revised bill has a new due date and its own surcharge."
+   "description": "A surcharge already charged on the latest bill is reversed: the revised bill's own surcharge, on what is still payable, is charged after its due date."
   },
   {
    "fieldname": "held_from_arrears",
@@ -175,9 +175,9 @@
   {
    "fieldname": "new_due_date",
    "fieldtype": "Date",
-   "label": "Revised Bill Due Date",
+   "label": "Due Date (unchanged)",
    "read_only": 1,
-   "description": "The approval date plus the Society's days to the due date."
+   "description": "The bill's own due date. Only a due date extension changes it."
   },
   {
    "fieldname": "result_section",

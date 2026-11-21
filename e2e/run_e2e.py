@@ -2646,6 +2646,12 @@ def t_court_hold(d: Desk):
 	row = [r for r in rows_of(run_report(gm, "Defaulters", society=s, as_of=later)) if r.get("connection") == conn]
 	eq((bool(row), float(row[0]["held"]) if row else None, round(float(row[0]["receivable"]) - float(row[0]["owed"]), 2) if row else None),
 	   (True, 2500.0, 2500.0), "the defaulters report shows the held amount and the total receivable")
+	# increment 40: the Defaulters and Recovery page too, beside what is owed and in a summary card
+	page = d.call("utility_billing.utility_billing.recovery.get_recovery", society=s, as_of=later, show="all")
+	eq((float(page["cards"]["held"]), [float(r["held"]) for r in page["rows"] if r["connection"] == conn]), (2500.0, [2500.0]),
+	   "the Defaulters and Recovery page shows the held amount")
+	revised = d.get("Utility Bill", done["revised_bill"])
+	eq(revised["due_date"], old["due_date"], "the court hold kept the bill's due date (user, 2026-11-21)")
 	held = d.get("Held Amount", done["held_amount"])
 	eq((held["status"], float(held["amount"]), held["court_hold"]), ("Held", 2500.0, done["name"]), "the held amount, released or written off from its own form")
 
