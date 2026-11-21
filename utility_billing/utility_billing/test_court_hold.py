@@ -135,6 +135,17 @@ class IntegrationTestCourtHold(BillingCase):
 		self.assertEqual(values["Held by court order (not payable)"], 1_000)
 		self.assertEqual(values["Total receivable (owed + held)"], round(values["Total owed by consumers"] + 1_000, 2))
 
+	def test_the_defaulters_report_shows_the_held_amount_beside_what_is_owed(self):
+		"""Increment 39 (user, 2026-11-21): the held amount is shown, but only what is payable decides who is a defaulter."""
+		with today("2026-11-10"):
+			self.approved(self.hold(1_000))  # the revised bill is due 24-11-2026
+		f = frappe._dict(society=SOC, as_of="2026-12-10", min_amount=1, min_days=1)
+		row = [r for r in mis.defaulters(f)["data"] if r.get("connection") == self.conn][0]
+		self.assertEqual((row["owed"], row["held"], row["receivable"]), (22_364, 1_000, 23_364))
+		total = mis.defaulters(f)["data"][-1]
+		self.assertEqual((total["held"], total["receivable"]), (1_000, round(total["owed"] + 1_000, 2)))
+		self.assertFalse([r for r in mis.defaulters(frappe._dict(f, min_amount=22_365))["data"] if r.get("connection") == self.conn])  # held isn't counted
+
 	def test_what_is_refused(self):
 		with today("2026-11-10"):
 			self.assertRaises(frappe.ValidationError, self.hold, 30_000)  # more than is owed

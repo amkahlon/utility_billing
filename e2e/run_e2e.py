@@ -2639,6 +2639,13 @@ def t_court_hold(d: Desk):
 	total = rows_of(run_report(gm, "Arrears Ageing", society=s, as_of=date.today().isoformat()))[-1]
 	eq((float(total["held"]), round(float(total["receivable"]), 2)), (2500.0, round(float(total["total"]) + 2500, 2)),
 	   "the arrears ageing adds the held amount to the total receivable")
+	# increment 39: the defaulters report shows it beside what is owed; run 40 days on, past the revised bill's new due date
+	from datetime import timedelta
+
+	later = (date.today() + timedelta(days=40)).isoformat()
+	row = [r for r in rows_of(run_report(gm, "Defaulters", society=s, as_of=later)) if r.get("connection") == conn]
+	eq((bool(row), float(row[0]["held"]) if row else None, round(float(row[0]["receivable"]) - float(row[0]["owed"]), 2) if row else None),
+	   (True, 2500.0, 2500.0), "the defaulters report shows the held amount and the total receivable")
 	held = d.get("Held Amount", done["held_amount"])
 	eq((held["status"], float(held["amount"]), held["court_hold"]), ("Held", 2500.0, done["name"]), "the held amount, released or written off from its own form")
 
