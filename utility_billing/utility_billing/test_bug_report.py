@@ -23,6 +23,39 @@ class IntegrationTestBugReport(BillingCase):
 		roles = set(frappe.get_all("Has Role", filters={"parenttype": "Page", "parent": "ub-dashboard"}, pluck="role"))
 		self.assertTrue({"Meter Reader", "Cashier"} <= roles)
 
+	def test_users_land_in_the_app_and_see_no_platform_name(self):
+		"""Increment 42 (user, 2026-11-21): every user lands straight in the app, on the screen of their role, and doesn't see the
+		platform's name."""
+		from frappe.apps import get_route  # noqa: PLC0415
+
+		from utility_billing import install  # noqa: PLC0415
+		from utility_billing.utility_billing.testing import CASHIER  # noqa: PLC0415
+
+		install.apply_product_identity()
+		self.assertEqual([frappe.db.get_single_value("System Settings", f) for f in ("default_app", "app_name", "disable_standard_email_footer")],
+		                 ["utility_billing", "Utility Management System", 1])
+		self.assertEqual(frappe.db.get_single_value("Website Settings", "app_name"), "Utility Management System")
+		self.assertEqual(get_route("utility_billing"), "/desk/ub-dashboard")  # login goes here; the dashboard sends others on
+		ctx = frappe.get_hooks("website_context")
+		last = lambda v: v[-1] if isinstance(v, list) else v  # noqa: E731  (hooks come as lists; the website context takes the last)
+		self.assertTrue(all("utility-billing-logo" in last(ctx[k]) for k in ("favicon", "splash_image")))
+		# /desk opens the user's own screen, never the apps screen; the app switcher lists only this app
+		self.assertEqual((boot.desk_home("ub-cash"), boot.desk_home("List/Connection")), ("ub-cash", "ub-dashboard"))
+
+		def booted(user):
+			info = frappe._dict(home_page="desktop", app_data=[{"app_name": "erpnext", "on_apps_screen": True},
+			                                                   {"app_name": "frappe", "on_apps_screen": True},
+			                                                   {"app_name": "utility_billing", "on_apps_screen": True}])
+			frappe.set_user(user)
+			try:
+				boot.boot_session(info)
+			finally:
+				frappe.set_user("Administrator")
+			return info.home_page, [a["app_name"] for a in info.app_data if a["on_apps_screen"]], info.ub_product["name"]
+
+		self.assertEqual(booted(CASHIER), ("ub-cash", ["utility_billing"], "Utility Management System"))
+		self.assertEqual(booted("Administrator"), ("ub-dashboard", ["erpnext", "frappe", "utility_billing"], "Utility Management System"))
+
 	def test_a_workflow_action_on_ticked_records_says_what_it_did(self):
 		if not approval.workflow_active("Security Deposit"):
 			self.skipTest("no Security Deposit workflow on this site")

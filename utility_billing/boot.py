@@ -3,6 +3,7 @@
 
 import frappe
 
+import utility_billing
 from utility_billing.ui_version import ui_version
 from utility_billing.utility_billing import rights
 
@@ -43,8 +44,25 @@ def link_parents() -> dict[str, list[str]]:
 	return out
 
 
+def desk_home(home) -> str:
+	"""The Page the desk opens at /desk: the user's own screen when it is a page, else the dashboard, which sends them on. Never the
+	apps screen with the platform's and other apps' icons (user, 2026-11-21; increment 42)."""
+	return home if "/" not in home else "ub-dashboard"
+
+
 def boot_session(bootinfo):
 	bootinfo.ub_ui_version = ui_version()
 	bootinfo.ub_home = home_page()
+	if bootinfo.get("home_page") != "setup-wizard":
+		bootinfo.home_page = desk_home(bootinfo.ub_home)
+	if "System Manager" not in frappe.get_roles():
+		# the sidebar's app switcher lists only this app: not the platform ("Framework") or another app installed beside it
+		for app in bootinfo.get("app_data") or []:
+			if app.get("app_name") != "utility_billing":
+				app["on_apps_screen"] = False
+	from utility_billing.install import PRODUCT_NAME  # noqa: PLC0415
+
+	bootinfo.ub_product = {"name": PRODUCT_NAME, "publisher": "SoftVerx",
+	                       "version": utility_billing.__version__}
 	bootinfo.ub_rights = rights.mine()
 	bootinfo.ub_link_parents = link_parents()

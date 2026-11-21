@@ -2668,6 +2668,29 @@ def t_court_hold(d: Desk):
 		eq(cols.get(field), "Held by Court Order", f"{name} has a Held by Court Order column")
 
 
+@case("QA-101", "Increment 42: users land straight in the app, on their role's screen, and see the product's name, not the platform's")
+def t_landing_and_identity(d: Desk):
+	import re as _re
+
+	cashier = USERS["cashier"]
+	r = cashier.s.get(f"{URL}/login", allow_redirects=False)  # signed in: the login page sends the user on, as after signing in
+	eq((r.status_code in (301, 302, 303, 307), r.headers.get("Location", "").split("?")[0].replace(URL, "")), (True, "/desk/ub-dashboard"),
+	   "after login the app opens (the dashboard sends a cashier to the cash counter)")
+	html = cashier.s.get(f"{URL}/desk").text
+	eq(bool(_re.search(r'"home_page":\s*"ub-cash"', html)), True, "/desk opens the cashier's own screen, not the apps screen")
+	eq(("<title>Utility Management System</title>" in html, "utility-billing-logo.svg" in html, "frappe-favicon" in html),
+	   (True, True, False), "the product's name and icon, not the platform's")
+	# opening the desk gives the session a CSRF token, which the browser then sends with every call: so do we
+	token = _re.search(r'csrf_token\s*=\s*"([^"]+)"', html)
+	if token:
+		cashier.s.headers["X-Frappe-CSRF-Token"] = token.group(1)
+	apps = [a["name"] for a in cashier.call("frappe.apps.get_apps")]
+	eq(apps, ["utility_billing"], "the apps a cashier is offered")
+	for page in (f"{URL}/login", f"{URL}/no-such-page"):
+		text = requests.get(page, timeout=30).text
+		eq(("frappe-favicon" in text, "utility-billing-logo.svg" in text), (False, True), f"{page.replace(URL, '')} carries the product's icon")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 
