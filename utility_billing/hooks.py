@@ -42,6 +42,9 @@ app_include_css = f"/assets/utility_billing/css/ub_theme.css?v={_V}"
 web_include_css = f"/assets/utility_billing/css/ub_theme.css?v={_V}"
 app_include_js = [f"/assets/utility_billing/js/approval.js?v={_V}", f"/assets/utility_billing/js/ub_map.js?v={_V}", f"/assets/utility_billing/js/ub_desk.js?v={_V}"]
 boot_session = "utility_billing.boot.boot_session"
+# our own browser-tab icon and loading screen in place of the platform's (user, 2026-11-21; increment 42)
+website_context = {"favicon": "/assets/utility_billing/images/utility-billing-logo.svg",
+                   "splash_image": "/assets/utility_billing/images/utility-billing-logo.svg"}
 
 # include js, css files in header of web template
 # web_include_js = "/assets/utility_billing/js/utility_billing.js"

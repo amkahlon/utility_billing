@@ -250,6 +250,27 @@ utility_billing.can = (action) => frappe.user.has_role("System Manager") || (fra
 		});
 	}
 
+	// ---------------------------------------------------------------- 6. our own About (increment 42)
+	// User, 2026-11-21: "user should not know what platform or open source tool we have used to build this application". The
+	// platform's About dialog (opened from the search bar or a keyboard shortcut) names it and its versions; ours names the product.
+	function about() {
+		const p = frappe.boot.ub_product || { name: "Utility Management System", publisher: "SoftVerx", version: "" };
+		const d = new frappe.ui.Dialog({ title: __("About") });
+		$(d.body).html(`<div class="ub-about">
+			<img src="/assets/utility_billing/images/utility-billing-logo.svg" alt="" style="width:48px;height:48px;margin-bottom:12px">
+			<h4 style="margin:0 0 4px">${frappe.utils.escape_html(__(p.name))}</h4>
+			<p class="text-muted" style="margin:0 0 12px">${__("Version {0}", [frappe.utils.escape_html(p.version || "")])}</p>
+			<p class="text-muted" style="margin:0">© ${new Date().getFullYear()} ${frappe.utils.escape_html(p.publisher)}. ${__("All rights reserved.")}</p>
+		</div>`);
+		d.show();
+	}
+	function patch_about() {
+		frappe.provide("frappe.ui.misc");
+		frappe.ui.misc.about = about;
+	}
+	patch_about();
+	$(document).on("startup", patch_about);
+
 	// the form code is loaded with the first form, after this file: patch it then, and place the button for that first form
 	$(document).on("form-refresh", (e, frm) => {
 		patch_toolbar();

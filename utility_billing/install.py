@@ -164,6 +164,29 @@ def after_install():
 	create_default_kpis()
 	create_default_flags()
 	allow_superseded_bill_print()
+	apply_product_identity()
+
+
+PRODUCT_NAME = "Utility Management System"
+
+
+def apply_product_identity():
+	"""Users land straight in the app and don't see the platform's name (user, 2026-11-21: "Every user should directly land in the
+	utility management system's home page or as per his access rights" and "user should not know what platform or open source tool
+	we have used to build this application"). Our app is the default app, so login skips the apps screen even where another app
+	(ERPNext) is installed; the product name is the desk's title; the platform's own line under every e-mail is left out.
+	The favicon and loading screen come from hooks.website_context; the About dialog and the landing page from ub_desk.js and boot.py."""
+	wanted = {"default_app": "utility_billing", "app_name": PRODUCT_NAME, "disable_standard_email_footer": 1}
+	changed = False
+	for field, value in wanted.items():
+		if frappe.db.get_single_value("System Settings", field) != value:
+			frappe.db.set_single_value("System Settings", field, value)
+			changed = True
+	if frappe.db.get_single_value("Website Settings", "app_name") != PRODUCT_NAME:
+		frappe.db.set_single_value("Website Settings", "app_name", PRODUCT_NAME)
+		changed = True
+	if changed:
+		frappe.clear_cache()
 
 
 def allow_superseded_bill_print():
@@ -192,6 +215,7 @@ def after_migrate():
 	ensure_indexes()
 	ensure_roles_and_workflows()
 	allow_superseded_bill_print()
+	apply_product_identity()
 
 
 def ensure_roles_and_workflows():
