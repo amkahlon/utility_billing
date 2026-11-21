@@ -163,6 +163,15 @@ def after_install():
 	create_default_export_layouts()
 	create_default_kpis()
 	create_default_flags()
+	allow_superseded_bill_print()
+
+
+def allow_superseded_bill_print():
+	"""Frappe's print view refuses every cancelled document unless Print Settings allow it. It is allowed, and the app's before_print
+	check (bill_print.guard_cancelled_print) refuses every cancelled document except a bill superseded by a revised bill (user, 2026-11-21)."""
+	if not frappe.db.get_single_value("Print Settings", "allow_print_for_cancelled"):
+		frappe.db.set_single_value("Print Settings", "allow_print_for_cancelled", 1)
+		frappe.clear_document_cache("Print Settings", "Print Settings")
 
 
 def create_default_flags():
@@ -182,6 +191,7 @@ def after_migrate():
 		servicereq.ensure_types(society)  # the standard service request types (FS-WF-00)
 	ensure_indexes()
 	ensure_roles_and_workflows()
+	allow_superseded_bill_print()
 
 
 def ensure_roles_and_workflows():

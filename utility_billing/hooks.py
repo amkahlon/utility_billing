@@ -113,6 +113,8 @@ jinja = {"methods": [
 
 # Events for other systems (FS-API-02): written with the change, delivered by the scheduler
 doc_events = {
+	# superseded bills print; other cancelled documents still don't (user, 2026-11-21; bill_print.guard_cancelled_print)
+	"*": {"before_print": "utility_billing.utility_billing.bill_print.guard_cancelled_print"},
 	"Utility Bill": {"on_submit": "utility_billing.utility_billing.events.bill_issued"},
 	"Payment Receipt": {"on_submit": "utility_billing.utility_billing.events.payment_posted",
 	                    "on_cancel": "utility_billing.utility_billing.events.payment_reversed"},

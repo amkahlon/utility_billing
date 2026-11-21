@@ -2230,6 +2230,14 @@ def t_bill_designer_print(d: Desk):
 	_, text = get_pdf(USERS["cashier"], "download_bill", name=S["bill"])  # superseded since QA-69 (increment 37): marked so, otherwise exact
 	eq((" ".join(text.replace("SUPERSEDED", " ").split()), "SUPERSEDED" in text), (S["bill_text"], True),
 	   "the bill issued before the template still reprints exactly, marked superseded")
+	# increment 38 (user, 2026-11-21): Frappe's print view prints a superseded bill too; other cancelled documents are still refused
+	r = USERS["cashier"].s.get(f"{URL}/printview", params={"doctype": "Utility Bill", "name": S["bill"]})
+	eq((r.status_code, "SUPERSEDED" in r.text, "Not allowed to print cancelled" in r.text), (200, True, False), "the print view prints the superseded bill")
+	gone = d.s.get(f"{URL}/api/resource/Payment Receipt", params={"filters": json.dumps([["docstatus", "=", 2]]), "limit_page_length": 1}).json()["data"]
+	if not gone:
+		raise AssertionError("expected a reversed (cancelled) payment receipt from the payment reversal case")
+	r = d.s.get(f"{URL}/printview", params={"doctype": "Payment Receipt", "name": gone[0]["name"]})
+	eq("Not allowed to print cancelled documents" in r.text, True, "a cancelled payment receipt still doesn't print")
 	expect_error(lambda: USERS["iso"].call(f"{BD}.preview", society="QA-ISO", layout=json.dumps(st["layout"])), "access")
 	r = Desk().s.post(f"{URL}/api/method/{BD}.preview", data={"society": S["society"], "layout": json.dumps(st["layout"])})
 	eq(r.status_code in (401, 403), True, "a visitor can't preview")

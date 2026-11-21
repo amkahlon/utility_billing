@@ -208,6 +208,22 @@ class IntegrationTestCorrections(BillingCase):
 		self.assertEqual(account.apply_surcharges(as_of="2026-11-16", society=SOC), 0)  # not due yet
 		self.assertEqual(account.apply_surcharges(as_of="2026-11-21", society=SOC), 1)  # after the new date
 
+	def test_a_superseded_bill_prints_in_the_print_view_and_other_cancelled_documents_do_not(self):
+		"""User, 2026-11-21: "allow print of superseded bills in the print view"."""
+		from utility_billing.install import allow_superseded_bill_print  # noqa: PLC0415
+
+		allow_superseded_bill_print()
+		self.assertEqual(frappe.db.get_single_value("Print Settings", "allow_print_for_cancelled"), 1)
+		with today("2026-11-10"):
+			ext = self.extension("2026-11-20")
+		html = frappe.get_print("Utility Bill", self.bill_doc.name)  # the print view's own path (the bill's print format)
+		self.assertIn("SUPERSEDED", html)
+		self.assertIn(self.bill_doc.name, html)
+		frappe.db.set_value("Utility Bill", self.bill_doc.name, "status", "Cancelled")  # a bill cancelled with its run, not superseded
+		with self.assertRaises(frappe.PermissionError):
+			frappe.get_print("Utility Bill", self.bill_doc.name)
+		self.assertIn("(Revised, version 2)", frappe.get_print("Utility Bill", ext.revised_bill))  # posted bills print as before
+
 	def test_a_surcharge_already_charged_is_reversed_and_charged_again_later(self):
 		self.assertEqual(account.apply_surcharges(as_of="2026-11-16", society=SOC), 1)
 		with_surcharge = self.balance()

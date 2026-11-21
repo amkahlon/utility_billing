@@ -273,6 +273,14 @@ def image_data_uri(file_url, max_px=480):
 	return f"data:image/jpeg;base64,{base64.b64encode(out.getvalue()).decode()}"
 
 
+def guard_cancelled_print(doc, method=None, *args, **kwargs):
+	"""Before every print (all doctypes): a cancelled document can't be printed, except a bill superseded by a revised bill, which reprints
+	as it was issued, marked SUPERSEDED (user's request, 2026-11-21). Print Settings > Allow Print for Cancelled is kept on so that
+	Frappe's print view lets these through to this check (install.allow_superseded_bill_print)."""
+	if doc.meta.is_submittable and doc.docstatus == 2 and not (doc.doctype == "Utility Bill" and doc.get("status") == "Superseded"):
+		frappe.throw(_("Not allowed to print cancelled documents"), frappe.PermissionError)
+
+
 def watermark_of(bill, duplicate):
 	if bill.docstatus == 2:  # a version replaced by a revised bill is superseded, not cancelled (increment 37)
 		return _("SUPERSEDED") if bill.get("status") == "Superseded" else _("CANCELLED")
