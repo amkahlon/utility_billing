@@ -79,9 +79,13 @@ function upload_readings(frm, source) {
 					// what to do next (the user, 2026-11-24: after the success message "what is the next step? i pressed save button but it
 					// says no change in data"): the readings are in the cycle already, so nothing is saved here
 					const next = [];
-					if (r.flagged) next.push(__("Review the {0} flagged readings: Reading Entry (tick Show exceptions only) or Review Queue.", [n(r.flagged)]));
-					if (r.to_enter) next.push(__("{0} accounts have no reading yet: upload or type them, or leave them for Estimate Unread.", [n(r.to_enter)]));
-					if (r.not_read) next.push(__("{0} are marked as not read: Estimate Unread works out their units.", [n(r.not_read)]));
+					const one = (count, single, many) => (count === 1 ? single : __(many, [n(count)]));
+					if (r.flagged) next.push(one(r.flagged, __("Review the 1 flagged reading: Reading Entry (tick Show exceptions only) or Review Queue."),
+						"Review the {0} flagged readings: Reading Entry (tick Show exceptions only) or Review Queue."));
+					if (r.to_enter) next.push(one(r.to_enter, __("1 account has no reading yet: upload or type it, or leave it for Estimate Unread."),
+						"{0} accounts have no reading yet: upload or type them, or leave them for Estimate Unread."));
+					if (r.not_read) next.push(one(r.not_read, __("1 is marked as not read: Estimate Unread works out its units."),
+						"{0} are marked as not read: Estimate Unread works out their units."));
 					next.push(r.to_enter || r.not_read ? __("Then, under Close: Estimate Unread, and Close Cycle.") : __("Then, under Close: Close Cycle."));
 					frappe.msgprint({
 						title: __("Readings uploaded"),
@@ -89,7 +93,7 @@ function upload_readings(frm, source) {
 						message:
 							`<p><b>${r.updated === 1 ? __("1 reading applied.") : __("{0} readings applied.", [n(r.updated)])}</b> ${__("They are in the cycle now; there is nothing to save.")}</p>` +
 							(rows
-								? `<p>${__("{0} rows were not applied:", [n(r.errors.length)])}</p><table class="table table-bordered"><tr><th>${__("Row")}</th><th>${__("Reference No")}</th><th>${__("Reason")}</th></tr>${rows}</table>` +
+								? `<p>${r.errors.length === 1 ? __("1 row was not applied:") : __("{0} rows were not applied:", [n(r.errors.length)])}</p><table class="table table-bordered"><tr><th>${__("Row")}</th><th>${__("Reference No")}</th><th>${__("Reason")}</th></tr>${rows}</table>` +
 								  (more > 0 ? `<p>${__("…and {0} more, for the same kinds of reason.", [n(more)])}</p>` : "")
 								: "") +
 							`<p><b>${__("What to do next")}</b></p><ol>${next.map((x) => `<li>${x}</li>`).join("")}</ol>`,
