@@ -137,7 +137,7 @@ def reading_context(connection_name, month):
 	meter = readcache.meter_info(current.meter)
 	last = last_actual(connection_name, month)
 	ctx = frappe._dict(
-		meter=current.meter, multiplier=flt(meter.multiplier) or 1, digits=meter.digits or 5,
+		meter=current.meter, multiplier=flt(meter.multiplier) or 1, digits=meter.digits or engine.DEFAULT_DIGITS,
 		previous_reading=flt(current.start_reading), previous_reading_date=current.installed_on,
 		old_meter_units=0, estimated_since_units=0,
 		# a net-metering meter's export register (increment 28): from the last actual reading, or as the meter was installed

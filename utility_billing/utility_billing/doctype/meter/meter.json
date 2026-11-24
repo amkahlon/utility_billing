@@ -129,8 +129,8 @@
    "label": "Registers"
   },
   {
-   "default": "5",
-   "description": "Used to detect roll-over",
+   "default": "6",
+   "description": "How many digits the meter's dial shows before the decimal point. A reading with more digits is refused; a dial near its top that goes round to a small number is a roll-over.",
    "fieldname": "digits",
    "fieldtype": "Int",
    "label": "Dial Digits"
@@ -186,7 +186,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-24 17:00:00.000000",
+ "modified": "2026-11-24 19:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Meter",

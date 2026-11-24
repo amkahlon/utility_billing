@@ -28,6 +28,10 @@ class Meter(Document):
 		"""A meter marked (or unmarked) as a smart meter: its readings in open cycles know at once, so the Reading Entry screen
 		and the form lock or unlock them without waiting for the reading's next save (increment 47)."""
 		before = self.get_doc_before_save()
+		if before and cint(before.get("digits")) != cint(self.digits):
+			# the dial's digits corrected: its readings in open cycles are judged by the new ones from their next check (increment 50)
+			frappe.db.sql("""update `tabMeter Reading` r join `tabReading Cycle` c on c.name = r.reading_cycle
+			                 set r.digits = %s where r.meter = %s and c.status != 'Closed'""", (cint(self.digits), self.name))
 		if before and cint(before.get("smart_meter")) != cint(self.smart_meter):
 			frappe.db.sql("""update `tabMeter Reading` r join `tabReading Cycle` c on c.name = r.reading_cycle
 			                 set r.smart_meter = %s, r.smart_meter_mute = if(%s, r.smart_meter_mute, 0)

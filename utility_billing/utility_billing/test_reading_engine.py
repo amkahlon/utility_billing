@@ -43,11 +43,22 @@ class TestReadingEngine(UnitTestCase):
 		self.assertFalse(r.needs_review)  # roll-over is information only
 
 	def test_lower_reading_is_flagged_not_rollover(self):
+		# taken as the same reading: no units, never units below zero (increment 50; it was -1,000 before)
 		units, rolled, lower = raw_units(5000, 4000, 5, 1)
-		self.assertEqual((units, rolled, lower), (D(-1000), False, True))
+		self.assertEqual((units, rolled, lower), (D(0), False, True))
 		r = evaluate(5000, 4000)
-		self.assertIn(FLAG_LOWER, r.flags)
-		self.assertTrue(r.needs_review)
+		self.assertEqual((r.flags, r.units, r.raw_units, r.needs_review), ([FLAG_LOWER], D(0), D(0), True))  # and not "Zero use" as well
+
+	def test_a_previous_reading_the_dial_cant_show_is_not_a_roll_over(self):
+		# the pilot, 2026-11-24: 123,456 then 23,556 on a dial taken as 5 digits came to -99,900 units and passed as a valid roll-over
+		self.assertEqual(raw_units(123456, 23556, 5, 1), (D(0), False, True))
+		self.assertEqual(raw_units(123456, 123556, 6, 1), (D(100), False, False))
+		self.assertEqual(raw_units(999950, 30, 6, 1), (D(80), True, False))  # a 6-digit dial going round
+		# a dial's digits when the meter doesn't say: 6
+		self.assertEqual(raw_units(99950, 123, None, 1), (D(0), False, True))
+		self.assertEqual(raw_units(999950, 123, None, 1), (D(173), True, False))
+		for prev, pres, digits in ((123456, 23556, 5), (5000, 4000, 5), (99950, 123, 6), (10, 0, 5)):
+			self.assertGreaterEqual(evaluate(prev, pres, digits=digits).units, 0)
 
 	def test_zero_use(self):
 		r = evaluate(3905, 3905)

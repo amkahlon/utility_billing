@@ -497,6 +497,24 @@ class IntegrationTestMigration(IntegrationTestCase):
 		self.assertTrue(migration.load(b2), [p.problem for p in b2.problems if p.severity == "Error"])
 		self.assertFalse(b2.opening_import)
 
+	def test_a_meters_dial_digits_follow_its_reading_when_the_file_gives_none(self):
+		# increment 50: the pilot's file gave no digits, every meter became a 5-digit dial, and 212 of them stood above 99,999
+		book = self.good_book()
+		book["Readings"][1][2] = 1234567  # MIG-1001's meter stands at seven digits
+		b = self.batch(book)
+		self.assertTrue(migration.load(b), [p.problem for p in b.problems if p.severity == "Error"])
+		self.assertEqual([frappe.db.get_value("Meter", m, "digits") for m in ("TST-MIG-M1", "TST-MIG-M2", "TST-MIG-M3")], [7, 6, 6])
+		migration.undo(b)
+		# digits given in the file are kept; a reading they can't show is a problem to fix before loading
+		book = self.good_book()
+		book["Connections"] = [[*CONN_HEAD, "digits"]] + [row + [d] for row, d in zip(book["Connections"][1:], (5, 3, ""))]
+		errors = self.errors_of(book)
+		self.assertEqual(errors, ["Reading 5320 has more digits than the dial (3) given for meter TST-MIG-M2. Correct the digits, or leave them empty."])
+		book["Connections"][2][-1] = 5
+		b = self.batch(book)
+		self.assertTrue(migration.load(b), [p.problem for p in b.problems if p.severity == "Error"])
+		self.assertEqual([frappe.db.get_value("Meter", m, "digits") for m in ("TST-MIG-M1", "TST-MIG-M2", "TST-MIG-M3")], [5, 5, 6])
+
 	def test_undo_is_refused_once_the_opening_balances_are_posted(self):
 		b = self.loaded()
 		frappe.db.set_value("Opening Balance Import", b.opening_import, "docstatus", 1)

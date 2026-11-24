@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
 ROLLOVER_THRESHOLD = Decimal("0.9")  # previous reading must be in the top 10% of the dial
+# A dial's digits when the meter doesn't say (increment 50, the user: "we need to enhance the reading dial digits from 5 to 6"). The
+# pilot's 21,464 meters came without them and were all taken as 5-digit dials, 212 of them standing above 99,999.
+DEFAULT_DIGITS = 6
 
 FLAG_LOWER = "Lower than previous reading"
 FLAG_ZERO = "Zero use"
@@ -54,10 +57,14 @@ def raw_units(previous, present, digits: int, multiplier) -> tuple[Decimal, bool
 	prev, pres, mult = D(previous), D(present), D(multiplier) or Decimal(1)
 	if pres >= prev:
 		return q((pres - prev) * mult), False, False
-	dial_max = Decimal(10) ** int(digits or 5)
-	if prev >= dial_max * ROLLOVER_THRESHOLD:
+	dial_max = Decimal(10) ** int(digits or DEFAULT_DIGITS)
+	# A roll-over: the dial stood near its top and went round. A previous reading the dial can't even show isn't one: taken as a
+	# roll-over, 123,456 then 23,556 on a "5-digit" dial came to -99,900 units and passed as valid (the pilot, 2026-11-24).
+	if dial_max * ROLLOVER_THRESHOLD <= prev < dial_max:
 		return q((dial_max - prev + pres) * mult), True, False
-	return q((pres - prev) * mult), False, True
+	# Lower than before and no roll-over: the same reading as before, so no units; never units below zero (the user, 2026-11-24:
+	# "system should not accept present reading less than previous reading ... auto consider reading as same-to-same").
+	return q(Decimal(0)), False, True
 
 
 def expected_range(history: Sequence, same_month_last_year=None, tolerance_percent=50):
@@ -101,7 +108,7 @@ def evaluate(
 		flags.append(FLAG_ROLLOVER)
 	if lower:
 		flags.append(FLAG_LOWER)
-	if raw == 0:
+	if raw == 0 and not lower:
 		flags.append(FLAG_ZERO)
 	if D(estimated_since) > 0 and units < 0:
 		flags.append(FLAG_NEGATIVE_TRUE_UP)
