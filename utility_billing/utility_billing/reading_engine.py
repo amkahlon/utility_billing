@@ -16,6 +16,12 @@ ROLLOVER_THRESHOLD = Decimal("0.9")  # previous reading must be in the top 10% o
 # pilot's 21,464 meters came without them and were all taken as 5-digit dials, 212 of them standing above 99,999.
 DEFAULT_DIGITS = 6
 
+
+def plain(value) -> str:
+	"""A reading as a person writes it: every digit, no exponent, no needless decimals (1234567, 3905, 1241.18)."""
+	text = f"{D(value):f}"
+	return text.rstrip("0").rstrip(".") if "." in text else text
+
 FLAG_LOWER = "Lower than previous reading"
 FLAG_ZERO = "Zero use"
 FLAG_HIGH = "Above expected range"
