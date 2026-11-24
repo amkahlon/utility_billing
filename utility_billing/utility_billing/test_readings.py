@@ -239,6 +239,8 @@ class IntegrationTestReadings(IntegrationTestCase):
 		result = readings.upload_readings(cycle, file.file_url)
 		self.assertEqual(result["updated"], 2)
 		self.assertEqual(sorted(e["row"] for e in result["errors"]), [4, 5])
+		# where the cycle stands, for the message's "what to do next": one read, one marked as not read, none flagged or left
+		self.assertEqual((result["to_enter"], result["not_read"], result["flagged"]), (0, 1, 0))
 		r = self.reading("2026-10-01")
 		self.assertEqual((r.units, r.source), (264, "Import"))
 		self.assertEqual(self.reading("2026-10-01", conn2).exception_code, "No Access")

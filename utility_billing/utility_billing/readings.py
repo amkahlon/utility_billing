@@ -291,7 +291,13 @@ def upload_readings(cycle: str, file_url: str, source: str = "Import"):
 			loaded = _load_readings(c, [in_cycle[ref] for _i, _row, ref in group if ref in in_cycle]) if fast else {}
 			updated += _apply_rows(group, col, in_cycle, loaded, errors, fast, source)
 	c.refresh_counts()
-	return {"updated": updated, "errors": errors}
+	# where the cycle stands now, for the message's "what to do next" (increment 51)
+	to_enter, not_read, flagged = frappe.db.sql("""select sum(reading_date is null and ifnull(exception_code, '') = '' and status = 'Pending'),
+	                                               sum(ifnull(exception_code, '') != '' and status = 'Pending'),
+	                                               sum(status in ('Flagged', 'Re-read Requested'))
+	                                               from `tabMeter Reading` where reading_cycle = %s""", c.name)[0]
+	return {"updated": updated, "errors": errors, "to_enter": frappe.utils.cint(to_enter), "not_read": frappe.utils.cint(not_read),
+	        "flagged": frappe.utils.cint(flagged)}
 
 
 def kept_by_hand(r, present, date) -> bool:
