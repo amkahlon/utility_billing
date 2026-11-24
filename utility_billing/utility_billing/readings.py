@@ -10,6 +10,7 @@ from frappe import _
 from frappe.utils import add_months, cstr, flt, getdate, now_datetime, nowdate
 
 from utility_billing.utility_billing import bulk, readcache
+from utility_billing.utility_billing import uniqueness
 from utility_billing.utility_billing import reading_engine as engine
 from utility_billing.utility_billing import routes
 from utility_billing.utility_billing import rights
@@ -109,7 +110,7 @@ def reading_context(connection_name, month):
 		old_meter_units=0, estimated_since_units=0,
 		# a net-metering meter's export register (increment 28): from the last actual reading, or as the meter was installed
 		net_metering=1 if meter.meter_type == NET_METERING else 0, previous_export_reading=flt(current.get("start_export_reading")),
-		old_meter_export_units=0,
+		old_meter_export_units=0, smart_meter=frappe.utils.cint(meter.get("smart_meter")),
 	)
 	if last and last.meter == current.meter:
 		ctx.previous_reading, ctx.previous_reading_date = flt(last.present_reading), last.reading_date
@@ -208,35 +209,114 @@ def close_cycle(cycle: str):
 	return c.status
 
 
+FILE_SOURCES = ("Import", "Mobile", "MDM")  # an office spreadsheet, the mobile reading app's file, the meter data system's file
+# other names a file may use for our columns (the mobile app's and the MDM's formats aren't fixed yet: user, 2026-11-24)
+HEADER_ALIASES = {"present export reading": "export reading", "meter number": "meter no", "meter serial": "meter no", "reading": "present reading",
+                  "import reading": "present reading", "not communicating": "mute", "smart meter mute": "mute"}
+
+
 @frappe.whitelist()
-def upload_readings(cycle: str, file_url: str):
-	"""Apply readings from an Excel or CSV file (FS-RDG-04). Columns: Reference No, Present Reading,
-	Reading Date (optional, default today), Exception Code (optional), MDI (optional, kW), Export Reading (net-metering meters).
+def upload_readings(cycle: str, file_url: str, source: str = "Import"):
+	"""Apply readings from an Excel, CSV or text file (FS-RDG-04). Columns: Reference No or Meter No, Present Reading,
+	Reading Date (optional, default today), Exception Code (optional), MDI (optional, kW), Export Reading (net-metering meters),
+	Mute (yes for a smart meter that isn't communicating and was read by hand).
+	`source` says where the file is from (increment 47): an office spreadsheet (Import), the mobile reading app (Mobile) or the
+	meter data system (MDM, the only one whose readings a smart meter takes).
 	Every row gets the same checks as office entry; rows that can't be applied are returned with the reason."""
+	if source not in FILE_SOURCES:
+		frappe.throw(_("Say where the file is from: {0}.").format(", ".join(FILE_SOURCES)))
 	c = cycle_doc(cycle)
 	rows = _read_rows(file_url)
 	if not rows:
 		frappe.throw(_("The file has no rows."))
-	header = [cstr(h).strip().lower() for h in rows[0]]
-	if "present export reading" in header and "export reading" not in header:
-		header[header.index("present export reading")] = "export reading"
-	col = {k: header.index(k) for k in ("reference no", "present reading", "reading date", "exception code", "mdi", "export reading") if k in header}
-	if "reference no" not in col or ("present reading" not in col and "exception code" not in col):
-		frappe.throw(_("The file needs the columns Reference No and Present Reading (or Exception Code)."))
+	header = [" ".join(cstr(h).strip().lower().replace("_", " ").split()) for h in rows[0]]
+	header = [HEADER_ALIASES.get(h, h) if HEADER_ALIASES.get(h, h) not in header else h for h in header]
+	col = {k: header.index(k) for k in ("reference no", "meter no", "present reading", "reading date", "exception code", "mdi", "export reading", "mute")
+	       if k in header}
+	if ("reference no" not in col and "meter no" not in col) or ("present reading" not in col and "exception code" not in col):
+		frappe.throw(_("The file needs the columns Reference No (or Meter No) and Present Reading (or Exception Code)."))
 	updated, errors = 0, []
 	fast = bulk.plain("Meter Reading")
 	in_cycle = dict(frappe.db.sql("select connection, name from `tabMeter Reading` where reading_cycle = %s", c.name))
+	by_meter = {}
+	if "meter no" in col:  # a meter data system knows the meter, not our reference number
+		by_meter = {uniqueness.norm(m, "serial"): conn for conn, m in frappe.db.sql(
+			"select connection, meter from `tabMeter Reading` where reading_cycle = %s", c.name)}
 	lines = []
 	for i, row in enumerate(rows[1:], start=2):
-		ref = cstr(row[col["reference no"]] if col["reference no"] < len(row) else "").strip().split(".")[0]
+		cell = lambda key: cstr(row[col[key]] if key in col and col[key] < len(row) else "").strip()  # noqa: E731
+		ref = cell("reference no").split(".")[0]
+		meter = cell("meter no").removesuffix(".0")
+		if not ref and meter:
+			ref = by_meter.get(uniqueness.norm(meter, "serial"))
+			if not ref:
+				errors.append({"row": i, "reference_no": meter, "error": _("No reading for meter {0} in the cycle").format(meter)})
+				continue
 		if ref:
 			lines.append((i, row, ref))
 	with readcache.for_cycle(c):
 		for group in bulk.in_chunks(lines, GROUP):
 			loaded = _load_readings(c, [in_cycle[ref] for _i, _row, ref in group if ref in in_cycle]) if fast else {}
-			updated += _apply_rows(group, col, in_cycle, loaded, errors, fast)
+			updated += _apply_rows(group, col, in_cycle, loaded, errors, fast, source)
 	c.refresh_counts()
 	return {"updated": updated, "errors": errors}
+
+
+def kept_by_hand(r, present, date) -> bool:
+	"""A smart meter that wasn't communicating was read by hand, and now the MDM sends a reading for the same cycle: the hand
+	reading stays (nothing is overwritten silently) and the difference goes to the reviewer. True when that is the case."""
+	if not (frappe.utils.cint(r.smart_meter_mute) and r.reading_date and r.source != "MDM"):
+		return False
+	note = _("The MDM then sent {0} for {1}; the reading taken by hand ({2}) is kept.").format(flt(present), frappe.utils.formatdate(date), flt(r.present_reading))
+	lines = [x for x in (r.checks or "").split("\n") if x and not x.startswith(_("The MDM then sent"))]
+	frappe.db.set_value("Meter Reading", r.name, {"checks": "\n".join([*lines, note]), "status": "Flagged"})
+	return True
+
+
+def receive_mdm(rows, allowed=None) -> dict:
+	"""Readings sent by a meter data system through the API (increment 47): [{meter_no, reading, reading_date, export_reading, mdi}].
+	Each goes to the meter's reading in the newest open reading cycle; only smart meters take them. `allowed(society)` refuses
+	a society the caller may not write to. Returns what was taken and what wasn't, with the reason."""
+	if not isinstance(rows, list) or not rows:
+		frappe.throw(_("Send the readings as a list."))
+	if len(rows) > 5000:
+		frappe.throw(_("Send at most 5,000 readings in one call."))
+	accepted, rejected = [], []
+	for row in rows:
+		row = frappe._dict(row if isinstance(row, dict) else {})
+		meter_no = cstr(row.get("meter_no")).strip()
+		try:
+			if not meter_no or row.get("reading") in (None, ""):
+				raise frappe.ValidationError(_("Each reading needs meter_no and reading"))
+			meter = frappe.db.get_value("Meter", {"serial_no": meter_no}) or (meter_no if frappe.db.exists("Meter", meter_no) else None)
+			found = meter and frappe.db.sql("""select r.name, r.society from `tabMeter Reading` r join `tabReading Cycle` c on c.name = r.reading_cycle
+			                                   where r.meter = %s and c.status != 'Closed' order by c.billing_month desc limit 1""", meter, as_dict=True)
+			if not found:
+				raise frappe.ValidationError(_("No open reading cycle has a reading for this meter"))
+			if allowed:
+				allowed(found[0].society)
+			r = frappe.get_doc("Meter Reading", found[0].name)
+			date = getdate(row.get("reading_date")) if row.get("reading_date") else getdate(nowdate())
+			if kept_by_hand(r, row.reading, date):
+				rejected.append({"meter_no": meter_no, "reason": _("Read by hand already (not communicating): the hand reading is kept and flagged for review")})
+				continue
+			r.present_reading, r.reading_date, r.exception_code = flt(row.reading), date, None
+			if row.get("export_reading") not in (None, ""):
+				if not frappe.utils.cint(r.net_metering):
+					raise frappe.ValidationError(_("An export reading for a meter that isn't a net-metering meter"))
+				r.present_export_reading = flt(row.export_reading)
+			if row.get("mdi") not in (None, ""):
+				r.mdi_kw = flt(row.mdi)
+			r.flags.from_mdm = True
+			r.flags.ignore_permissions = True
+			r.save()
+			accepted.append({"meter_no": meter_no, "reading": r.name, "status": r.status, "units": flt(r.units)})
+		except Exception as e:
+			frappe.clear_last_message()
+			rejected.append({"meter_no": meter_no, "reason": cstr(e) or e.__class__.__name__})
+	for cycle in {frappe.db.get_value("Meter Reading", a["reading"], "reading_cycle") for a in accepted}:
+		frappe.get_doc("Reading Cycle", cycle).refresh_counts()
+	return {"accepted": len(accepted), "rejected": len(rejected), "readings": accepted, "errors": rejected}
 
 
 GROUP = 500  # the performance step, part 2: a cycle reads and writes its readings this many at a time
@@ -275,7 +355,7 @@ def _load_readings(c, names) -> dict:
 	return out
 
 
-def _apply_rows(group, col, in_cycle, loaded, errors, fast) -> int:
+def _apply_rows(group, col, in_cycle, loaded, errors, fast, source="Import") -> int:
 	"""Apply a group of file rows. A reading entered for the first time is checked and written without the document's save
 	(the same validate, one update); a reading that already had a value is a correction and is saved as a document, with its
 	change history. Returns the number of readings updated."""
@@ -293,7 +373,15 @@ def _apply_rows(group, col, in_cycle, loaded, errors, fast) -> int:
 			first_entry = bool(r) and not r.reading_date and not r.exception_code and r.status == "Pending"
 			if not first_entry:
 				r = frappe.get_doc("Meter Reading", name)
+			if cstr(val("mute")).strip().lower() in ("1", "yes", "y", "true", "mute"):
+				r.smart_meter_mute = 1  # a smart meter that isn't communicating, read by the meter reader
 			code = cstr(val("exception code")).strip()
+			if source == "MDM":
+				if kept_by_hand(r, val("present reading"), getdate(val("reading date")) if val("reading date") else getdate(nowdate())):
+					loaded.pop(ref, None)
+					errors.append({"row": i, "reference_no": ref, "error": _("Read by hand already (not communicating): the hand reading is kept and flagged for review")})
+					continue
+				r.flags.from_mdm = True
 			if code:
 				r.exception_code = code
 			else:
@@ -309,7 +397,7 @@ def _apply_rows(group, col, in_cycle, loaded, errors, fast) -> int:
 						raise frappe.ValidationError(_("An export reading for a meter that isn't a net-metering meter"))
 					r.present_export_reading = flt(val("export reading"))
 			r.reading_date = getdate(val("reading date")) if val("reading date") else nowdate()
-			r.source = "Import"
+			r.source = source
 			if first_entry:
 				r.flags.in_bulk = True
 				r.validate()
@@ -333,9 +421,24 @@ def _read_rows(file_url):
 		from frappe.utils.xlsxutils import read_xlsx_file_from_attached_file
 
 		return read_xlsx_file_from_attached_file(fcontent=content)
+	if file_url.lower().endswith(".txt"):
+		return _read_text(content)
 	from frappe.utils.csvutils import read_csv_content
 
 	return read_csv_content(content)
+
+
+def _read_text(content) -> list[list]:
+	"""A text file from a mobile reading app or a meter data system: one reading a line, the columns parted by tabs, bars,
+	semicolons or commas (whichever the first line uses most)."""
+	import csv  # noqa: PLC0415
+
+	text = content.decode("utf-8-sig", errors="replace") if isinstance(content, bytes) else cstr(content)
+	lines = [x for x in text.splitlines() if x.strip()]
+	if not lines:
+		return []
+	mark = max(("\t", "|", ";", ","), key=lines[0].count)
+	return [[cell.strip() for cell in row] for row in csv.reader(lines, delimiter=mark)]
 
 
 # ----- review actions (FS-RDG-07) -----
@@ -373,6 +476,9 @@ def correct_reading(name: str, present_reading: float, reason: str):
 	r = _review_doc(name, ("Flagged", "Valid"))
 	if len(cstr(reason).strip()) < 5:
 		frappe.throw(_("Give the reason for the correction (at least 5 characters)."))
+	if frappe.utils.cint(r.smart_meter) and not frappe.utils.cint(r.smart_meter_mute):
+		frappe.throw(_("This is a smart meter's reading from the MDM: it isn't corrected by hand. Ask for a re-read; if the meter isn't "
+		               "communicating, tick Not Communicating on the reading and enter the meter reader's reading."))
 	r.corrected_from = r.present_reading
 	r.correction_reason = reason.strip()
 	r.present_reading = flt(present_reading)

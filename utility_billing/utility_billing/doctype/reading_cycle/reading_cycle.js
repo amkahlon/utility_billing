@@ -15,7 +15,23 @@ frappe.ui.form.on("Reading Cycle", {
 				frm.reload_doc();
 			})
 		);
-		frm.add_custom_button(__("Upload Readings"), () => upload_readings(frm));
+		// increment 47: every account of the cycle on one screen, only the reading typed
+		frm.add_custom_button(__("Reading Entry"), () => {
+			frappe.route_options = { society: frm.doc.society, cycle: frm.doc.name };
+			frappe.set_route("ub-reading-entry");
+		});
+		frm.add_custom_button(__("Upload Readings"), () => {
+			// where the file is from decides what it may do: only the meter data system's readings are taken for smart meters
+			frappe.prompt(
+				[{ fieldname: "source", fieldtype: "Select", label: __("The file is from"), reqd: 1, default: "Import",
+				   options: [{ value: "Import", label: __("An office spreadsheet") }, { value: "Mobile", label: __("The mobile reading app") },
+				             { value: "MDM", label: __("The meter data system (smart meters)") }],
+				   description: __("Columns: Reference No or Meter No, Present Reading, and if needed Reading Date, Exception Code, MDI, Export Reading, Mute. Excel, CSV or text.") }],
+				(v) => upload_readings(frm, v.source),
+				__("Upload readings"),
+				__("Choose the File")
+			);
+		});
 		frm.add_custom_button(__("Open Readings"), () =>
 			frappe.set_route("List", "Meter Reading", { reading_cycle: frm.doc.name })
 		);
@@ -44,14 +60,14 @@ frappe.ui.form.on("Reading Cycle", {
 	},
 });
 
-function upload_readings(frm) {
+function upload_readings(frm, source) {
 	new frappe.ui.FileUploader({
 		doctype: frm.doctype,
 		docname: frm.doc.name,
-		restrictions: { allowed_file_types: [".xlsx", ".csv"] },
+		restrictions: { allowed_file_types: [".xlsx", ".csv", ".txt"] },
 		on_success(file) {
 			frappe
-				.call({ method: `${RDG}.upload_readings`, args: { cycle: frm.doc.name, file_url: file.file_url }, freeze: true })
+				.call({ method: `${RDG}.upload_readings`, args: { cycle: frm.doc.name, file_url: file.file_url, source: source || "Import" }, freeze: true })
 				.then(({ message: r }) => {
 					const rows = (r.errors || [])
 						.map((e) => `<tr><td>${e.row}</td><td>${frappe.utils.escape_html(e.reference_no)}</td><td>${frappe.utils.escape_html(e.error)}</td></tr>`)

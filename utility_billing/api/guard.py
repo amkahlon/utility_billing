@@ -14,7 +14,8 @@ from frappe import _
 from frappe.utils import cint, cstr
 
 SCOPES = {"account.read": "scope_account_read", "bill.read": "scope_bill_read", "payment.write": "scope_payment_write",
-          "payment.reverse": "scope_payment_reverse", "events": "scope_events"}
+          "payment.reverse": "scope_payment_reverse", "events": "scope_events",
+          "reading.write": "scope_reading_write"}
 
 # Every method the API offers, for the OpenAPI document (v1.openapi) and the docs page: name -> spec.
 REGISTRY: dict[str, dict] = {}

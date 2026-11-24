@@ -55,7 +55,7 @@ def prime(connections, history=False):
 		g.meters.setdefault(r.parent, []).append(r)
 	meter_names = list({m.meter for rows in g.meters.values() for m in rows if m.meter})
 	if meter_names:
-		for r in frappe.db.sql("select name, multiplier, digits, meter_type from `tabMeter` where name in %s", (meter_names,), as_dict=True):
+		for r in frappe.db.sql("select name, multiplier, digits, meter_type, smart_meter from `tabMeter` where name in %s", (meter_names,), as_dict=True):
 			g.meter[r.name] = r
 	fields = ", ".join(f"r.{f}" for f in HISTORY_FIELDS)
 	# the last actual reading of each account before this month
@@ -124,7 +124,7 @@ def meter_info(name):
 	c = active()
 	if c and c.group and name in c.group.meter:
 		return c.group.meter[name]
-	return frappe.db.get_value("Meter", name, ["multiplier", "digits", "meter_type"], as_dict=True)
+	return frappe.db.get_value("Meter", name, ["multiplier", "digits", "meter_type", "smart_meter"], as_dict=True)
 
 
 def last_actual(connection, before_month):

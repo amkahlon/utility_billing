@@ -9,13 +9,14 @@ unrelated save."""
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, getdate
+from frappe.utils import cint, flt, getdate
 
 from utility_billing.utility_billing import defective, readcache, readings
 from utility_billing.utility_billing import reading_engine as engine
 
 INPUTS = ("present_reading", "reading_date", "exception_code", "present_export_reading")
 NUMBERS = ("present_reading", "present_export_reading")
+READ_BY_HAND = ("present_reading", "present_export_reading", "reading_date", "mdi_kw")  # what a reader or the MDM gives
 
 
 class MeterReading(Document):
@@ -29,8 +30,40 @@ class MeterReading(Document):
 			self.check_unique()
 		if self.is_new() or not self.meter:
 			self.load_context()
+		self.check_smart_meter()
 		self.evaluate()
 		self.check_mdi()
+
+	def check_smart_meter(self):
+		"""A smart (AMI) meter's reading comes from the MDM and isn't typed, uploaded or corrected by hand (increment 47; user,
+		2026-11-24: "meter reading fields should be editable only other than AMI/smart meters"). The exception: "in case if a smart
+		meter is mute, then its reading will be captured by meter reader", marked Not Communicating and sent to review."""
+		info = (readcache.meter_info(self.meter) if self.meter else None) or {}
+		self.smart_meter = cint(info.get("smart_meter"))
+		from_mdm = bool(self.flags.from_mdm)
+		if not self.smart_meter:
+			self.smart_meter_mute = 0
+			if from_mdm:
+				frappe.throw(_("Meter {0} isn't a smart meter: a reading from the MDM isn't taken for it.").format(self.meter))
+			return
+		if from_mdm:
+			self.source, self.smart_meter_mute = "MDM", 0
+			return
+		if self.flags.estimated or self.flags.request_reread:
+			return
+		before = self.get_doc_before_save()
+		if before:
+			given = any((flt(before.get(f)) != flt(self.get(f))) if f != "reading_date" else (str(before.get(f) or "") != str(self.get(f) or ""))
+			            for f in READ_BY_HAND)
+		else:
+			given = any(self.get(f) for f in READ_BY_HAND)
+		if not given:
+			return
+		if not cint(self.smart_meter_mute):
+			frappe.throw(_("Meter {0} is a smart meter: its reading comes from the MDM. If it isn't communicating, tick Not Communicating and enter the "
+			               "meter reader's reading.").format(self.meter))
+		if self.source == "MDM":
+			self.source = "Office"
 
 	def check_mdi(self):
 		"""The maximum demand (MDI) read from the meter: never negative; above the sanctioned load it is noted for a load extension."""
@@ -113,10 +146,12 @@ class MeterReading(Document):
 		self.units, self.raw_units = flt(result.units), flt(result.raw_units)
 		self.consumption_type = "Actual"
 		export_flags = self.evaluate_export()
-		self.checks = "\n".join([*result.flags, *export_flags]) or None
+		# a smart meter read by hand is always looked at by a reviewer
+		by_hand = [_("Smart meter not communicating: read by hand.")] if cint(self.smart_meter) and cint(self.smart_meter_mute) and self.source != "MDM" else []
+		self.checks = "\n".join([*result.flags, *export_flags, *by_hand]) or None
 		avg, low, high = result.expected or (0, 0, 0)
 		self.expected_average, self.expected_low, self.expected_high = flt(avg), flt(low), flt(high)
-		if result.needs_review or export_flags:
+		if result.needs_review or export_flags or by_hand:
 			self.status = "Approved" if self.flags.approve_as_is else "Flagged"
 		else:
 			self.status = "Valid"

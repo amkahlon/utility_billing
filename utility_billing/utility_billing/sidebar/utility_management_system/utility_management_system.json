@@ -355,6 +355,21 @@
    "indent": 0,
    "is_default_module": 0,
    "keep_closed": 0,
+   "label": "Reading Entry",
+   "link_to": "ub-reading-entry",
+   "link_type": "Page",
+   "open_in_new_tab": 1,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "added": 0,
+   "child": 1,
+   "collapsible": 1,
+   "hidden": 0,
+   "indent": 0,
+   "is_default_module": 0,
+   "keep_closed": 0,
    "label": "Reading Review",
    "link_to": "ub-review",
    "link_type": "Page",
@@ -2927,7 +2942,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-11-24 13:13:56.018939",
+ "modified": "2026-11-24 14:21:16.231007",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Management System",

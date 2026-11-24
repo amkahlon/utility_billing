@@ -24,6 +24,15 @@ class Meter(Document):
 				_("This meter is still on connection {0}. Remove it there first.").format(self.current_connection)
 			)
 
+	def on_update(self):
+		"""A meter marked (or unmarked) as a smart meter: its readings in open cycles know at once, so the Reading Entry screen
+		and the form lock or unlock them without waiting for the reading's next save (increment 47)."""
+		before = self.get_doc_before_save()
+		if before and cint(before.get("smart_meter")) != cint(self.smart_meter):
+			frappe.db.sql("""update `tabMeter Reading` r join `tabReading Cycle` c on c.name = r.reading_cycle
+			                 set r.smart_meter = %s, r.smart_meter_mute = if(%s, r.smart_meter_mute, 0)
+			                 where r.meter = %s and c.status != 'Closed'""", (cint(self.smart_meter), cint(self.smart_meter), self.name))
+
 	def on_trash(self):
 		if frappe.db.exists("Connection Meter", {"meter": self.name}):
 			frappe.throw(_("This meter has installation history and can't be deleted."))
