@@ -100,6 +100,18 @@ def defaulter_stats(society, as_of):
 	return count, amount
 
 
+def connections_card(society, as_of):
+	"""How many connections were active on the day (user, 2026-11-24: "dashboard should also display total no of active
+	connections"). One disconnected since then still counts for an earlier month; one only applied for doesn't count."""
+	v = {"s": society, "d": getdate(as_of)}
+	started = "status != 'Applied' and (connection_date is null or connection_date <= %(d)s)"
+	active = frappe.db.sql(f"""select count(*) from `tabConnection` where society = %(s)s and {started}
+	                           and (status = 'Active' or (disconnected_on is not null and disconnected_on > %(d)s))""", v)[0][0]
+	off = frappe.db.sql(f"""select count(*) from `tabConnection` where society = %(s)s and {started} and status = 'Disconnected'
+	                        and (disconnected_on is null or disconnected_on <= %(d)s)""", v)[0][0]
+	return kpi(_("Active connections"), f"{active:,}", _("{0} disconnected").format(f"{off:,}") if off else _("None disconnected"), MUTED, active)
+
+
 def kpis_of(society, month, series, as_of):
 	cur, prev = series[-1], series[-2] if len(series) > 1 else None
 	prev_month_name = getdate(add_months(month, -1)).strftime("%B")
@@ -119,6 +131,7 @@ def kpis_of(society, month, series, as_of):
 	defective = frappe.get_all("Meter", filters={"society": society, "status": "Defective"}, pluck="modified")
 	stale = sum(1 for m in defective if (getdate(as_of) - getdate(m)).days > 60)
 	return [
+		connections_card(society, as_of),
 		kpi(_("Billed this cycle"), rs(cur["billed"]), billed_note, MUTED, cur["billed"]),
 		kpi(_("Collected so far"), rs(cur["collected"]),
 		    _("{0}% collection efficiency").format(f"{rate:.1f}") if cur["bills"] else _("No bills in this cycle"),
@@ -281,12 +294,12 @@ def channels_of(society, month):
 	return sorted(out, key=lambda c: -c["raw"])
 
 
-ICONS = ("billed", "collected", "arrears", "losses", "units", "defaulters", "meters", "service")
+ICONS = ("connections", "billed", "collected", "arrears", "losses", "units", "defaulters", "meters", "service")
 
 
 def cards_of(society, month, series, as_of):
-	"""The eight cards with an icon each and, where there is a monthly history, a sparkline of the last 12 months."""
-	sparks = {0: [m["billed"] for m in series], 1: [m["collected"] for m in series], 4: [m["units"] for m in series]}
+	"""The nine cards with an icon each and, where there is a monthly history, a sparkline of the last 12 months."""
+	sparks = {1: [m["billed"] for m in series], 2: [m["collected"] for m in series], 5: [m["units"] for m in series]}
 	cards = kpis_of(society, month, series, as_of)
 	for i, card in enumerate(cards):
 		card["icon"] = ICONS[i]

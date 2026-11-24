@@ -21,6 +21,8 @@ window.UtilityBillingDashboard = class UtilityBillingDashboard {
 			const to = $(e.currentTarget).attr("data-drill");
 			if (!to) return;
 			if (to.startsWith("ub-")) return frappe.set_route(to);
+			// the active connections card (increment 46) opens the list of them
+			if (to === "active-connections") return frappe.set_route("List", "Connection", { society: this.society || undefined, status: "Active" });
 			frappe.route_options = { society: this.society || undefined };
 			frappe.set_route("query-report", to);
 		});
@@ -78,8 +80,8 @@ window.UtilityBillingDashboard = class UtilityBillingDashboard {
 	}
 
 	skeleton() {
-		const cards = Array.from({ length: 8 }, () => '<div class="ub-skeleton"></div>').join("");
-		return `<div class="ub-head"><div><h1>${__("Dashboard")}</h1></div></div><div class="ub-kpis">${cards}</div>`;
+		const cards = Array.from({ length: 9 }, () => '<div class="ub-skeleton"></div>').join("");
+		return `<div class="ub-head"><div><h1>${__("Dashboard")}</h1></div></div><div class="ub-kpis ub-kpis3">${cards}</div>`;
 	}
 
 	greeting(d) {
@@ -130,7 +132,7 @@ window.UtilityBillingDashboard = class UtilityBillingDashboard {
 		const e = frappe.utils.escape_html;
 		const options = (list, current, key, label) => list.map((o) => `<option value="${e(o[key])}" ${o[key] === current ? "selected" : ""}>${e(o[label])}</option>`).join("");
 		// Each card opens the report or screen behind its figure, in the order dashboard.kpis_of returns them.
-		const drill = ["Bill Register", "Collections", "Arrears Ageing", "AT&C Losses", "Consumption Analytics", "ub-recovery", "Defective Meters",
+		const drill = ["active-connections", "Bill Register", "Collections", "Arrears Ageing", "AT&C Losses", "Consumption Analytics", "ub-recovery", "Defective Meters",
 			"Service Requests and Service Standards"];
 		const kpis = d.kpis
 			.map(
@@ -186,7 +188,7 @@ window.UtilityBillingDashboard = class UtilityBillingDashboard {
 			</div>
 		</div>
 		<div class="ub-actions">${actions}<button class="ub-chip" data-page="ub-recovery">${ub_icon("defaulters")}${__("Defaulters and recovery")}</button><button class="ub-chip" data-report="1">${ub_icon("chart")}${__("All reports")}</button></div>
-		<div class="ub-kpis">${kpis}</div>
+		<div class="ub-kpis ub-kpis3">${kpis}</div>
 		<div class="ub-insights-slot"></div>
 		<div class="ub-grid3">
 			<section class="ub-card ub-span2">

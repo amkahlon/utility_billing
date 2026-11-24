@@ -1143,8 +1143,11 @@ def t_notifications(d: Desk):
 def t_modern_dashboard(d: Desk):
 	call = "utility_billing.utility_billing.dashboard.get_dashboard"
 	res = USERS["mgmt"].call(call, society=S["society"], month="2026-11-01")
-	eq(len(res["kpis"]), 8, "eight cards")
+	eq(len(res["kpis"]), 9, "nine cards")
 	cards = {k["label"]: k for k in res["kpis"]}
+	# increment 46: the first card counts the society's active connections
+	active = d.call("frappe.client.get_count", doctype="Connection", filters=json.dumps({"society": S["society"], "status": "Active"}))
+	eq((res["kpis"][0]["label"], cards["Active connections"]["value"], active > 0), ("Active connections", f"{active:,}", True), "active connections")
 	eq((cards["Billed this cycle"]["value"], cards["Units billed"]["value"], cards["Units billed"]["note"]),
 	   ("Rs 22,700", "300 kWh", "1 connection billed"), "November figures")
 	eq((cards["Line losses (AT&C)"]["value"], cards["Open service requests"]["value"]), ("—", "0"), "line losses unavailable without a DISCO bill; no open service requests")

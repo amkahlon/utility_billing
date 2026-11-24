@@ -47,7 +47,26 @@ class IntegrationTestDashboard(BillingCase):
 		self.assertEqual((k["Collected so far"]["value"], k["Collected so far"]["note"], k["Collected so far"]["tone"]),
 		                 ("Rs 58,366", "249.8% collection efficiency", "green"))
 		self.assertEqual((k["Units billed"]["value"], k["Units billed"]["note"]), ("264 kWh", "1 connection billed"))
-		self.assertEqual(len(d["kpis"]), 8)
+		self.assertEqual(len(d["kpis"]), 9)
+		self.assertEqual([c["label"] for c in d["kpis"]][:2], ["Active connections", "Billed this cycle"])
+
+	def test_the_active_connections_card_counts_as_at_the_day(self):
+		# user, 2026-11-24: "dashboard should also display total no of active connections" (increment 46)
+		self.october_posted()
+		card = lambda **kw: self.cards(self.get(**kw))["Active connections"]  # noqa: E731
+		c = card(month="2026-10-01")
+		self.assertEqual((c["value"], c["note"], c["raw"], c["icon"], c["spark"]), ("1", "None disconnected", 1, "connections", None))
+		# disconnected in November: still active for October, not from then on
+		frappe.db.set_value("Connection", self.conn, {"status": "Disconnected", "disconnected_on": "2026-11-10"})
+		self.assertEqual(card(month="2026-10-01")["value"], "1")
+		with patch.object(dashboard, "nowdate", return_value="2026-11-20"):
+			c = card(month="2026-11-01")
+		self.assertEqual((c["value"], c["note"]), ("0", "1 disconnected"))
+		# only applied for, or connected after the day: not counted
+		frappe.db.set_value("Connection", self.conn, {"status": "Applied", "disconnected_on": None})
+		self.assertEqual((card(month="2026-10-01")["value"], card(month="2026-10-01")["note"]), ("0", "None disconnected"))
+		frappe.db.set_value("Connection", self.conn, {"status": "Active", "connection_date": "2026-12-05"})
+		self.assertEqual(card(month="2026-10-01")["value"], "0")
 
 	def test_cards_that_cant_be_produced_yet_say_so_instead_of_showing_zero(self):
 		self.october_posted()
