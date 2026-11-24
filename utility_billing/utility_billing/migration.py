@@ -24,7 +24,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate, nowdate
 
-from utility_billing.utility_billing import uniqueness
+from utility_billing.utility_billing import reading_engine, uniqueness
 
 TARGETS = {
 	"Connections": ["old_account_no", "old_customer_id", "old_collection_no", "consumer_name", "cnic", "ntn", "filer", "mobile", "address",
@@ -471,6 +471,9 @@ def analyse(batch) -> frappe._dict:
 			err("Readings", r, _("A reading can't be negative."), account=ref)
 		if r.reading_date and getdate(r.reading_date) > as_of:
 			err("Readings", r, _("Read on {0}, after the cut-over day.").format(r.reading_date), account=ref)
+		if cint(a.digits) and max(_digits_of(r.last_reading), _digits_of(r.last_export_reading)) > cint(a.digits):
+			err("Readings", r, _("Reading {0} has more digits than the dial ({1}) given for meter {2}. Correct the digits, or leave them empty.").format(
+				f"{max(flt(r.last_reading), flt(r.last_export_reading)):g}", cint(a.digits), a.meter_no), account=ref)
 		if a.meter_type == "Net Metering" and r.last_export_reading in (None, ""):
 			err("Readings", r, _("A net-metering meter needs its last export reading."), account=ref)
 		if a.meter_type != "Net Metering" and flt(r.last_export_reading):
@@ -634,13 +637,22 @@ def _property(batch, r, seen):
 	return name
 
 
+def _digits_of(value) -> int:
+	return len(str(int(abs(flt(value))))) if flt(value) else 1
+
+
+def dial_digits(r, reading) -> int:
+	"""The meter's dial digits: as the file gives them; else the usual 6, or as many as its own reading has when that is more."""
+	return cint(r.digits) or max(reading_engine.DEFAULT_DIGITS, _digits_of(reading.get("last_reading")), _digits_of(reading.get("last_export_reading")))
+
+
 def _new_account(batch, ref, r, consumers, properties):
 	reading = r.get("reading") or frappe._dict()
 	meters = []
 	if r.metered:
 		m = _new(batch, {"doctype": "Meter", "serial_no": str(r.meter_no), "society": batch.society, "utility": r.utility,
 		                 "meter_type": r.meter_type, "make": r.meter_make or None, "status": "In Store",
-		                 "multiplier": flt(r.multiplier) or 1, "digits": cint(r.digits) or 5,
+		                 "multiplier": flt(r.multiplier) or 1, "digits": dial_digits(r, reading),
 		                 "registers": 2 if r.meter_type == "Net Metering" else 1})
 		meters = [{"meter": m.name, "installed_on": reading.reading_date or r.connection_date or batch.as_of_date,
 		           "start_reading": flt(reading.last_reading),

@@ -113,13 +113,41 @@ class IntegrationTestReadings(IntegrationTestCase):
 		self.assertEqual(r.status, "Approved")
 
 	def test_lower_reading_corrected_with_reason(self):
+		# lower than the previous 3,641 and no roll-over: taken as the same reading, 0 units, for a reviewer's look (increment 50; user,
+		# 2026-11-24: "system should not accept present reading less than previous reading ... auto consider reading as same-to-same")
 		r = self.read("2026-10-01", 3500)
-		self.assertEqual(r.status, "Flagged")
-		self.assertIn("Lower than previous reading", r.checks)
+		self.assertEqual((r.status, r.units, r.raw_units, r.present_reading), ("Flagged", 0, 0, 3641))
+		self.assertEqual(r.checks, "Lower than previous reading (3500 entered): taken as the same reading, 0 units")
+		r = frappe.get_doc("Meter Reading", r.name)
+		r.save()  # opened and saved again with nothing new: the note of what was entered stays
+		self.assertEqual((r.status, r.checks), ("Flagged", "Lower than previous reading (3500 entered): taken as the same reading, 0 units"))
 		readings.correct_reading(r.name, 3905, "Reader typed 3500 instead of 3905")
 		r.reload()
-		self.assertEqual((r.status, r.units, r.corrected_from), ("Valid", 264, 3500))
+		self.assertEqual((r.status, r.units, r.corrected_from), ("Valid", 264, 3641))
 		self.assertEqual(r.correction_reason, "Reader typed 3500 instead of 3905")
+
+	def test_a_same_to_same_reading_is_approved_as_no_use_and_the_next_month_counts_on(self):
+		r = self.read("2026-10-01", 3500)
+		readings.approve_reading(r.name, "The reader confirms the meter stands at 3641")
+		r.reload()
+		self.assertEqual((r.status, r.units, r.present_reading), ("Approved", 0, 3641))
+		nxt = self.read("2026-11-01", 3700)
+		self.assertEqual((nxt.previous_reading, nxt.units), (3641, 59))  # counted from the reading that was kept, not from 3,500
+
+	def test_a_reading_the_dial_cant_show_is_refused(self):
+		r = self.reading("2026-10-01")  # a 5-digit dial
+		r.present_reading, r.reading_date = 123905, "2026-10-05"
+		self.assertRaisesRegex(frappe.ValidationError, "has more digits than the dial of meter TST-RDG-M1 \\(5 digits\\)", r.save)
+		# the dial corrected on the meter: its reading in the open cycle is judged by the new digits at once
+		m = frappe.get_doc("Meter", self.meter)
+		m.digits = 6
+		m.save()
+		r = self.reading("2026-10-01")
+		self.assertEqual(r.digits, 6)
+		r.present_reading, r.reading_date = 3905, "2026-10-05"
+		r.save()
+		self.assertEqual((r.units, r.status), (264, "Valid"))
+		self.assertEqual(frappe.get_meta("Meter").get_field("digits").default, "6")  # a new meter's dial has 6 digits unless told
 
 	def test_rollover_is_valid(self):
 		meter = self.new_meter("TST-RDG-M2")

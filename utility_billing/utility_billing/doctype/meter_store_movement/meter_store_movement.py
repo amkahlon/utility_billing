@@ -8,6 +8,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt
 
+from utility_billing.utility_billing.reading_engine import DEFAULT_DIGITS
+
 RECEIVED, ISSUED, RETURNED, SCRAPPED = "Received", "Issued", "Returned", "Scrapped"
 IN_STORE = "In Store"
 # the statuses a meter may have before each movement
@@ -30,7 +32,7 @@ class MeterStoreMovement(Document):
 				if r.meter:
 					frappe.throw(_("Row {0}: a meter received is new to the store; enter its serial number instead.").format(r.idx))
 				r.serial_no = (r.serial_no or "").strip()
-				r.digits, r.multiplier = cint(r.digits) or 5, flt(r.multiplier) or 1
+				r.digits, r.multiplier = cint(r.digits) or DEFAULT_DIGITS, flt(r.multiplier) or 1
 				continue
 			if not r.meter:
 				frappe.throw(_("Row {0}: choose the meter.").format(r.idx))
