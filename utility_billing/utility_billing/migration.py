@@ -13,6 +13,7 @@ codes mean which of our values, how house numbers are written and how dates are.
   approve (workflow, not the maker) -> the batch can no longer be undone. The opening balances are approved and posted as before.
 """
 
+import contextlib
 import datetime
 import io
 import json
@@ -21,7 +22,9 @@ from collections import Counter, defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, getdate
+from frappe.utils import cint, flt, getdate, nowdate
+
+from utility_billing.utility_billing import uniqueness
 
 TARGETS = {
 	"Connections": ["old_account_no", "old_customer_id", "old_collection_no", "consumer_name", "cnic", "ntn", "filer", "mobile", "address",
@@ -248,6 +251,28 @@ def _account_transformer(batch, r, ref, tx_rows, network, transformers, err):
 		transformers.add(code)
 
 
+def _serial(v) -> str:
+	"""A meter number as the app compares it: without leading zeros, spaces, dashes or capitals."""
+	return uniqueness.norm(v, "serial")
+
+
+def _held_keys(group, values) -> set:
+	"""Which of these values (already in their comparison form) a record on the site holds in a uniqueness group."""
+	held, values = set(), [v for v in values if v]
+	if not values or not frappe.db.table_exists("Unique Key"):
+		return held
+	for k in range(0, len(values), 1000):
+		rows = frappe.get_all("Unique Key", filters={"key_group": group, "key_value": ["in", values[k:k + 1000]], "scope_key": ""},
+		                      fields=["key_value", "ref_doctype", "ref_name"])
+		by_dt = defaultdict(list)
+		for r in rows:
+			by_dt[r.ref_doctype].append(r)
+		for dt, found in by_dt.items():  # a key whose record went without the app doesn't count
+			alive = set(frappe.get_all(dt, filters={"name": ["in", [r.ref_name for r in found]]}, pluck="name"))
+			held.update(r.key_value for r in found if r.ref_name in alive)
+	return held
+
+
 def analyse(batch) -> frappe._dict:
 	"""Everything the load needs, and every problem, without writing anything."""
 	prof = profile_of(batch.profile)
@@ -264,6 +289,11 @@ def analyse(batch) -> frappe._dict:
 	def err(sheet, r, text, account=None, severity="Error"):
 		problems.append(dict(sheet=sheet, row_no=r._row if r else 0, account=account or (r.get("old_account_no") if r else "") or "",
 		                     severity=severity, problem=text))
+
+	# What the load would refuse is reported here (increment 45): a load of 21,446 accounts stopped four times on rules the check
+	# didn't test (2026-11-24), the last of them after everything else was made.
+	if data["Balances"] and as_of >= getdate(nowdate()):
+		err("Balances", None, _("The cut-over day must be before today: opening balances are as at a day that has ended."))
 
 	# the network: the Feeders and Transformers sheets, and an older workbook's Network sheet with a kind column
 	network = []
@@ -294,6 +324,9 @@ def analyse(batch) -> frappe._dict:
 	# accounts
 	accounts, cnic_names = {}, defaultdict(set)
 	seen_meters = Counter(str(r.meter_no) for r in data["Connections"] if r.meter_no)
+	# the app compares meter numbers without leading zeros, spaces, dashes or capitals: 000986 and 00000986 are one meter
+	same_meters = Counter(_serial(r.meter_no) for r in data["Connections"] if r.meter_no)
+	held_meters = _held_keys("Meter number", list(same_meters))
 	# looked up once for the file, not once a row (the performance step: 20,000 accounts)
 	utilities = set(frappe.get_all("Utility Type", pluck="name"))
 	categories = {}
@@ -374,7 +407,10 @@ def analyse(batch) -> frappe._dict:
 			else:
 				if seen_meters[str(r.meter_no)] > 1:
 					err("Connections", r, _("Meter {0} is on more than one account in the file.").format(r.meter_no))
-				if str(r.meter_no) in existing_meters:
+				elif same_meters[_serial(r.meter_no)] > 1:
+					err("Connections", r, _("Meter {0} is another account's meter in the file once leading zeros, spaces, dashes and capitals are left out.").format(
+						r.meter_no))
+				if str(r.meter_no) in existing_meters or _serial(r.meter_no) in held_meters:
 					err("Connections", r, _("Meter {0} is already in the system.").format(r.meter_no))
 			if r.meter_type not in ("Single Phase", "Three Phase", "TOU", "Net Metering", "Prepaid", "Bulk / Check Meter"):
 				err("Connections", r, _("Meter type {0} isn't one of ours.").format(r.meter_type))
@@ -402,17 +438,18 @@ def analyse(batch) -> frappe._dict:
 			err("Connections", r, _("Plot size missing."), severity="Warning")
 		accounts[ref] = r
 	# the transformers' own meters: each one new, and not a consumer's meter
-	consumer_meters, tx_meters = {str(a.meter_no) for a in accounts.values() if a.meter_no}, {}
+	consumer_meters, tx_meters = {_serial(a.meter_no) for a in accounts.values() if a.meter_no}, {}
+	held_tx = _held_keys("Meter number", [_serial(t.meter_no) for t in network if t.kind == "Transformer" and t.get("meter_no")])
 	for t in network:
 		if t.kind != "Transformer" or not t.get("meter_no"):
 			continue
-		m = str(t.meter_no)
+		m = _serial(t.meter_no)
 		if m in tx_meters:
-			err(t._sheet, t, _("Meter {0} is on transformers {1} and {2}.").format(m, tx_meters[m], t.code))
+			err(t._sheet, t, _("Meter {0} is on transformers {1} and {2}.").format(t.meter_no, tx_meters[m], t.code))
 		elif m in consumer_meters:
-			err(t._sheet, t, _("Meter {0} of transformer {1} is also a consumer's meter in the file.").format(m, t.code))
-		elif frappe.db.exists("Meter", m):
-			err(t._sheet, t, _("Meter {0} of transformer {1} is already in the system.").format(m, t.code))
+			err(t._sheet, t, _("Meter {0} of transformer {1} is also a consumer's meter in the file.").format(t.meter_no, t.code))
+		elif frappe.db.exists("Meter", str(t.meter_no)) or m in held_tx:
+			err(t._sheet, t, _("Meter {0} of transformer {1} is already in the system.").format(t.meter_no, t.code))
 		if flt(t.get("last_reading")) < 0:
 			err(t._sheet, t, _("A reading can't be negative."))
 		tx_meters[m] = t.code
@@ -420,6 +457,8 @@ def analyse(batch) -> frappe._dict:
 		if len(names) > 1:
 			problems.append(dict(sheet="Connections", row_no=0, account="", severity="Warning",
 			                     problem=_("CNIC {0} belongs to different names: {1}. They become one consumer.").format(cnic, ", ".join(sorted(names)))))
+	_check_old_numbers(batch, accounts, existing, err)
+	_check_tax_numbers(accounts, err)
 	by_meter = {str(r.meter_no): ref for ref, r in accounts.items() if r.meter_no}
 	# readings
 	for r in data["Readings"]:
@@ -482,6 +521,52 @@ def analyse(batch) -> frappe._dict:
 	receivable = sum(flt(b.current_bill) + flt(b.arrears) + flt(b.surcharge) + flt(b.fees) + flt(b.deferred) - flt(b.credit) for b in balances.values())
 	return frappe._dict(prof=prof, problems=problems, network=network, accounts=accounts, balances=balances, history=history,
 	                    receivable=round(receivable, 2))
+
+
+def _check_old_numbers(batch, accounts, existing, err):
+	"""An old collection number belongs to one account, in the file and on the site (Connection.validate_legacy_numbers)."""
+	rows = defaultdict(list)
+	for ref, r in accounts.items():
+		number = str(r.old_collection_no or "").strip()
+		if number:
+			rows[number].append((ref, r))
+	held, numbers = set(), list(rows)
+	for k in range(0, len(numbers), 1000):
+		for field in ("legacy_account_no", "legacy_collection_no"):
+			held.update(frappe.get_all("Connection", filters={"society": batch.society, field: ["in", numbers[k:k + 1000]]}, pluck=field))
+	for number, users in rows.items():
+		for _ref, r in users[1:]:
+			err("Connections", r, _("Old number {0} is on more than one account in the file (rows {1} and {2}). It belongs to one account.").format(
+				number, users[0][1]._row, r._row))
+		for ref, r in users:
+			if number in accounts and number != ref:
+				err("Connections", r, _("Old number {0} is another account's old account number in the file.").format(number))
+			elif number in held and ref not in existing:
+				err("Connections", r, _("Old number {0} already belongs to an account in the system.").format(number))
+
+
+def _check_tax_numbers(accounts, err):
+	"""A tax number belongs to one consumer. Accounts become one consumer through the same customer ID or CNIC (_consumer); the
+	consumer takes the tax number of its first account."""
+	people, owner_of = set(), {}
+	held = _held_keys("Tax number (NTN)", list({uniqueness.norm(r.ntn) for r in accounts.values() if r.ntn}))
+	for ref, r in accounts.items():
+		keys = [k for k in (("id", str(r.old_customer_id)) if r.old_customer_id else None, ("cnic", r.cnic) if r.cnic else None) if k]
+		if any(k in people for k in keys):
+			continue  # an account of a consumer already met
+		people.update(keys)
+		number = uniqueness.norm(r.ntn) if r.ntn else ""
+		if not number:
+			continue
+		if number in owner_of:
+			err("Connections", r, _("Tax number {0} is also on account {1}, a different consumer (they share no customer ID or CNIC). It belongs to one consumer.").format(
+				r.ntn, owner_of[number]))
+			continue
+		owner_of[number] = ref
+		if number in held and not (
+			(r.old_customer_id and frappe.db.exists("Consumer", {"legacy_customer_id": str(r.old_customer_id)}))
+			or (r.cnic and frappe.db.exists("Consumer", {"id_type": "CNIC", "id_number": r.cnic}))):
+			err("Connections", r, _("Tax number {0} already belongs to a consumer in the system.").format(r.ntn))
 
 
 def _store_results(batch, a):
@@ -704,9 +789,34 @@ def check_undoable(batch):
 		frappe.throw(_("The opening balances {0} are posted: the batch can't be undone.").format(batch.opening_import))
 
 
+@contextlib.contextmanager
+def _clean_up_at_once():
+	"""Frappe queues a clean-up job for every record it deletes. Undoing 16,000 accounts filled the queue to its limit and the undo
+	stopped (2026-11-24), so while a batch is undone those clean-ups run at once."""
+	from frappe.model.delete_doc import delete_dynamic_links  # noqa: PLC0415
+
+	queue = frappe.enqueue
+
+	def enqueue(method, *args, **kwargs):
+		if method == "frappe.model.delete_doc.delete_dynamic_links":
+			return delete_dynamic_links(kwargs["doctype"], kwargs["name"])
+		return queue(method, *args, **kwargs)
+
+	frappe.enqueue = enqueue
+	try:
+		yield
+	finally:
+		frappe.enqueue = queue
+
+
 def undo(batch, commit=False):
 	"""Remove what the batch created, as long as nothing has happened on those accounts since."""
 	check_undoable(batch)
+	with _clean_up_at_once():
+		_undo(batch, commit)
+
+
+def _undo(batch, commit):
 	frappe.flags.in_migration_undo = True
 	try:
 		if batch.opening_import and frappe.db.exists("Opening Balance Import", batch.opening_import):

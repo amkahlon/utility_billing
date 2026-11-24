@@ -2698,6 +2698,38 @@ def t_landing_and_identity(d: Desk):
 		eq(("frappe-favicon" in text, "utility-billing-logo.svg" in text), (False, True), f"{page.replace(URL, '')} carries the product's icon")
 
 
+@case("QA-102", "Increment 45: a dispute taken to court closes when its court hold is approved; Held Amount is reached from the hold, not the menu")
+def t_dispute_to_court(d: Desk):
+	bo, bm, gm, cashier = USERS["bo"], USERS["bm"], USERS["gm"], USERS["cashier"]
+	conn = S["nm_conn"]  # QA-100's account: its bill was revised by the first court hold
+	ref = d.get("Connection", conn)["reference_no"]
+	info = cashier.call("utility_billing.utility_billing.account.enquiry", reference_no=ref)
+	amount = min(500, int(float(info["balance"])))
+	dispute = bo.save_doc({"doctype": "Bill Dispute", "connection": conn, "bill": info["bill"], "disputed_amount": str(amount),
+	                       "reason": "The consumer denies the detection charges"})
+	hold = {"doctype": "Court Hold", "connection": conn, "amount": str(amount), "court_order": f"CS {RUN}/2026", "court_order_date": "2026-11-12",
+	        "remarks": f"Dispute {dispute['name']}: the consumer went to court", "bill_dispute": dispute["name"]}
+	expect_error(lambda: bo.save_doc(dict(hold, connection=S["conn"]["name"])), "isn't a dispute of account")
+	saved = bo.workflow(bo.save_doc(dict(hold)), "Submit for Approval")
+	eq(d.get("Bill Dispute", dispute["name"])["status"], "Open", "the dispute stays open while the hold waits for approval")
+	done = bm.workflow(saved, "Approve")
+	after = d.get("Bill Dispute", dispute["name"])
+	eq((after["status"], after.get("court_hold"), after.get("resolved_by")), ("Referred to court", done["name"], EMAIL["bm"]), "the dispute closed with the hold")
+	eq(done["name"] in after["resolution"] and hold["court_order"] in after["resolution"], True, "the dispute says where it went")
+	expect_error(lambda: doc_method(bm, after, "resolve", {"outcome": "Withdrawn", "remarks": "decided twice"}), "already decided")
+	expect_error(lambda: bo.save_doc(dict(hold, court_order=f"CS {RUN}/2026 B")), "already decided")
+	# the menu: Bill Dispute and Court Hold, not Held Amount, which is still reached from the hold
+	html = gm.s.get(f"{URL}/desk").text
+	boot = json.JSONDecoder().raw_decode(html, html.index("frappe.boot = ") + len("frappe.boot = "))[0]
+	links = {i.get("link_to") for i in boot["module_sidebars"]["Utility Management System"]["items"]}
+	eq(("Bill Dispute" in links, "Court Hold" in links, "Held Amount" in links, "Held Amounts Register" in links), (True, True, False, True), "the Corrections menu")
+	eq(gm.get("Held Amount", done["held_amount"])["status"], "Held", "the Held Amount still opens from the court hold")
+	# left open on purpose: the browser test BR-15 opens it and presses Taken to Court
+	left = int(float(cashier.call("utility_billing.utility_billing.account.enquiry", reference_no=ref)["balance"]))
+	if left >= 1:
+		bo.save_doc({"doctype": "Bill Dispute", "connection": conn, "bill": latest_bill(conn), "disputed_amount": "1", "reason": "Left open for the browser test"})
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

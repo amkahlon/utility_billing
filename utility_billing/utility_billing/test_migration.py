@@ -412,6 +412,74 @@ class IntegrationTestMigration(IntegrationTestCase):
 		self.assertEqual({dt: frappe.db.count(dt) for dt in before}, before)
 		self.assertFalse(b.records)
 
+	# ---- increment 45: the check reports what the load would refuse (a load of 21,446 accounts stopped four times, 2026-11-24)
+	def errors_of(self, book, **kw):
+		b = self.batch(book, **kw)
+		migration.check(b)
+		return [p.problem for p in b.problems if p.severity == "Error"]
+
+	def test_check_finds_meter_numbers_that_are_the_same_to_the_app(self):
+		book = self.good_book()
+		book["Connections"][1][9], book["Connections"][2][9] = "000986", "00000986"  # one meter once the leading zeros are left out
+		book["Readings"] = book["Readings"][:1]
+		self.assertIn("Meter 000986 is another account's meter in the file once leading zeros, spaces, dashes and capitals are left out.", self.errors_of(book))
+		# a meter on the site under another spelling, and a transformer's meter that is a consumer's
+		frappe.get_doc({"doctype": "Meter", "serial_no": "tst-mig m7", "society": SOC, "utility": "Electricity", "meter_type": "Single Phase"}).insert()
+		book = self.good_book()
+		book["Connections"][3][9] = "TST-MIG-M7"
+		book["Transformers"][1][4] = "tst mig m1"
+		errors = self.errors_of(book)
+		self.assertIn("Meter TST-MIG-M7 is already in the system.", errors)
+		self.assertIn("Meter tst mig m1 of transformer MT1 is also a consumer's meter in the file.", errors)
+
+	def test_check_finds_an_old_number_on_two_accounts(self):
+		book = self.good_book()
+		book["Connections"] = [[*CONN_HEAD, "old_collection_no"]] + [row + [old] for row, old in zip(book["Connections"][1:], ("OLD-7", "OLD-7", "MIG-1001"))]
+		errors = self.errors_of(book)
+		self.assertIn("Old number OLD-7 is on more than one account in the file (rows 2 and 3). It belongs to one account.", errors)
+		self.assertIn("Old number MIG-1001 is another account's old account number in the file.", errors)
+		# one already on the site
+		self.loaded()
+		frappe.db.set_value("Connection", self.conn("MIG-1003"), "legacy_collection_no", "OLD-9")
+		book = self.good_book()
+		book["Connections"] = [[*CONN_HEAD, "old_collection_no"], ["MIG-3001", "C-31", "Bilal Khan", "", "", "70-C", "", "RES", 5, "TST-MIG-M31", "", 5, "Marla", "OLD-9"]]
+		book["Readings"], book["Balances"], book["History"] = book["Readings"][:1], book["Balances"][:1], book["History"][:1]
+		self.assertIn("Old number OLD-9 already belongs to an account in the system.", self.errors_of(book))
+
+	def test_check_finds_a_tax_number_on_two_consumers(self):
+		book = self.good_book()
+		# MIG-1001 and MIG-1002 are one consumer (customer C-1): the same tax number on both is fine; on Sana Ahmed's account it isn't
+		book["Connections"] = [[*CONN_HEAD, "ntn"]] + [row + [ntn] for row, ntn in zip(book["Connections"][1:], ("1234567-8", "1234567-8", "12345678"))]
+		errors = self.errors_of(book)
+		self.assertEqual([e for e in errors if "Tax number" in e],
+		                 ["Tax number 12345678 is also on account MIG-1001, a different consumer (they share no customer ID or CNIC). It belongs to one consumer."])
+		book["Connections"][3][-1] = ""
+		self.assertFalse(self.errors_of(book))
+		# one that a consumer on the site already has
+		frappe.get_doc({"doctype": "Consumer", "consumer_name": "Tax Holder", "consumer_type": "Individual", "tax_no": "7654321-0"}).insert()
+		book["Connections"][3][-1] = "76543210"
+		self.assertIn("Tax number 76543210 already belongs to a consumer in the system.", self.errors_of(book))
+
+	def test_check_refuses_a_cut_over_day_that_hasnt_ended(self):
+		text = "The cut-over day must be before today: opening balances are as at a day that has ended."
+		book = self.good_book()
+		for sheet in ("Readings", "History"):  # dated before the cut-over day either way
+			book[sheet] = book[sheet][:1]
+		self.assertIn(text, self.errors_of(book, as_of_date=nowdate()))
+		self.assertNotIn(text, self.errors_of(book, as_of_date=add_days(nowdate(), -1)))
+		del book["Balances"]  # without opening balances any day will do
+		self.assertNotIn(text, self.errors_of(book, as_of_date=nowdate()))
+
+	def test_undo_cleans_up_at_once_instead_of_queueing_a_job_for_each_record(self):
+		from unittest.mock import patch  # noqa: PLC0415
+
+		b = self.loaded()
+		with patch.object(frappe, "enqueue") as queued:
+			migration.undo(b)
+		self.assertFalse([c for c in queued.call_args_list if "delete_dynamic_links" in str(c)])
+		self.assertEqual((b.load_status, frappe.db.count("Connection", {"migration_batch": b.name})), ("Undone", 0))
+		self.assertIsNot(frappe.enqueue, queued)  # the queue is put back afterwards
+
 	def test_undo_is_refused_once_the_opening_balances_are_posted(self):
 		b = self.loaded()
 		frappe.db.set_value("Opening Balance Import", b.opening_import, "docstatus", 1)

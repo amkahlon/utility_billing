@@ -108,7 +108,7 @@ def overview(conn_name) -> dict:
 	months.sort(key=lambda m: getdate(m.billing_month))
 	held = flt(frappe.db.get_value("Connection", conn_name, "security_deposit"))
 	alerts = [{"tone": "amber", "text": _("Flag: {0}").format(f.name)} for f in flags.active(conn_name, today)]
-	for dt, label, cond in (("Bill Dispute", _("Bill dispute"), {"status": ["not in", ["Closed", "Resolved", "Decided", "Cancelled"]]}),
+	for dt, label, cond in (("Bill Dispute", _("Bill dispute"), {"status": "Open"}),  # decided disputes were listed too (found in increment 45)
 	                        ("Installment Plan", _("Installment plan"), {"plan_status": "Active", "docstatus": 1})):
 		for n in frappe.get_all(dt, filters={"connection": conn_name, **cond}, pluck="name", limit=3):
 			alerts.append({"tone": "blue", "text": f"{label} {n}", "go": [dt, n]})

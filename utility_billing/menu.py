@@ -42,7 +42,7 @@ SECTION_ROLES: dict[str, tuple[str, ...]] = {
 EXTRA_ROLES: dict[str, tuple[str, ...]] = {
 	"Cashier Day": (CA,), "Payment Receipt": (CA,), "Fee Charge": (CA,),  # the cash counter's own records
 	"Connection": (CA, MR),  # finding an account
-	"Installment Plan": (RO,), "Bill Dispute": (RO,), "Court Hold": (RO,), "Held Amount": (RO,),  # recovery arranges and holds
+	"Installment Plan": (RO,), "Bill Dispute": (RO,), "Court Hold": (RO,),  # recovery arranges and holds
 	"Security Deposit": (CA,),  # taken at the counter
 }
 # pages whose own role list lets in roles that only pass through them
