@@ -79,6 +79,11 @@ class IntegrationTestLicensing(BillingCase):
 		self.assertEqual((received.status, received.accounts), ("Received", usage.accounts))
 		self.assertEqual(getdate(frappe.db.get_single_value("Licence Settings", "last_sent_month")), LAST_MONTH)
 		self.control_mode()
+		# the rest happens on the invoice day: run after the due date, the invoice was "Overdue" at once and the test failed
+		# in the last days of every month (found 2026-11-24)
+		on_the_6th = patch.object(licensing, "nowdate", return_value=str(getdate(nowdate()).replace(day=6)))
+		on_the_6th.start()
+		self.addCleanup(on_the_6th.stop)
 		self.assertEqual(licensing.raise_invoices(getdate(nowdate()).replace(day=4)), [])  # before the invoice day
 		(inv,) = licensing.raise_invoices(getdate(nowdate()).replace(day=6))
 		inv = frappe.get_doc("Licence Invoice", inv)
