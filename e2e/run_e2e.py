@@ -2680,6 +2680,13 @@ def t_landing_and_identity(d: Desk):
 	eq(bool(_re.search(r'"home_page":\s*"ub-cash"', html)), True, "/desk opens the cashier's own screen, not the apps screen")
 	eq(("<title>Utility Management System</title>" in html, "utility-billing-logo.svg" in html, "frappe-favicon" in html),
 	   (True, True, False), "the product's name and icon, not the platform's")
+	# increment 44: the cashier's sidebar lists the counter's screens, not every list the role may read
+	# read only the app's own sidebar from the boot data: the page also carries the platform's other sidebars
+	boot = json.JSONDecoder().raw_decode(html, html.index("frappe.boot = ") + len("frappe.boot = "))[0]
+	app_links = {i.get("link_to") for i in boot["module_sidebars"]["Utility Management System"]["items"]}
+	in_menu = lambda target: target in app_links  # noqa: E731
+	eq((in_menu("ub-cash"), in_menu("Payment Receipt"), in_menu("Bill Run"), in_menu("User"), in_menu("ub-dashboard")),
+	   (True, True, False, False, False), "the cashier's sidebar: Cash Counter and receipts, not Bill Run, Users or the dashboard")
 	# opening the desk gives the session a CSRF token, which the browser then sends with every call: so do we
 	token = _re.search(r'csrf_token\s*=\s*"([^"]+)"', html)
 	if token:
@@ -2703,8 +2710,12 @@ def _notice_pdf(desk, run):
 
 # ---------------------------------------------------------------- runner
 def main():
+	global RUN
 	d = Desk()
 	d.login()
+	# a run number no earlier run used (2026-11-21: a random repeat, 5060, found its records already there and 87 cases failed)
+	while d.call("frappe.client.get_count", doctype="Society", filters=json.dumps([["name", "like", f"%{RUN}%"]])):
+		RUN = f"{random.randint(1000, 9999)}"
 	make_user(d, "bm", ["Billing Manager"])
 	make_user(d, "gm", ["General Manager"])
 	make_user(d, "bmgm", ["Billing Manager", "General Manager"])
