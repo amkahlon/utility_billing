@@ -300,6 +300,33 @@ def resolve_dispute(d, outcome, remarks, revision=None):
 	d.resolved_by, d.resolved_on = frappe.session.user, now_datetime()
 
 
+def check_dispute_for_court(hold):
+	"""A court hold may follow a consumer's dispute (increment 45, user 2026-11-21: the two "serve similar purpose"; they stay two
+	records, linked). The dispute must be the same account's and still open."""
+	if not hold.bill_dispute:
+		return
+	d = frappe.db.get_value("Bill Dispute", hold.bill_dispute, ["connection", "status", "court_hold"], as_dict=True)
+	if not d or d.connection != hold.connection:
+		frappe.throw(_("{0} isn't a dispute of account {1}.").format(hold.bill_dispute, hold.connection))
+	if d.status != "Open" and d.court_hold != hold.name:
+		frappe.throw(_("Dispute {0} was already decided ({1}).").format(hold.bill_dispute, _(d.status)))
+
+
+def refer_dispute_to_court(hold):
+	"""On the court hold's approval its dispute closes as Referred to court: from here the court's order decides the amount, and
+	the Held Amount is released or written off when the court rules."""
+	if not hold.bill_dispute:
+		return
+	d = frappe.get_doc("Bill Dispute", hold.bill_dispute)
+	if d.status != "Open":
+		return
+	d.status, d.court_hold = "Referred to court", hold.name
+	d.resolution = _("Taken to court (order {0}). Rs {1} set aside by court hold {2}.").format(hold.court_order, f"{flt(hold.amount):,.0f}", hold.name)
+	d.resolved_by, d.resolved_on = frappe.session.user, now_datetime()
+	d.flags.resolving = True
+	d.save(ignore_permissions=True)
+
+
 # ---------------------------------------------------------------- bulk adjustment (WF-12)
 def bulk_connections(doc) -> list[dict]:
 	filters = {"society": doc.society, "status": "Active"}

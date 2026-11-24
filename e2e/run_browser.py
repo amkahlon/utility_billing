@@ -289,6 +289,31 @@ def t_one_banner_per_message(s: Session):
 	assert len(texts) == len(set(texts)), f"a banner is repeated after two refreshes: {texts}"
 
 
+def t_dispute_taken_to_court(s: Session):
+	"""Increment 45: an open dispute's Taken to Court button opens a court hold filled in from it; a referred one links both ways."""
+	p = s.page
+	rows = p.evaluate("""() => frappe.db.get_list('Bill Dispute', {fields: ['name', 'connection', 'disputed_amount'], filters: {status: 'Open'},
+		order_by: 'creation desc', limit: 1})""")
+	assert rows, "the QA site has no open dispute: run the HTTP suite first (QA-102 leaves one)"
+	s.go(f"bill-dispute/{rows[0]['name']}")
+	button = p.locator(".page-actions button, .form-inner-toolbar button", has_text="Taken to Court").first
+	button.wait_for(state="visible", timeout=20000)
+	button.click()
+	p.wait_for_function("() => window.cur_frm && cur_frm.doctype === 'Court Hold' && cur_frm.is_new() && cur_frm.doc.bill_dispute", timeout=20000)
+	got = p.evaluate("() => [cur_frm.doc.connection, cur_frm.doc.bill_dispute, Number(cur_frm.doc.amount), (cur_frm.doc.remarks || '').includes(cur_frm.doc.bill_dispute)]")
+	assert got == [rows[0]["connection"], rows[0]["name"], float(rows[0]["disputed_amount"]), True], f"the court hold isn't filled in from the dispute: {got}"
+	done = p.evaluate("""() => frappe.db.get_list('Bill Dispute', {fields: ['name', 'court_hold'], filters: {status: 'Referred to court'},
+		order_by: 'creation desc', limit: 1})""")
+	assert done and done[0]["court_hold"], "no dispute was referred to court: run the HTTP suite first"
+	s.go(f"bill-dispute/{done[0]['name']}")
+	link = p.locator(".page-actions button, .form-inner-toolbar button", has_text="Court Hold").first
+	link.wait_for(state="visible", timeout=20000)
+	assert p.locator("button", has_text="Taken to Court").count() == 0 and p.locator("button", has_text="Decide").count() == 0, "a decided dispute still offers actions"
+	link.click()
+	p.wait_for_function(f"() => window.cur_frm && cur_frm.doctype === 'Court Hold' && cur_frm.docname === '{done[0]['court_hold']}'", timeout=20000)
+	p.locator(".page-actions button, .form-inner-toolbar button", has_text="Bill Dispute").first.wait_for(state="visible", timeout=20000)
+
+
 CASES = (
 	("BR-01", "Sign in through the login form", t_sign_in),
 	("BR-02", "Sidebar lists the main screens, Migration and the Net Metering Register", t_sidebar),
@@ -304,6 +329,7 @@ CASES = (
 	("BR-12", "Reports open with no script error", t_reports),
 	("BR-13", "Phone width: the main pages don't scroll sideways", t_phone_width),
 	("BR-14", "A form shows each banner once, however often it refreshes", t_one_banner_per_message),
+	("BR-15", "A dispute's Taken to Court button opens a court hold filled in from it", t_dispute_taken_to_court),
 )
 
 

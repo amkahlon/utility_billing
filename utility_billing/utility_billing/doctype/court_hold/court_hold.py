@@ -12,7 +12,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
 
-from utility_billing.utility_billing import approval, held
+from utility_billing.utility_billing import approval, corrections, held
 
 APPROVER_ROLE = "Billing Manager"
 
@@ -33,6 +33,7 @@ class CourtHold(Document):
 		if other:
 			frappe.throw(_("{0} is already open for account {1}: finish it first.").format(other, self.connection))
 		if self.docstatus == 0:
+			corrections.check_dispute_for_court(self)
 			held.fill_hold_preview(self)
 		self.hold_title = f"{self.connection} · Rs {flt(self.amount):,.0f} · {self.court_order}"
 		approval.validate_transition(self)
@@ -46,6 +47,7 @@ class CourtHold(Document):
 
 	def on_submit(self):
 		held.place_hold(self)
+		corrections.refer_dispute_to_court(self)
 		approval.notify(self, APPROVER_ROLE)
 
 	def before_cancel(self):

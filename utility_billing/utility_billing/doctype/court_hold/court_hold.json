@@ -15,6 +15,7 @@
   "court_order_date",
   "amount",
   "remarks",
+  "bill_dispute",
   "effect_section",
   "owed_now",
   "surcharge_reversed",
@@ -123,6 +124,14 @@
    "fieldtype": "Small Text",
    "label": "Explanation",
    "reqd": 1
+  },
+  {
+   "fieldname": "bill_dispute",
+   "fieldtype": "Link",
+   "label": "From Bill Dispute",
+   "options": "Bill Dispute",
+   "description": "The consumer's dispute that went to court, if this hold follows one. On approval the dispute closes as Referred to court.",
+   "search_index": 1
   },
   {
    "fieldname": "effect_section",
@@ -311,7 +320,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-21 09:00:00.000000",
+ "modified": "2026-11-24 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Court Hold",

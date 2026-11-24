@@ -920,21 +920,6 @@
    "indent": 0,
    "is_default_module": 0,
    "keep_closed": 0,
-   "label": "Held Amount",
-   "link_to": "Held Amount",
-   "link_type": "DocType",
-   "open_in_new_tab": 1,
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "added": 0,
-   "child": 1,
-   "collapsible": 1,
-   "hidden": 0,
-   "indent": 0,
-   "is_default_module": 0,
-   "keep_closed": 0,
    "label": "Bulk Adjustment",
    "link_to": "Bulk Adjustment",
    "link_type": "DocType",
@@ -2942,7 +2927,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-11-21 13:24:10.421251",
+ "modified": "2026-11-24 13:13:56.018939",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Utility Management System",

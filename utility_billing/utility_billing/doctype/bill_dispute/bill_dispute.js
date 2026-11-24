@@ -6,7 +6,29 @@ frappe.ui.form.on("Bill Dispute", {
 	},
 
 	refresh(frm) {
-		if (frm.is_new() || frm.doc.status !== "Open") return;
+		if (frm.is_new()) return;
+		if (frm.doc.court_hold) {
+			frm.add_custom_button(__("Court Hold"), () => frappe.set_route("Form", "Court Hold", frm.doc.court_hold));
+		}
+		if (frm.doc.status !== "Open") return;
+		// the dispute has gone to court (increment 45): a court hold takes it over, filled in from here
+		if (frappe.model.can_create("Court Hold")) {
+			frappe.db.get_value("Court Hold", { bill_dispute: frm.doc.name, docstatus: 0 }, "name").then((r) => {
+				const open = r && r.message && r.message.name;
+				if (open) {
+					frm.add_custom_button(__("Court Hold {0}", [open]), () => frappe.set_route("Form", "Court Hold", open));
+				} else {
+					frm.add_custom_button(__("Taken to Court"), () =>
+						frappe.new_doc("Court Hold", {
+							connection: frm.doc.connection,
+							bill_dispute: frm.doc.name,
+							amount: frm.doc.disputed_amount,
+							remarks: __("Dispute {0}: {1}", [frm.doc.name, frm.doc.reason]),
+						})
+					);
+				}
+			});
+		}
 		frm.add_custom_button(__("Decide"), () => {
 			frappe.prompt(
 				[

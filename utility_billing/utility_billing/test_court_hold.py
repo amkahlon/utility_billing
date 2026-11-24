@@ -12,7 +12,7 @@ from unittest.mock import patch
 import frappe
 
 from utility_billing.install import create_default_reason_codes
-from utility_billing.utility_billing import account, bill_print, corrections, gl, held, mis
+from utility_billing.utility_billing import account, approval, bill_print, corrections, gl, held, mis
 from utility_billing.utility_billing.test_billing import SOC, BillingCase
 from utility_billing.utility_billing.testing import BILLING_MANAGER, BILLING_OFFICER, GENERAL_MANAGER, act
 
@@ -210,6 +210,62 @@ class IntegrationTestCourtHold(BillingCase):
 			doc.reload()
 		frappe.set_user("Administrator")
 		self.assertRaises(frappe.ValidationError, doc.cancel)  # released or written off on the Held Amount, never undone
+
+	# ---- increment 45: a dispute that goes to court is taken over by a court hold (user, 2026-11-21 and 2026-11-24)
+	def dispute(self, amount=1_000):
+		frappe.set_user(BILLING_OFFICER)
+		d = frappe.get_doc({"doctype": "Bill Dispute", "connection": self.conn, "bill": self.october.name, "disputed_amount": amount,
+		                    "reason": "Detection charges the consumer denies"}).insert()
+		frappe.set_user("Administrator")
+		return d
+
+	def test_a_dispute_taken_to_court_closes_when_its_hold_is_approved(self):
+		from utility_billing.utility_billing import consumer360  # noqa: PLC0415
+
+		alerts = lambda: [a["text"] for a in consumer360.overview(self.conn)["alerts"]]  # noqa: E731
+		with today("2026-11-10"):
+			d = self.dispute()
+			doc = self.hold(1_000, bill_dispute=d.name)
+			act(doc, "Submit for Approval", BILLING_OFFICER)
+			d.reload()
+			self.assertEqual((d.status, d.court_hold), ("Open", None))  # still the society's dispute until the hold is approved
+			self.assertIn(f"Bill dispute {d.name}", alerts())
+			act(doc, "Approve", BILLING_MANAGER)
+		d.reload()
+		doc.reload()
+		self.assertEqual((d.status, d.court_hold, d.resolved_by), ("Referred to court", doc.name, BILLING_MANAGER))
+		self.assertEqual(d.resolution, f"Taken to court (order WP 4471/2025 (LHC)). Rs 1,000 set aside by court hold {doc.name}.")
+		self.assertTrue(d.resolved_on)
+		self.assertEqual((account.balance(self.conn), held.held_of(self.conn)), (22_364, 1_000))
+		self.assertNotIn(f"Bill dispute {d.name}", alerts())  # a decided dispute is no longer an alert on Consumer 360
+		# decided: it can't be decided again, and no second hold can follow it
+		frappe.set_user(BILLING_MANAGER)
+		self.assertRaisesRegex(frappe.ValidationError, "already decided", d.resolve, "Withdrawn", "The consumer withdrew it")
+		frappe.set_user("Administrator")
+		with today("2026-11-11"):
+			self.assertRaisesRegex(frappe.ValidationError, "already decided", self.hold, 500, bill_dispute=d.name)
+
+	def test_a_rejected_hold_leaves_its_dispute_open_and_a_wrong_dispute_is_refused(self):
+		with today("2026-11-10"):
+			d = self.dispute()
+			doc = self.hold(1_000, bill_dispute=d.name)
+			act(doc, "Submit for Approval", BILLING_OFFICER)
+			frappe.set_user(BILLING_MANAGER)
+			approval.set_rejection_reason(doc.doctype, doc.name, "The order isn't on file yet")
+			frappe.set_user("Administrator")
+			act(doc, "Reject", BILLING_MANAGER)
+			d.reload()
+			self.assertEqual((d.status, d.court_hold), ("Open", None))
+			# the Billing Manager then decides it the usual way
+			frappe.set_user(BILLING_MANAGER)
+			self.assertEqual(d.resolve("Withdrawn", "The consumer withdrew it"), "Withdrawn")
+		frappe.set_user("Administrator")
+
+	def test_a_dispute_of_another_account_is_refused(self):
+		other = self.dispute(500)
+		frappe.db.set_value("Bill Dispute", other.name, "connection", "0000000000")  # as if it were another account's
+		with today("2026-11-10"):
+			self.assertRaisesRegex(frappe.ValidationError, "isn't a dispute of account", self.hold, 500, bill_dispute=other.name)
 
 	def test_the_held_receivables_account_is_needed(self):
 		frappe.db.set_value("Society", SOC, "held_receivables_account", None)

@@ -18,6 +18,7 @@
   "resolution_section",
   "resolution",
   "revision",
+  "court_hold",
   "resolved_by",
   "resolved_on"
  ],
@@ -75,7 +76,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Open\nReleased\nBill revised\nWithdrawn",
+   "options": "Open\nReleased\nBill revised\nWithdrawn\nReferred to court",
    "default": "Open",
    "read_only": 1,
    "in_list_view": 1,
@@ -121,6 +122,14 @@
    "read_only": 1
   },
   {
+   "fieldname": "court_hold",
+   "fieldtype": "Link",
+   "label": "Court Hold",
+   "options": "Court Hold",
+   "read_only": 1,
+   "description": "The court hold that took this dispute over when it went to court."
+  },
+  {
    "fieldname": "resolved_by",
    "fieldtype": "Link",
    "label": "Decided By",
@@ -136,7 +145,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 16:00:00.000000",
+ "modified": "2026-11-24 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Bill Dispute",

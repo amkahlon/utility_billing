@@ -13,6 +13,9 @@ frappe.ui.form.on("Court Hold", {
 				"orange"
 			);
 		}
+		if (frm.doc.bill_dispute) {
+			frm.add_custom_button(__("Bill Dispute"), () => frappe.set_route("Form", "Bill Dispute", frm.doc.bill_dispute));
+		}
 		if (frm.doc.held_amount) {
 			frm.add_custom_button(__("Held Amount"), () => frappe.set_route("Form", "Held Amount", frm.doc.held_amount));
 		}
