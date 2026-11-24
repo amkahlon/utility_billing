@@ -184,7 +184,20 @@ def reverse_payment(client, transaction_id, reason=None):
 
 
 # ---------------------------------------------------------------- documentation (FS-API-08)
-TYPES = {"string": {"type": "string"}, "number": {"type": "number"}, "integer": {"type": "integer"}}
+TYPES = {"string": {"type": "string"}, "number": {"type": "number"}, "integer": {"type": "integer"},
+         "array": {"type": "array", "items": {"type": "object"}}}  # a list of records (the MDM's readings, increment 47)
+
+
+@endpoint("reading.write", write=True, summary="Send smart meters' readings from a meter data system (MDM). Each goes to the meter's reading in the newest "
+          "open reading cycle and gets the same checks as any reading. Send an Idempotency-Key header.",
+          params=[("readings", "array", True, "A list of {meter_no, reading, reading_date (YYYY-MM-DD), export_reading (net meters), mdi (kW)}; at most 5,000.")],
+          returns={"accepted": 1, "rejected": 1, "readings": [{"meter_no": "SM-1001", "reading": "RDG-2026-000123", "status": "Valid", "units": 312.0}],
+                   "errors": [{"meter_no": "SM-1002", "reason": "No open reading cycle has a reading for this meter"}]})
+def post_meter_readings(client, readings):
+	from utility_billing.utility_billing import readings as reading_rules  # noqa: PLC0415
+
+	rows = frappe.parse_json(readings) if isinstance(readings, str) else readings
+	return reading_rules.receive_mdm(rows, allowed=lambda society: check_society(client, society))
 
 
 @frappe.whitelist(allow_guest=True)

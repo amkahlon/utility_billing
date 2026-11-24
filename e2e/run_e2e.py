@@ -2733,6 +2733,49 @@ def t_dispute_to_court(d: Desk):
 		bo.save_doc({"doctype": "Bill Dispute", "connection": conn, "bill": latest_bill(conn), "disputed_amount": "1", "reason": "Left open for the browser test"})
 
 
+@case("QA-103", "Increment 47: Reading Entry saves typed readings; a smart meter takes the MDM's file, not typing, unless it isn't communicating")
+def t_reading_entry(d: Desk):
+	bo, reader, cashier = USERS["bo"], USERS["reader"], USERS["cashier"]
+	entry = "utility_billing.utility_billing.reading_entry"
+	rd = bo.s.get(f"{URL}/api/resource/Meter Reading", params={
+		"filters": json.dumps([["connection", "=", S["nm_conn"]]]), "fields": json.dumps(["name", "reading_cycle", "meter", "previous_reading"]),
+		"order_by": "creation desc", "limit_page_length": 1}).json()["data"][0]  # QA-92's October reading of the solar account, its cycle still open
+	cycle, prev = rd["reading_cycle"], int(float(rd["previous_reading"]))
+	sheet = bo.call(f"{entry}.get_sheet", cycle=cycle)
+	eq((sheet["status"], sheet["can_write"], [r["name"] for r in sheet["rows"]], sheet["totals"]["records"]), ("Open", True, [rd["name"]], 1), "the cycle's sheet")
+	expect_error(lambda: cashier.call(f"{entry}.get_sheet", cycle=cycle))  # a cashier doesn't see readings
+
+	def typed(desk, **kw):
+		return desk.call(f"{entry}.save_rows", cycle=cycle, rows=json.dumps([{"name": rd["name"], "exception_code": "", **kw}]))
+
+	def mdm_file(reading, day):
+		text = f"Meter No|Reading|Export Reading|Reading Date\n{rd['meter']}|{reading}|21500|{day}\n"
+		up = bo.s.post(f"{URL}/api/method/upload_file", files={"file": (f"mdm-{RUN}-{random.randint(100, 999)}.txt", text.encode())},
+		               data={"is_private": 1, "doctype": "Reading Cycle", "docname": cycle})
+		return bo.call(f"{RDG}.upload_readings", cycle=cycle, file_url=up.json()["message"]["file_url"], source="MDM")
+
+	out = typed(reader, present_reading=str(prev + 290), present_export_reading="21500", reading_date="2026-10-08")
+	row = out["rows"][0]
+	eq((out["saved"], row["ok"], float(row["units"]), row["source"], out["totals"]["entered"]), (1, True, 290.0, "Office", 1), "a meter reader types a reading on the screen")
+	eq(mdm_file(prev + 283, "2026-10-08")["updated"], 0, "the MDM's file isn't taken for an ordinary meter")
+	# the meter becomes a smart meter: its reading is locked on the screen at once
+	d.save_doc(dict(d.get("Meter", rd["meter"]), smart_meter=1))
+	eq(bo.call(f"{entry}.get_sheet", cycle=cycle)["rows"][0]["smart_meter"], 1, "the sheet shows it as a smart meter")
+	refused = typed(bo, present_reading=str(prev + 300))["rows"][0]
+	eq((refused["ok"], "is a smart meter" in refused.get("error", "")), (False, True), "typing a smart meter's reading is refused")
+	res = mdm_file(prev + 283, "2026-10-08")
+	after = d.get("Meter Reading", rd["name"])
+	eq((res["updated"], float(after["units"]), after["source"]), (1, 283.0, "MDM"), "the MDM's text file gives the smart meter its reading, by meter number")
+	# not communicating: the meter reader's reading is taken, marked, and goes to review; the MDM's later reading doesn't replace it
+	hand = typed(reader, present_reading=str(prev + 285), present_export_reading="21500", reading_date="2026-10-09", smart_meter_mute=1)["rows"][0]
+	eq((hand["ok"], float(hand["units"]), hand["status"], hand["source"], "read by hand" in (hand.get("checks") or "")), (True, 285.0, "Flagged", "Office", True),
+	   "a mute smart meter is read by hand and sent to review")
+	late = mdm_file(prev + 284, "2026-10-10")
+	kept = d.get("Meter Reading", rd["name"])
+	eq((late["updated"], "hand reading is kept" in late["errors"][0]["error"], float(kept["units"]), "The MDM then sent" in kept["checks"]), (0, True, 285.0, True),
+	   "the hand reading is kept when the MDM reports later")
+
+
 def _notice_pdf(desk, run):
 	from pypdf import PdfReader
 

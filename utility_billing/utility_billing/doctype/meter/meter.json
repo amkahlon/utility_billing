@@ -14,6 +14,7 @@
   "utility",
   "make",
   "meter_type",
+  "smart_meter",
   "cb_meter",
   "status",
   "issued_to",
@@ -70,6 +71,14 @@
    "label": "Type",
    "options": "Single Phase\nThree Phase\nTOU\nNet Metering\nPrepaid\nBulk / Check Meter",
    "reqd": 1
+  },
+  {
+   "fieldname": "smart_meter",
+   "fieldtype": "Check",
+   "label": "Smart Meter (AMI)",
+   "default": "0",
+   "in_standard_filter": 1,
+   "description": "Its readings come from the meter data system (MDM), not from a meter reader. A reading is typed only when the meter isn't communicating."
   },
   {
    "fieldname": "cb_meter",
@@ -177,7 +186,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-20 22:00:00.000000",
+ "modified": "2026-11-24 17:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Meter",

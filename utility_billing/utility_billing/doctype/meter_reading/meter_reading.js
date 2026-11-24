@@ -9,6 +9,7 @@ frappe.ui.form.on("Meter Reading", {
 		if (frm.doc.checks && color) {
 			frm.dashboard.set_headline_alert(frappe.utils.escape_html(frm.doc.checks).replace(/\n/g, "<br>"), color);
 		}
+		lock_smart_meter(frm);
 		if (frm.is_new()) return;
 		// Readings in a closed cycle are locked: read-only form and no review actions.
 		frappe.db.get_value("Reading Cycle", frm.doc.reading_cycle, "status").then(({ message }) => {
@@ -19,7 +20,23 @@ frappe.ui.form.on("Meter Reading", {
 			}
 		});
 	},
+
+	smart_meter_mute(frm) {
+		lock_smart_meter(frm);
+	},
 });
+
+// A smart (AMI) meter's reading comes from the MDM; it is typed only when the meter isn't communicating (increment 47).
+function lock_smart_meter(frm) {
+	const locked = !!frm.doc.smart_meter && !frm.doc.smart_meter_mute;
+	["present_reading", "present_export_reading", "reading_date", "mdi_kw"].forEach((f) => frm.set_df_property(f, "read_only", locked ? 1 : 0));
+	if (locked) {
+		frm.dashboard.set_headline_alert(
+			__("A smart meter: its reading comes from the MDM. If it isn't communicating, tick Not Communicating and enter the meter reader's reading."),
+			"blue"
+		);
+	}
+}
 
 function add_review_buttons(frm) {
 	{

@@ -17,6 +17,7 @@
   "cb2",
   "scope_payment_write",
   "scope_payment_reverse",
+  "scope_reading_write",
   "scope_events",
   "societies_section",
   "all_societies",
@@ -63,7 +64,7 @@
    "options": "User",
    "reqd": 1,
    "unique": 1,
-   "description": "The system signs in as this user with its API key and secret (User \u2192 API Access). The user needs only the API Integration role."
+   "description": "The system signs in as this user with its API key and secret (User → API Access). The user needs only the API Integration role."
   },
   {
    "fieldname": "rate_limit",
@@ -107,6 +108,12 @@
    "fieldname": "scope_payment_reverse",
    "fieldtype": "Check",
    "label": "Reverse its own payments"
+  },
+  {
+   "fieldname": "scope_reading_write",
+   "fieldtype": "Check",
+   "label": "Send meter readings (MDM)",
+   "default": "0"
   },
   {
    "fieldname": "scope_events",
@@ -156,7 +163,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-15 20:00:00.000000",
+ "modified": "2026-11-24 17:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "API Client",

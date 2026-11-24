@@ -32,7 +32,7 @@ IGNORED_ERRORS: tuple[str, ...] = ()
 
 PAGES = (  # route, what must be on it
 	("ub-dashboard", ".ub-card"), ("ub-consumer-360", ".ub-c360-q"), ("ub-cash", ".ub-card"), ("ub-billrun", ".ub-card, .ub-empty"),
-	("ub-readings", ".ub-card"), ("ub-review", ".ub-card, .ub-empty"), ("ub-recovery", ".ub-card, .ub-empty"),
+	("ub-readings", ".ub-card"), ("ub-reading-entry", ".ub-re .ub-card"), ("ub-review", ".ub-card, .ub-empty"), ("ub-recovery", ".ub-card, .ub-empty"),
 	("ub-approvals", ".ub-root"), ("ub-rights", ".ub-root, .ub-card"), ("ub-tariff", ".ub-root, .ub-card"), ("ub-users", ".ub-root, .ub-card"),
 	("ub-bill-designer", ".bd-blank"), ("ub-ask", ".ub-q"),
 )
@@ -314,6 +314,35 @@ def t_dispute_taken_to_court(s: Session):
 	p.locator(".page-actions button, .form-inner-toolbar button", has_text="Bill Dispute").first.wait_for(state="visible", timeout=20000)
 
 
+def t_reading_entry(s: Session):
+	"""Increment 47: the Reading Entry screen. A smart meter's cells are locked unless Mute is ticked; a reading that isn't a number
+	isn't sent; a typed row is counted on the Save button."""
+	p = s.page
+	rows = p.evaluate("""() => frappe.db.get_list('Meter Reading', {fields: ['name', 'reading_cycle'], filters: {smart_meter: 1}, order_by: 'modified desc', limit: 1})""")
+	assert rows, "the QA site has no smart meter's reading: run the HTTP suite first (QA-103 makes one)"
+	p.evaluate("(cycle) => { frappe.route_options = {cycle}; frappe.set_route('ub-reading-entry'); }", rows[0]["reading_cycle"])
+	row = p.locator(f'.ub-re-tbl tr[data-name="{rows[0]["name"]}"]')
+	row.wait_for(state="visible", timeout=20000)
+	s.idle()
+	assert p.locator(".ub-re-stat").count() >= 7, "the totals strip is missing"
+	assert row.locator(".ub-pill", has_text="Smart").count() == 1, "the smart meter isn't marked"
+	box, mute = row.locator('[data-f="present_reading"]'), row.locator('[data-f="smart_meter_mute"]')
+	assert mute.is_checked() and box.is_enabled(), "a mute smart meter's reading can't be typed"
+	mute.uncheck()
+	assert box.is_disabled() and row.locator('[data-f="reading_date"]').is_disabled(), "a smart meter's reading can be typed without Mute"
+	mute.check()
+	assert box.is_enabled(), "ticking Mute didn't unlock the reading"
+	save = p.locator(".ub-re-save")
+	assert save.is_enabled() and "(1)" in save.inner_text(), f"the typed row isn't counted on Save: {save.inner_text()}"
+	kept = box.input_value()
+	box.fill("12x4")
+	save.click()
+	p.wait_for_timeout(600)
+	assert "is-failed" in (row.get_attribute("class") or ""), "a reading that isn't a number was sent"
+	box.fill(kept)  # nothing is saved by this test
+	p.evaluate("() => frappe.pages['ub-reading-entry'].ub_reading_entry.dirty.clear()")
+
+
 CASES = (
 	("BR-01", "Sign in through the login form", t_sign_in),
 	("BR-02", "Sidebar lists the main screens, Migration and the Net Metering Register", t_sidebar),
@@ -330,6 +359,7 @@ CASES = (
 	("BR-13", "Phone width: the main pages don't scroll sideways", t_phone_width),
 	("BR-14", "A form shows each banner once, however often it refreshes", t_one_banner_per_message),
 	("BR-15", "A dispute's Taken to Court button opens a court hold filled in from it", t_dispute_taken_to_court),
+	("BR-16", "Reading Entry: a smart meter is locked unless Mute is ticked; a bad reading isn't sent", t_reading_entry),
 )
 
 
