@@ -393,7 +393,7 @@ body[data-path="login"] .web-footer, body[data-path="login"] footer { color: #94
 .ub-re-tbl { font-size: 13px; }
 .ub-re-tbl thead th { position: sticky; top: 0; z-index: 2; white-space: nowrap; padding: 8px; }
 .ub-re-tbl td { padding: 6px 8px; vertical-align: top; }
-.ub-re-tbl .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+.ub-re-tbl .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 .ub-re-seq { color: var(--ub-faint); font-variant-numeric: tabular-nums; }
 .ub-re-open { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--ub-blue-dark); cursor: pointer; }
 .ub-re-open:hover { text-decoration: underline; }
@@ -402,13 +402,13 @@ body[data-path="login"] .web-footer, body[data-path="login"] footer { color: #94
 .ub-re-in:disabled { background: var(--ub-soft); color: var(--ub-faint); border-color: var(--ub-line); }
 .ub-re-num { width: 84px; text-align: right; font-variant-numeric: tabular-nums; }
 .ub-re-num[data-f="mdi_kw"] { width: 58px; }
-.ub-re-date { width: 124px; } .ub-re-code { width: 132px; }
+.ub-re-date { width: 122px; } .ub-re-code { width: 116px; }
 .ub-re-mute { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; margin: 0 0 0 6px; cursor: pointer; white-space: nowrap; }
 .ub-re-mute .ub-re-in { padding: 0; }
 .ub-re-tbl tr.is-entered td:first-child { box-shadow: inset 3px 0 0 var(--ub-green); }
 .ub-re-tbl tr.is-dirty td:first-child { box-shadow: inset 3px 0 0 var(--ub-blue); }
 .ub-re-tbl tr.is-failed td:first-child { box-shadow: inset 3px 0 0 var(--ub-red); }
 .ub-re-tbl tr.is-locked td { background: var(--ub-soft); }
-.ub-re-state { min-width: 150px; } .ub-re-state .sub { white-space: normal; max-width: 220px; } .ub-re-err { color: var(--ub-red) !important; }
+.ub-re-state { min-width: 130px; } .ub-re-state .sub { white-space: normal; max-width: 150px; } .ub-re-err { color: var(--ub-red) !important; }
 .ub-re-hint { padding: 10px 16px; border-top: 1px solid var(--ub-line); }
 @media (max-width: 560px) { .ub-re-search { min-width: 0; width: 100%; max-width: none; } }
