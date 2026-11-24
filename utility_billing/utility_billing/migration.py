@@ -473,7 +473,7 @@ def analyse(batch) -> frappe._dict:
 			err("Readings", r, _("Read on {0}, after the cut-over day.").format(r.reading_date), account=ref)
 		if cint(a.digits) and max(_digits_of(r.last_reading), _digits_of(r.last_export_reading)) > cint(a.digits):
 			err("Readings", r, _("Reading {0} has more digits than the dial ({1}) given for meter {2}. Correct the digits, or leave them empty.").format(
-				f"{max(flt(r.last_reading), flt(r.last_export_reading)):g}", cint(a.digits), a.meter_no), account=ref)
+				reading_engine.plain(max(flt(r.last_reading), flt(r.last_export_reading))), cint(a.digits), a.meter_no), account=ref)
 		if a.meter_type == "Net Metering" and r.last_export_reading in (None, ""):
 			err("Readings", r, _("A net-metering meter needs its last export reading."), account=ref)
 		if a.meter_type != "Net Metering" and flt(r.last_export_reading):

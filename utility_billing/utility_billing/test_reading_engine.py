@@ -49,6 +49,12 @@ class TestReadingEngine(UnitTestCase):
 		r = evaluate(5000, 4000)
 		self.assertEqual((r.flags, r.units, r.raw_units, r.needs_review), ([FLAG_LOWER], D(0), D(0), True))  # and not "Zero use" as well
 
+	def test_a_reading_is_written_in_full_in_messages(self):
+		from utility_billing.utility_billing.reading_engine import plain  # noqa: PLC0415
+
+		self.assertEqual([plain(v) for v in (1234567, 1234567.0, 3905, 1241.18, 0, 100000, "21121")],
+		                 ["1234567", "1234567", "3905", "1241.18", "0", "100000", "21121"])
+
 	def test_a_previous_reading_the_dial_cant_show_is_not_a_roll_over(self):
 		# the pilot, 2026-11-24: 123,456 then 23,556 on a dial taken as 5 digits came to -99,900 units and passed as a valid roll-over
 		self.assertEqual(raw_units(123456, 23556, 5, 1), (D(0), False, True))

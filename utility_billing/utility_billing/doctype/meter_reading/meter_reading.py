@@ -71,7 +71,7 @@ class MeterReading(Document):
 		for label, value in ((_("Present Reading"), self.present_reading), (_("Export Reading"), self.present_export_reading)):
 			if flt(value) >= 10 ** digits:
 				frappe.throw(_("{0} {1} has more digits than the dial of meter {2} ({3} digits). Check the reading, or correct Dial Digits on the meter.").format(
-					label, f"{flt(value):g}", self.meter, digits))
+					label, engine.plain(value), self.meter, digits))
 
 	def check_mdi(self):
 		"""The maximum demand (MDI) read from the meter: never negative; above the sanctioned load it is noted for a load extension."""
@@ -160,7 +160,7 @@ class MeterReading(Document):
 			# Lower than the previous reading and no roll-over: taken as the same reading (increment 50), so 0 units and next month
 			# counts from the right place. What was entered is kept in the note, and a reviewer looks at it.
 			flags[flags.index(engine.FLAG_LOWER)] = _("Lower than previous reading ({0} entered): taken as the same reading, 0 units").format(
-				f"{flt(self.present_reading):g}")
+				engine.plain(self.present_reading))
 			self.present_reading = self.previous_reading
 		self.units, self.raw_units = flt(result.units), flt(result.raw_units)
 		self.consumption_type = "Actual"
