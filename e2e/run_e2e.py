@@ -1935,6 +1935,13 @@ def t_opening_balances(d: Desk):
 	eq((rep.status_code, len(rep.text.strip().splitlines())), (200, 3), "problems report: header and two rows")
 	expect_error(lambda: ao.workflow(doc, "Submit for Approval"), "problems")
 	expect_error(lambda: USERS["cashier"].save_doc({"doctype": "Opening Balance Import", "society": soc, "as_of_date": yesterday}))
+	# increment 48: the step asked for by name, as the form of a large import does; the file handed over with the call; the progress
+	act = "utility_billing.utility_billing.opening"
+	expect_error(lambda: ao.call(f"{act}.act", name=doc["name"], action="Submit for Approval"), "problems")
+	expect_error(lambda: ao.call(f"{act}.act", name=doc["name"], action="Approve"), "isn't available")
+	eq(ao.call(f"{act}.load_file", name=doc["name"], file_url=doc["import_file"]), {"rows": 2, "errors": 2}, "Load File with the file's address")
+	eq(ao.call(f"{act}.progress", name=doc["name"]), None, "no step is running on it")
+	expect_error(lambda: USERS["cashier"].call(f"{act}.progress", name=doc["name"]))
 
 
 @case("QA-80", "FS-ACC-04, gap 10: approvals in sequence set on the Society; level 1 approves from the form, then the covering level")

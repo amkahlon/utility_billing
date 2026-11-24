@@ -746,8 +746,12 @@ def load(batch, commit=False) -> bool:
 			         "fees": flt(b.fees), "credit": flt(b.credit), "security_deposit": flt(b.security_deposit), "plan_remaining": flt(b.plan_remaining),
 			         "plan_installments": cint(b.plan_installments), "solar_credit_units": flt(b.solar_credit_units),
 			         "held_amount": flt(b.deferred)} for ref, b in a.balances.items()]
-			imp = frappe.get_doc({"doctype": "Opening Balance Import", "society": batch.society, "as_of_date": batch.as_of_date, "rows": rows}).insert(ignore_permissions=True)
-			batch.opening_import = imp.name
+			# an account with nothing to bring over gets no row: the opening balances count such a row as a problem and then
+			# can't be submitted (455 of the pilot's 21,446 accounts, 2026-11-24). It starts at zero.
+			rows = [r for r in rows if any(flt(v) for k, v in r.items() if k != "reference_no")]
+			if rows:
+				imp = frappe.get_doc({"doctype": "Opening Balance Import", "society": batch.society, "as_of_date": batch.as_of_date, "rows": rows}).insert(ignore_permissions=True)
+				batch.opening_import = imp.name
 	finally:
 		frappe.flags.in_migration = False
 	batch.load_status, batch.load_progress, batch.load_error = "Loaded", None, None
@@ -820,6 +824,8 @@ def _undo(batch, commit):
 	frappe.flags.in_migration_undo = True
 	try:
 		if batch.opening_import and frappe.db.exists("Opening Balance Import", batch.opening_import):
+			# its rows go first, in one statement: deleting the document with 21,446 rows dropped the database connection (2026-11-24)
+			frappe.db.delete("Opening Balance Row", {"parent": batch.opening_import})
 			frappe.delete_doc("Opening Balance Import", batch.opening_import, force=True, ignore_permissions=True)
 		frappe.db.delete("Legacy Bill", {"migration_batch": batch.name})
 		for dt in UNDO_ORDER:
