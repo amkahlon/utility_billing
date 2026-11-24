@@ -2743,10 +2743,14 @@ def t_reading_entry(d: Desk):
 	cycle, prev = rd["reading_cycle"], int(float(rd["previous_reading"]))
 	sheet = bo.call(f"{entry}.get_sheet", cycle=cycle)
 	eq((sheet["status"], sheet["can_write"], [r["name"] for r in sheet["rows"]], sheet["totals"]["records"]), ("Open", True, [rd["name"]], 1), "the cycle's sheet")
-	expect_error(lambda: cashier.call(f"{entry}.get_sheet", cycle=cycle))  # a cashier doesn't see readings
 
 	def typed(desk, **kw):
 		return desk.call(f"{entry}.save_rows", cycle=cycle, rows=json.dumps([{"name": rd["name"], "exception_code": "", **kw}]))
+
+	# a cashier may read readings (as before) but can't type them: the sheet is read-only for them and a save is refused
+	eq(cashier.call(f"{entry}.get_sheet", cycle=cycle)["can_write"], False, "a cashier sees the sheet read-only")
+	no = typed(cashier, present_reading=str(prev + 1))
+	eq((no["saved"], no["rows"][0]["ok"]), (0, False), "a cashier's typing isn't saved")
 
 	def mdm_file(reading, day):
 		text = f"Meter No|Reading|Export Reading|Reading Date\n{rd['meter']}|{reading}|21500|{day}\n"
