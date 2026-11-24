@@ -5,6 +5,8 @@
 A reading counts as entered when its Reading Date is set (number fields store 0 when empty, so a
 zero reading and "not entered" would otherwise look the same)."""
 
+import re
+
 import frappe
 from frappe import _
 from frappe.utils import add_months, cstr, flt, getdate, now_datetime, nowdate
@@ -42,32 +44,62 @@ def _readings(connection, filters=None, order="billing_month desc", limit=None, 
 	)
 
 
-def monthly_history(connection, before_month, months=6):
+def legacy_months(connection, before_month):
+	"""The months the previous system billed for the account before `before_month` (Legacy Bill), most recent first.
+
+	Increment 49: an account's first cycles here had no history, so nothing was checked against its usual use (a reading eight times
+	too high passed) and an unread meter was estimated at zero. The user, 2026-11-24: "where reading is not available,
+	corresponding month's consumption can be used for billing"."""
+	rows = readcache.legacy(connection, before_month)
+	if rows is None:
+		rows = frappe.get_all("Legacy Bill", filters={"connection": connection, "billing_month": ["<", month_start(before_month)]},
+		                      fields=["billing_month", "units"], order_by="billing_month desc", limit=24)
+	return rows
+
+
+def monthly_history(connection, before_month, months=6, legacy=True):
 	"""Actual monthly units before `before_month`, most recent first. True-up months (which cover
-	several months) are left out so they don't distort averages."""
+	several months) are left out so they don't distort averages. Where the account's readings here don't reach back `months`
+	months, the months the previous system billed follow. `legacy=False` leaves those out: a net meter's old bills hold its net
+	units, which don't compare with what its import register shows."""
 	found, cached = readcache.history(connection, before_month, months)
-	if found:
-		return [flt(r.units) for r in cached]
-	rows = _readings(
+	rows = cached if found else _readings(
 		connection,
 		{"billing_month": ["<", month_start(before_month)], "status": ["in", ACTUAL_DONE],
 		 "consumption_type": "Actual", "estimated_since_units": 0},
 		limit=months,
 	)
-	return [flt(r.units) for r in rows]
+	units = [flt(r.units) for r in rows]
+	if legacy and len(units) < months:
+		oldest = min((getdate(r.billing_month) for r in rows), default=None)
+		for old in legacy_months(connection, before_month):
+			if len(units) >= months:
+				break
+			if oldest is None or getdate(old.billing_month) < oldest:
+				units.append(max(flt(old.units), 0))
+	return units
 
 
-def same_month_last_year(connection, month):
+def same_month_last_year(connection, month, legacy=True):
+	"""What the account used in this month a year ago: from its readings here, or from the previous system's bill of that month."""
+	target = add_months(month_start(month), -12)
 	found, cached = readcache.same_month_last_year(connection, month)
 	if found:
-		return flt(cached.units) if cached else None
-	rows = _readings(
-		connection,
-		{"billing_month": add_months(month_start(month), -12), "status": ["in", ACTUAL_DONE],
-		 "consumption_type": "Actual", "estimated_since_units": 0},
-		limit=1,
-	)
-	return flt(rows[0].units) if rows else None
+		rows = [cached] if cached else []
+	else:
+		rows = _readings(
+			connection,
+			{"billing_month": target, "status": ["in", ACTUAL_DONE],
+			 "consumption_type": "Actual", "estimated_since_units": 0},
+			limit=1,
+		)
+	if rows:
+		return flt(rows[0].units)
+	if legacy:
+		for old in legacy_months(connection, month):
+			if getdate(old.billing_month) == getdate(target):
+				return max(flt(old.units), 0)
+	return None
 
 
 def last_actual(connection, before_month):
@@ -469,6 +501,58 @@ def approve_reading(name: str, note: str):
 	r.flags.approve_as_is = True
 	r.save()
 	return r.status
+
+
+# ----- many flagged readings of one kind at once (increment 49) -----
+# The pilot's November cycle flagged 1,136 readings for zero use (houses that used nothing last November either). A reviewer accepts
+# such a kind in one step, with one reason, instead of opening each reading.
+def _kind(line) -> str:
+	"""A check's text without its figures, so readings flagged for the same thing fall together."""
+	return " ".join(re.sub(r"\d[\d,.]*", "#", cstr(line)).split())
+
+
+def _kinds_of(checks) -> list[str]:
+	return [_kind(x) for x in cstr(checks).split("\n") if x.strip()]
+
+
+@frappe.whitelist()
+def exception_kinds(cycle: str) -> list[dict]:
+	"""The kinds of flag on the cycle's flagged readings, with how many readings carry only that kind."""
+	require_reviewer()
+	frappe.get_doc("Reading Cycle", cycle).check_permission("read")
+	only, mixed = {}, 0
+	for checks in frappe.db.sql_list("select ifnull(checks, '') from `tabMeter Reading` where reading_cycle = %s and status = 'Flagged'", cycle):
+		kinds = set(_kinds_of(checks))
+		if len(kinds) == 1:
+			k = kinds.pop()
+			only[k] = only.get(k, 0) + 1
+		else:
+			mixed += 1
+	return [{"kind": k, "count": n} for k, n in sorted(only.items(), key=lambda kv: -kv[1])] + ([{"kind": "", "count": mixed}] if mixed else [])
+
+
+@frappe.whitelist(methods=["POST"])
+def approve_kind(cycle: str, kind: str, note: str, limit: int = 200) -> dict:
+	"""Approve as read up to `limit` flagged readings whose only flag is `kind`, with one reason. The screen calls it until none are
+	left, showing how far it is. A reading with any other flag as well is left for a look of its own."""
+	require_reviewer()
+	c = cycle_doc(cycle)
+	if len(cstr(note).strip()) < 5:
+		frappe.throw(_("Write why these readings are accepted (at least 5 characters)."))
+	if not cstr(kind).strip():
+		frappe.throw(_("Choose the kind of flag to approve."))
+	names = [n for n, checks in frappe.db.sql("select name, ifnull(checks, '') from `tabMeter Reading` where reading_cycle = %s and status = 'Flagged' order by name",
+	                                          c.name) if set(_kinds_of(checks)) == {kind}]
+	todo = names[:max(1, min(frappe.utils.cint(limit), 500))]
+	for name in todo:
+		r = frappe.get_doc("Meter Reading", name)
+		r.check_permission("write")
+		_mark_reviewed(r, note.strip())
+		r.flags.approve_as_is = True
+		r.save()
+	if todo:
+		c.refresh_counts()
+	return {"approved": len(todo), "remaining": len(names) - len(todo)}
 
 
 @frappe.whitelist()

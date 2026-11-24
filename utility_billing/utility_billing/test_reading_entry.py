@@ -249,3 +249,71 @@ class IntegrationTestReadingEntry(IntegrationTestCase):
 		readings.close_cycle(self.cycle)
 		self.assertFalse(reading_entry.get_sheet(cycle=self.cycle)["can_write"])
 		self.assertRaisesRegex(frappe.ValidationError, "closed", reading_entry.save_rows, self.cycle, [])
+
+	# ---- increment 49: the months the previous system billed are the account's history in its first cycles here. Found in the pilot's
+	# November cycle: a reading eight times too high wasn't flagged, and Estimate Unread would have billed 430 accounts nothing.
+	def old_bills(self, conn, units_by_month):
+		for month, units in units_by_month.items():
+			frappe.get_doc({"doctype": "Legacy Bill", "connection": conn, "society": SOC, "billing_month": month, "units": units}).insert()
+
+	SUMMER = {"2026-09-01": 180, "2026-08-01": 330, "2026-07-01": 340, "2025-10-01": 90}  # the cycle is October 2026
+
+	def test_a_reading_is_set_against_what_the_previous_system_billed(self):
+		self.old_bills(self.plain, self.SUMMER)
+		self.assertEqual(readings.monthly_history(self.plain, MONTH, 3), [180, 330, 340])
+		self.assertEqual((readings.same_month_last_year(self.plain, MONTH), readings.same_month_last_year(self.smart, MONTH)), (90, None))
+		r = self.reading(self.plain)
+		for present, status, check in ((3641 + 95, "Valid", None), (3641 + 720, "Flagged", "Above expected range"), (3641 + 30, "Flagged", "Below expected range")):
+			r.present_reading, r.reading_date = present, "2026-10-05"
+			r.save()
+			self.assertEqual((r.status, r.checks, r.expected_low, r.expected_high), (status, check, 45, 425), present)
+		# a net meter's old bills hold net units (often below zero): not set against its import register, but its estimate uses them
+		self.old_bills(self.solar, {"2026-09-01": -120, "2026-08-01": 60, "2025-10-01": -40})
+		self.assertEqual(readings.monthly_history(self.solar, MONTH, 3, legacy=False), [])
+		self.assertEqual((readings.monthly_history(self.solar, MONTH, 3), readings.same_month_last_year(self.solar, MONTH)), ([0, 60, 0], 0))
+		self.upload("Meter No,Reading,Reading Date,Export Reading\nTST-RDE-S2,1400,2026-10-05,300\n", "MDM")
+		s = self.reading(self.solar)
+		self.assertEqual((s.status, s.units, s.expected_high), ("Valid", 900, 0))
+
+	def test_an_unread_meter_is_estimated_from_what_the_previous_system_billed(self):
+		self.old_bills(self.plain, self.SUMMER)
+		self.old_bills(self.smart, {"2026-09-01": 200, "2025-10-01": 110})
+		for conn in (self.plain, self.smart):
+			r = self.reading(conn)
+			r.exception_code = "No Access"
+			r.save()
+		frappe.db.set_value("Society", SOC, "estimation_method", "Same month last year")  # the user: "corresponding month's consumption"
+		frappe.clear_document_cache("Society", SOC)
+		readings.estimate_unread(self.cycle)
+		a, b, c = self.reading(self.plain), self.reading(self.smart), self.reading(self.solar)
+		self.assertEqual((a.units, a.status, a.consumption_type), (90, "Estimated", "Estimated"))
+		self.assertEqual((b.units, b.status), (110, "Estimated"))
+		self.assertEqual((c.units, "No reading history" in c.checks), (0, True))  # no old bills either: still zero, and said so
+		from utility_billing.utility_billing import reading_engine as engine  # noqa: PLC0415
+
+		self.assertAlmostEqual(float(engine.estimate("Average of last 3 months", readings.monthly_history(self.plain, MONTH, 6))), 283.33, places=2)
+
+	def test_flagged_readings_of_one_kind_are_approved_together(self):
+		def zero_use(conn, **extra):
+			r = self.reading(conn)
+			r.update({"present_reading": r.previous_reading, "reading_date": "2026-10-05", **extra})
+			r.save()
+			return r
+
+		a, b = zero_use(self.plain), zero_use(self.smart, smart_meter_mute=1)
+		self.assertEqual((a.status, a.checks, b.checks), ("Flagged", "Zero use", f"Zero use\n{BY_HAND}"))
+		frappe.set_user(READER)
+		self.assertRaises(frappe.PermissionError, readings.exception_kinds, self.cycle)
+		self.assertFalse(reading_entry.get_sheet(cycle=self.cycle)["can_review"])
+		frappe.set_user(BILLING_OFFICER)
+		self.assertTrue(reading_entry.get_sheet(cycle=self.cycle)["can_review"])
+		self.assertEqual(readings.exception_kinds(self.cycle), [{"kind": "Zero use", "count": 1}, {"kind": "", "count": 1}])
+		self.assertRaisesRegex(frappe.ValidationError, "at least 5", readings.approve_kind, self.cycle, "Zero use", "ok")
+		self.assertEqual(readings.approve_kind(self.cycle, "Zero use", "Houses that stood empty last October too"), {"approved": 1, "remaining": 0})
+		self.assertEqual(readings.approve_kind(self.cycle, "Zero use", "Houses that stood empty last October too"), {"approved": 0, "remaining": 0})
+		frappe.set_user("Administrator")
+		a.reload()
+		b.reload()
+		self.assertEqual((a.status, a.review_note, a.reviewed_by, a.units), ("Approved", "Houses that stood empty last October too", BILLING_OFFICER, 0))
+		self.assertEqual(b.status, "Flagged")  # zero use and read by hand: two flags, a look of its own
+		self.assertEqual(frappe.db.get_value("Reading Cycle", self.cycle, "flagged_readings"), 1)

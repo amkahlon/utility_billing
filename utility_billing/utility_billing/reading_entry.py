@@ -13,7 +13,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, cstr, flt, getdate, nowdate
 
-from utility_billing.utility_billing import access
+from utility_billing.utility_billing import access, rights
 
 PAGE = 100
 SHOW = {"all": [], "to_enter": [["reading_date", "is", "not set"], ["exception_code", "is", "not set"]],
@@ -90,6 +90,7 @@ def get_sheet(society: str | None = None, cycle: str | None = None, route: str |
 		"status": c.status, "utility": c.utility, "can_write": can_write, "rows": rows, "more": more, "start": cint(start), "show": show, "route": route or "",
 		"search": text, "routes": routes, "codes": [{"name": x.name, "label": f"{x.name}: {x.description}" if x.description else x.name} for x in codes],
 		"totals": _totals(c.name, route), "today": nowdate(),
+		"can_review": open_cycle and rights.can("readings.review"),  # a reviewer may approve flagged readings of one kind together
 	})
 	return out
 

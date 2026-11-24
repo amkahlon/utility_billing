@@ -42,7 +42,7 @@ def prime(connections, history=False):
 	that is being entered use them; a new, empty reading doesn't)."""
 	c = active()
 	names = list(connections)
-	g = frappe._dict(names=set(names), connections={}, meters={}, meter={}, last={}, estimated={}, history={}, older=set(), has_history=history)
+	g = frappe._dict(names=set(names), connections={}, meters={}, meter={}, last={}, estimated={}, history={}, older=set(), legacy={}, has_history=history)
 	c.group = g
 	if not names:
 		return g
@@ -79,6 +79,10 @@ def prime(connections, history=False):
 			g.history.setdefault(r.connection, []).append(r)
 		g.older = set(frappe.db.sql("""select distinct connection from `tabMeter Reading` where connection in %s and billing_month < %s
 		                               and status in ('Valid', 'Approved')""", (names, window), pluck=True))
+		# the months the previous system billed (increment 49): the history of an account in its first months here
+		for r in frappe.db.sql("""select connection, billing_month, units from `tabLegacy Bill` where connection in %s and billing_month < %s
+		                          and billing_month >= %s order by billing_month desc""", (names, c.month, window), as_dict=True):
+			g.legacy.setdefault(r.connection, []).append(r)
 	return g
 
 
@@ -139,6 +143,14 @@ def estimated_since(connection, after_month, before_month):
 		return False, 0
 	after = getdate(after_month).replace(day=1) if after_month else None
 	return True, sum(flt(r.units) for r in g.estimated.get(connection, []) if after is None or getdate(r.billing_month) > after)
+
+
+def legacy(connection, before_month):
+	"""The months the previous system billed for the account, most recent first; None when the database must be asked."""
+	g = _group(connection, before_month)
+	if not g or not g.has_history:
+		return None
+	return g.legacy.get(connection, [])
 
 
 def history(connection, before_month, months):

@@ -63,14 +63,22 @@ def raw_units(previous, present, digits: int, multiplier) -> tuple[Decimal, bool
 def expected_range(history: Sequence, same_month_last_year=None, tolerance_percent=50):
 	"""(average, low, high) from the last 3 months of actual units (most recent first) and, if known,
 	the same month last year. None without history."""
-	points = [D(u) for u in list(history)[:3]]
-	if same_month_last_year not in (None, ""):
-		points.append(D(same_month_last_year))
+	recent = [D(u) for u in list(history)[:3]]
+	last_year = None if same_month_last_year in (None, "") else D(same_month_last_year)
+	points = recent + ([last_year] if last_year is not None else [])
 	if not points:
 		return None
 	avg = sum(points) / len(points)
 	tol = D(tolerance_percent) / 100
-	return q(avg), q(avg * (1 - tol)), q(avg * (1 + tol))
+	low, high = avg * (1 - tol), avg * (1 + tol)
+	if last_year is not None and recent:
+		# Use swings with the season: the pilot's accounts used 330 units a month in summer and 90 in November, so a normal November
+		# reading fell below a range drawn round the average of both (increment 49). A reading in keeping with the recent months or
+		# with the same month last year is expected, so the range reaches from the lower of the two bands to the higher.
+		recent_avg = sum(recent) / len(recent)
+		low = min(recent_avg, last_year) * (1 - tol)
+		high = max(recent_avg, last_year) * (1 + tol)
+	return q(avg), q(low), q(high)
 
 
 def evaluate(
