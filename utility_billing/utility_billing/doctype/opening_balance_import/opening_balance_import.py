@@ -6,7 +6,7 @@ import isn't cancelled."""
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import getdate
+from frappe.utils import cint, getdate
 
 from utility_billing.utility_billing import approval, opening
 
@@ -14,7 +14,24 @@ DEFAULT_APPROVER = "General Manager"
 
 
 class OpeningBalanceImport(Document):
+	def onload(self):
+		"""A large import's form carries its first rows only (increment 48): 20,991 rows made the form slow and over the 25 MB a
+		request may be. The rest stay in the database; the totals and the problem count are of all of them."""
+		total = len(self.rows)
+		if total > opening.BIG:
+			self.set("rows", self.rows[:opening.SHOWN])
+			self.submitted_snapshot = None  # every row as it was submitted (6.6 MB for the pilot): kept in the database, not sent to the form
+			self.set_onload("rows_shown", opening.SHOWN)
+			self.set_onload("rows_total", total)
+		self.set_onload("progress", opening.progress_of(self.name))
+
 	def validate(self):
+		if not self.is_new() and not self.flags.rows_replaced:
+			stored = frappe.db.count("Opening Balance Row", {"parent": self.name})
+			if stored > opening.BIG and len(self.rows) < stored:
+				# the form of a large import shows its first rows: saving that would delete the others
+				frappe.throw(_("These opening balances have {0} accounts and the form shows the first {1}, so they can't be saved from the form. "
+				               "Use Load File to replace them, or Actions for the next step.").format(f"{stored:,}", cint(opening.SHOWN)))
 		live = frappe.db.get_value("Society", self.society, "go_live_date")
 		if live and self.docstatus == 0:
 			frappe.throw(_("{0} went live on {1}: its opening balances are already posted. Correct balances with credit or debit notes.").format(
@@ -23,6 +40,7 @@ class OpeningBalanceImport(Document):
 			frappe.throw(_("Opening balances are as at a day that has ended: choose a date before today."))
 		if self.docstatus == 0:
 			opening.check(self)
+		opening.tell(_("Saving"), len(self.rows), len(self.rows))
 		self.import_title = f"{self.society} {_('opening balances as at')} {frappe.utils.formatdate(self.as_of_date)}"
 		approval.validate_transition(self)
 		if self.workflow_state == approval.PENDING and self.error_count:

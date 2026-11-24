@@ -480,6 +480,23 @@ class IntegrationTestMigration(IntegrationTestCase):
 		self.assertEqual((b.load_status, frappe.db.count("Connection", {"migration_batch": b.name})), ("Undone", 0))
 		self.assertIsNot(frappe.enqueue, queued)  # the queue is put back afterwards
 
+	def test_an_account_with_nothing_to_bring_over_gets_no_opening_balance_row(self):
+		# increment 48: the pilot's opening balances had 455 rows of zeros, each counted as a problem, and couldn't be submitted
+		book = self.good_book()
+		book["Balances"].insert(2, ["MIG-1002", 0, 0, 0, 0, 0, 0])
+		b = self.batch(book)
+		self.assertTrue(migration.load(b), [p.problem for p in b.problems if p.severity == "Error"])
+		imp = frappe.get_doc("Opening Balance Import", b.opening_import)
+		self.assertEqual(([r.reference_no for r in imp.rows], imp.error_count), ([self.conn("MIG-1001"), self.conn("MIG-1003")], 0))
+		migration.undo(b)  # the rows go with their document
+		self.assertFalse(frappe.db.count("Opening Balance Row", {"parent": imp.name}) or frappe.db.exists("Opening Balance Import", imp.name))
+		# only accounts with nothing: no opening balances are made at all
+		book = self.good_book()
+		book["Balances"] = [book["Balances"][0], ["MIG-1001", 0, 0, 0, 0, 0, 0]]
+		b2 = self.batch(book)
+		self.assertTrue(migration.load(b2), [p.problem for p in b2.problems if p.severity == "Error"])
+		self.assertFalse(b2.opening_import)
+
 	def test_undo_is_refused_once_the_opening_balances_are_posted(self):
 		b = self.loaded()
 		frappe.db.set_value("Opening Balance Import", b.opening_import, "docstatus", 1)

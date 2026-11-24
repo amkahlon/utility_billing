@@ -160,3 +160,96 @@ class IntegrationTestOpening(IntegrationTestCase):
 		self.assertEqual(out, {"rows": 3, "errors": 1})
 		doc.reload()
 		self.assertEqual([r.row_status for r in doc.rows], ["OK", "OK", "Error"])
+
+	# ---- increment 48: a large import. The pilot's 20,991 rows greyed the screen for two minutes on Submit for Approval, then the
+	# form was refused for sending over 25 MB; the user, 2026-11-24: "instead of greying the screen, system should display the
+	# progress bar so that user may know whats going on". Here "large" is over 2 rows, and the form shows 1.
+	def large(self):
+		from unittest.mock import patch  # noqa: PLC0415
+
+		for name, value in (("BIG", 2), ("SHOWN", 1)):
+			p = patch.object(opening, name, value)
+			p.start()
+			self.addCleanup(p.stop)
+		doc = self.make(self.good_rows())
+		self.addCleanup(frappe.cache.delete_value, opening._key(doc.name))
+		return doc
+
+	def step(self, doc, action, user):
+		frappe.set_user(user)
+		try:
+			return opening.act(doc.name, action)
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_a_large_imports_form_carries_its_first_rows_and_cant_be_saved_from_it(self):
+		doc = self.large()
+		form = frappe.get_doc("Opening Balance Import", doc.name)
+		form.run_method("onload")
+		self.assertEqual((len(form.rows), form.get("__onload").rows_shown, form.get("__onload").rows_total, form.row_count, form.total_receivable),
+		                 (1, 1, 3, 3, 20150))
+		self.assertRaisesRegex(frappe.ValidationError, "can't be saved from the form", form.save)  # saving the first rows would delete the others
+		self.assertEqual(frappe.db.count("Opening Balance Row", {"parent": doc.name}), 3)
+		# a small import's form carries every row, and is saved as before
+		with __import__("unittest.mock").mock.patch.object(opening, "BIG", 500):
+			small = frappe.get_doc("Opening Balance Import", doc.name)
+			small.run_method("onload")
+			self.assertEqual((len(small.rows), small.get("__onload").get("rows_total")), (3, None))
+			small.save()
+
+	def test_a_large_imports_steps_run_as_a_job_that_says_how_far_it_is(self):
+		doc = self.large()
+		said = []
+		write = opening._write
+		with __import__("unittest.mock").mock.patch.object(opening, "_write", side_effect=lambda name, values: (said.append(dict(values)), write(name, values))):
+			self.assertEqual(self.step(doc, "Submit for Approval", BILLING_MANAGER), {"queued": True})
+			self.assertRaises(frappe.ValidationError, self.step, doc, "Approve", BILLING_MANAGER)  # not a Billing Manager's step
+			self.assertEqual(self.step(doc, "Approve", GENERAL_MANAGER), {"queued": True})
+		doc.reload()
+		self.assertEqual((doc.docstatus, doc.workflow_state, doc.requested_by, doc.approved_by), (1, "Approved", BILLING_MANAGER, GENERAL_MANAGER))
+		self.assertEqual((account.balance(self.a), account.balance(self.b), account.balance(self.c)), (17700, -750, 3200))
+		self.assertTrue(doc.gl_journal and doc.deposit_journal)
+		states = [(v.get("state"), v.get("action")) for v in said]
+		self.assertEqual(states[0], ("Queued", "Submit for Approval"))
+		self.assertIn(("Done", "Submit for Approval"), states)
+		self.assertEqual(states[-1], ("Done", "Approve"))
+		texts = {v.get("text") for v in said}
+		self.assertTrue({"Checking the accounts", "Saving", "Posting the balances", "Recording the security deposits", "Making the journal"} <= texts, texts)
+		now = opening.progress(doc.name)
+		self.assertEqual((now["state"], now["action"], now["workflow_state"], now["by"]), ("Done", "Approve", "Approved", GENERAL_MANAGER))
+
+	def test_a_step_that_fails_changes_nothing_and_says_why(self):
+		doc = self.large()
+		self.step(doc, "Submit for Approval", BILLING_MANAGER)
+		frappe.db.set_value("Society", SOC, "opening_balance_account", None)
+		frappe.clear_document_cache("Society", SOC)
+		self.assertRaises(frappe.ValidationError, self.step, doc, "Approve", GENERAL_MANAGER)
+		now = opening.progress_of(doc.name)
+		self.assertEqual((now["state"], now["action"]), ("Failed", "Approve"))
+		self.assertIn("opening balances", now["error"].lower())
+		self.assertEqual((frappe.db.get_value("Opening Balance Import", doc.name, "workflow_state"), frappe.db.exists("Customer Ledger Entry", {"connection": self.a})),
+		                 ("Pending Approval", None))
+		# a second step isn't started while one runs; one that went quiet is taken as stopped
+		opening._write(doc.name, {"state": "Running", "action": "Approve", "text": "Posting the balances"})
+		self.assertRaisesRegex(frappe.ValidationError, "already running", self.step, doc, "Approve", GENERAL_MANAGER)
+		frappe.cache.set_value(opening._key(doc.name), {"state": "Running", "action": "Approve", "at": "2026-01-01 00:00:00"})
+		stopped = opening.progress_of(doc.name)
+		self.assertEqual((stopped["state"], "stopped" in stopped["error"]), ("Failed", True))
+		self.assertRaisesRegex(frappe.ValidationError, "isn't available", self.step, doc, "Submit for Approval", BILLING_MANAGER)
+
+	def test_a_small_imports_step_runs_at_once(self):
+		doc = self.make(self.good_rows())
+		self.assertEqual(self.step(doc, "Submit for Approval", BILLING_MANAGER), {"queued": False, "workflow_state": "Pending Approval"})
+		self.assertIsNone(opening.progress_of(doc.name))
+
+	def test_the_checks_find_an_account_by_its_old_number_too(self):
+		frappe.db.set_value("Connection", self.c, "legacy_account_no", "OLD-OB-77")
+		frappe.db.set_value("Society", SOC, "old_numbers_until", "2027-12-31")
+		frappe.clear_document_cache("Society", SOC)
+		doc = self.make([{"reference_no": self.a, "arrears": 100}, {"reference_no": "OLD-OB-77", "arrears": 50}, {"reference_no": "NO-SUCH", "arrears": 5}])
+		self.assertEqual([(r.connection, r.row_status) for r in doc.rows], [(self.a, "OK"), (self.c, "OK"), (None, "Error")])
+		account.lock(self.a)
+		account.post(self.a, "Fee", {"fees": 50}, "Opening Balance Import", doc.name, posting_date="2026-10-02")
+		doc.reload()
+		doc.save()
+		self.assertIn("already has entries", doc.rows[0].error)

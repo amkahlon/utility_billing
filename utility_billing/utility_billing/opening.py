@@ -13,7 +13,7 @@ import io
 
 import frappe
 from frappe import _
-from frappe.utils import add_days, add_months, cint, flt, getdate, now_datetime
+from frappe.utils import add_days, add_months, cint, cstr, flt, getdate, now_datetime
 
 from utility_billing.utility_billing import account, gl, periods, plans
 from utility_billing.utility_billing.readings import month_start
@@ -88,19 +88,31 @@ def check(doc) -> int:
 	max_inst = cint(soc.get("max_installments")) or 36
 	others = set(frappe.db.sql_list("""select r.connection from `tabOpening Balance Row` r join `tabOpening Balance Import` i on i.name = r.parent
 	                                   where i.name != %s and i.docstatus < 2 and ifnull(r.connection, '') != ''""", doc.name or ""))
+	# Read a thousand accounts at a time: three queries a row made 60,000 for the pilot's 20,991 accounts, and every save and
+	# workflow step waited on them (increment 48).
+	refs = list({(r.reference_no or "").strip() for r in doc.rows if (r.reference_no or "").strip()})
+	known, with_entries = {}, set()
+	for k in range(0, len(refs), 1000):
+		part = refs[k:k + 1000]
+		for c in frappe.get_all("Connection", filters={"name": ["in", part]}, fields=["name", "society", "consumer_name", "status"]):
+			known[c.name] = c
+		with_entries.update(frappe.db.sql_list("select distinct connection from `tabCustomer Ledger Entry` where connection in %s", (part,)))
 	seen = set()
 	errors = 0
-	for r in doc.rows:
+	for i, r in enumerate(doc.rows):
+		if i % 2000 == 0:
+			tell(_("Checking the accounts"), i, len(doc.rows))
 		problems = []
 		r.reference_no = (r.reference_no or "").strip()
-		conn = account.connection_of(r.reference_no) if r.reference_no else None
+		# a reference number is usually the account's own number; an old number or a consumer ID is looked up one at a time
+		conn = r.reference_no if r.reference_no in known else (account.connection_of(r.reference_no) if r.reference_no else None)
 		r.connection, r.consumer_name = conn, None
 		if not r.reference_no:
 			problems.append(_("no reference number"))
 		elif not conn:
 			problems.append(_("no account with this reference number"))
 		else:
-			c = frappe.db.get_value("Connection", conn, ["society", "consumer_name", "status"], as_dict=True)
+			c = known.get(conn) or frappe.db.get_value("Connection", conn, ["society", "consumer_name", "status"], as_dict=True)
 			r.consumer_name = c.consumer_name
 			if c.society != doc.society:
 				problems.append(_("the account belongs to {0}").format(c.society))
@@ -108,7 +120,7 @@ def check(doc) -> int:
 				problems.append(_("the account is listed twice"))
 			if conn in others:
 				problems.append(_("the account is in another opening balance import"))
-			if frappe.db.exists("Customer Ledger Entry", {"connection": conn}):
+			if conn in with_entries or (conn not in known and frappe.db.exists("Customer Ledger Entry", {"connection": conn})):
 				problems.append(_("the account already has entries in this system"))
 			seen.add(conn)
 		for k in AMOUNTS:
@@ -156,12 +168,107 @@ def check_accounts(doc):
 		gl.need(s.held, _("amounts held by court order (Society {0} → Held Receivables Account)").format(doc.society))
 
 
+# ---------------------------------------------------------------- a large import (increment 48)
+# The pilot's opening balances have 20,991 rows. On the form, Submit for Approval greyed the screen for two minutes; the form then
+# sent the whole document to ask for its buttons and was refused (over 25 MB); approval would have posted 21,000 ledger entries
+# and 18,000 deposits inside one web request. User, 2026-11-24: "instead of greying the screen, system should display the progress
+# bar so that user may know whats going on". So a large import's form carries the first rows only, and its workflow steps run in
+# a background job that says how far it is.
+BIG = 500     # rows: above this the form shows the first rows and the workflow steps run in the background
+SHOWN = 200   # rows the form of a large import carries
+STALE_AFTER = 20 * 60  # seconds without news from a running step before it is taken as stopped
+
+
+def _key(name) -> str:
+	return f"ub_opening_progress:{name}"
+
+
+def _write(name, values):
+	frappe.cache.set_value(_key(name), {"done": 0, "total": 0, **values, "at": frappe.utils.now()}, expires_in_sec=6 * 3600)
+
+
+def tell(text, done=0, total=0):
+	"""Say how far the running step is (kept outside the database, so it is seen while the step's transaction is still open)."""
+	name = frappe.flags.get("opening_progress")
+	if name:
+		now = frappe.cache.get_value(_key(name), expires=True, use_local_cache=False) or {}
+		_write(name, {**now, "state": "Running", "text": text, "done": cint(done), "total": cint(total)})
+
+
+def progress_of(name):
+	"""The step running on the import, or its outcome: {state: Queued | Running | Done | Failed, action, text, done, total, error}."""
+	p = frappe.cache.get_value(_key(name), expires=True, use_local_cache=False)
+	if p and p.get("state") in ("Queued", "Running") and frappe.utils.time_diff_in_seconds(frappe.utils.now(), p.get("at")) > STALE_AFTER:
+		p = {**p, "state": "Failed", "error": _("{0} stopped: nothing was heard from it for {1} minutes. Nothing was changed. Try again.").format(
+			_(p.get("action") or "The step"), STALE_AFTER // 60)}
+	return p
+
+
+@frappe.whitelist()
+def progress(name: str):
+	frappe.get_doc("Opening Balance Import", name).check_permission("read")
+	return progress_of(name)
+
+
+@frappe.whitelist(methods=["POST"])
+def act(name: str, action: str) -> dict:
+	"""A workflow step (Submit for Approval, Approve, Reject, Withdraw) on opening balances. A large import's step is handed to a
+	background job, and the form shows its progress; a small one's runs at once, as before."""
+	from frappe.model.workflow import apply_workflow, get_transitions  # noqa: PLC0415
+
+	doc = frappe.get_doc("Opening Balance Import", name)
+	doc.check_permission("read")
+	if action not in [t.action for t in get_transitions(doc)]:
+		frappe.throw(_("{0} isn't available on these opening balances now.").format(_(action)))
+	if cint(doc.row_count) <= BIG:
+		return {"queued": False, "workflow_state": apply_workflow(doc, action).workflow_state}
+	now = progress_of(name)
+	if now and now.get("state") in ("Queued", "Running"):
+		frappe.throw(_("{0} is already running on these opening balances.").format(_(now.get("action"))))
+	_write(name, {"state": "Queued", "action": action, "text": _("Waiting to start"), "by": frappe.session.user})
+	at_once = bool(frappe.flags.in_test)
+	frappe.enqueue("utility_billing.utility_billing.opening.run_action", queue="long", timeout=3 * 3600, now=at_once, enqueue_after_commit=not at_once,
+	               import_name=name, action=action, user=frappe.session.user, reraise=at_once)
+	return {"queued": True}
+
+
+def run_action(import_name, action, user, reraise=False):
+	"""The background job: the workflow step as the user who asked for it, all of it or none of it."""
+	from frappe.model.workflow import apply_workflow  # noqa: PLC0415
+
+	frappe.set_user(user)
+	frappe.flags.opening_progress = import_name
+	# the first minute or so is the platform reading and locking every row before it saves (44 s for the pilot's 20,991)
+	_write(import_name, {"state": "Running", "action": action, "text": _("Reading the accounts' rows"), "by": user})
+	# Run at once (a test), the step is inside the caller's transaction: it undoes only its own work and commits nothing.
+	if reraise:
+		frappe.db.savepoint("opening_step")
+	try:
+		doc = apply_workflow(frappe.get_doc("Opening Balance Import", import_name), action)
+		if not reraise:
+			frappe.db.commit()
+		_write(import_name, {"state": "Done", "action": action, "by": user, "workflow_state": doc.workflow_state,
+		                     "text": _("{0}: the opening balances are now {1}.").format(_(action), _(doc.workflow_state))})
+	except Exception as e:
+		frappe.db.rollback(save_point="opening_step") if reraise else frappe.db.rollback()
+		_write(import_name, {"state": "Failed", "action": action, "by": user,
+		                     "error": frappe.utils.strip_html(cstr(e)) or e.__class__.__name__})
+		if reraise:
+			raise
+		frappe.log_error(title=f"Opening balances {import_name}: {action} failed")
+		frappe.db.commit()
+	finally:
+		frappe.flags.opening_progress = None
+
+
 # ---------------------------------------------------------------- posting (on approval)
 def post(doc):
 	as_of = getdate(doc.as_of_date)
 	approver = frappe.session.user
 	entries = []
-	for r in doc.rows:
+	for i, r in enumerate(doc.rows):
+		if i % 500 == 0:
+			tell(_("Posting the balances"), i, len(doc.rows))
 		deltas = {BUCKETS[k]: flt(r.get(k)) for k in BUCKETS}
 		deltas["credit"] = flt(r.credit)
 		if any(deltas.values()):
@@ -170,6 +277,7 @@ def post(doc):
 			                 remarks=_("Opening balance brought over at go-live ({0})").format(doc.name))
 			r.db_set("ledger_entry", e.name, update_modified=False)
 			entries.append(e.name)
+	tell(_("Making the journal"), len(doc.rows), len(doc.rows))
 	journal = gl.build_journal(doc.society, entries, "Opening Balances", as_of, _("Opening balances at go-live, as at {0} ({1})").format(
 		frappe.utils.formatdate(as_of), doc.name)) if entries else None
 	deposit_journal = _deposits(doc, as_of, approver)
@@ -193,7 +301,9 @@ def _deposits(doc, as_of, approver):
 	if not rows:
 		return None
 	names = []
-	for r in rows:
+	for i, r in enumerate(rows):
+		if i % 500 == 0:
+			tell(_("Recording the security deposits"), i, len(rows))
 		sd = frappe.get_doc({"doctype": "Security Deposit", "connection": r.connection, "consumer_name": r.consumer_name, "society": doc.society,
 		                     "deposit_type": "Received", "amount": flt(r.security_deposit), "mode": "Opening balance", "posting_date": as_of,
 		                     "remarks": _("Held at go-live, brought over by {0}").format(doc.name), "balance_before": 0, "balance_after": flt(r.security_deposit),
@@ -242,15 +352,21 @@ def _plan(doc, r, as_of, approver):
 
 # ---------------------------------------------------------------- buttons
 @frappe.whitelist(methods=["POST"])
-def load_file(name: str) -> dict:
-	"""Load Opening Balance Import's attached file into its rows (replacing them) and check them."""
+def load_file(name: str, file_url: str | None = None) -> dict:
+	"""Load Opening Balance Import's attached file into its rows (replacing them) and check them. `file_url`: the file just attached
+	on the form, for a large import, whose form isn't saved first (it shows its first rows only)."""
 	doc = frappe.get_doc("Opening Balance Import", name)
 	doc.check_permission("write")
 	if doc.docstatus != 0 or doc.workflow_state not in (None, "", "Draft", "Rejected"):
 		frappe.throw(_("Only a draft or rejected import can be reloaded."))
+	if file_url and file_url != doc.import_file:
+		if not frappe.db.exists("File", {"file_url": file_url}):
+			frappe.throw(_("Attach the file first."))
+		doc.import_file = file_url
 	if not doc.import_file:
 		frappe.throw(_("Attach the file first."))
 	doc.set("rows", rows_from_table(read_file(doc.import_file)))
+	doc.flags.rows_replaced = True  # the whole table is replaced on purpose (see OpeningBalanceImport.validate)
 	doc.save()
 	return {"rows": doc.row_count, "errors": doc.error_count}
 
