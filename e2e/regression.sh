@@ -11,6 +11,11 @@ export PATH="$HOME/.local/bin:$PATH"
 status=0
 PIDFILE="$HOME/qa-serve.pid"
 
+# The background worker makes notifications and runs loads; without it (WSL stops `bench start` when the laptop sleeps) cases
+# fail for no fault of the code (QA-24 on 2026-11-21). Checked now and again before the end-to-end suite.
+workers_up() { bench --site qa.localhost doctor 2>/dev/null | grep -qE "Workers online: [1-9]"; }
+workers_up || { echo "== regression NOT RUN: no background worker; start the bench (bench start) and run again"; exit 2; }
+
 for site in ub.localhost test.localhost qa.localhost; do
   echo "== migrate $site"
   bench --site "$site" migrate > "$HOME/migrate-$site.log" 2>&1 || { echo "migrate failed, see ~/migrate-$site.log"; status=1; }
@@ -31,6 +36,7 @@ for site in ${TEST_SITES:-qa.localhost}; do
   fi
 done
 
+workers_up || { echo "== no background worker now (did the laptop sleep?): the end-to-end results below can't be trusted"; status=1; }
 echo "== restarting QA server on :8001"
 if [ -f "$PIDFILE" ]; then kill "$(cat "$PIDFILE")" 2>/dev/null; sleep 2; fi
 nohup bench --site qa.localhost serve --port 8001 --noreload > "$HOME/qa-serve.log" 2>&1 &
