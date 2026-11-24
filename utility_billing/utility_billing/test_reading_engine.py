@@ -59,6 +59,19 @@ class TestReadingEngine(UnitTestCase):
 		self.assertEqual(expected_range([250, 270, 260], same_month_last_year=300)[0], D(270))
 		self.assertIsNone(expected_range([]))
 
+	def test_the_range_allows_for_the_season(self):
+		# increment 49: 330 units a month in summer, 90 last November. A November reading of 90 is expected; so is one like the
+		# recent months; one far above both, or far below both, isn't.
+		summer, last_november = [180, 330, 340], 90
+		avg, low, high = expected_range(summer, same_month_last_year=last_november, tolerance_percent=50)
+		self.assertEqual((avg, low, high), (D(235), D(45), D(425)))  # from half of last November to half as much again as the recent average
+		for units, flag in ((90, None), (300, None), (46, None), (720, "Above expected range"), (40, "Below expected range")):
+			r = evaluate(1000, 1000 + units, history=summer, same_month_last_year=last_november)
+			self.assertEqual([f for f in r.flags if "range" in f], [flag] if flag else [], units)
+		# with only one of the two known, the range is round what is known, as before
+		self.assertEqual(expected_range([], same_month_last_year=90), (D(90), D(45), D(135)))
+		self.assertEqual(expected_range([100, 100, 100]), (D(100), D(50), D(150)))
+
 	def test_out_of_range_flags(self):
 		hist = [250, 270, 260]
 		self.assertIn(FLAG_HIGH, evaluate(1000, 1400, history=hist).flags)

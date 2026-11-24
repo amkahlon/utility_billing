@@ -137,8 +137,9 @@ class MeterReading(Document):
 			self.present_reading,
 			digits=self.digits,
 			multiplier=self.multiplier,
-			history=readings.monthly_history(self.connection, self.billing_month, 3),
-			same_month_last_year=readings.same_month_last_year(self.connection, self.billing_month),
+			# a net meter's bills from the previous system hold its net units: they aren't set against its import register
+			history=readings.monthly_history(self.connection, self.billing_month, 3, legacy=not cint(self.net_metering)),
+			same_month_last_year=readings.same_month_last_year(self.connection, self.billing_month, legacy=not cint(self.net_metering)),
 			tolerance_percent=society.reading_tolerance_percent if society.reading_tolerance_percent is not None else 50,
 			estimated_since=self.estimated_since_units,
 			old_meter_units=self.old_meter_units,

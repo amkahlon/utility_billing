@@ -15,6 +15,7 @@ window.UtilityBillingReadingEntry = class UtilityBillingReadingEntry {
 		this.$root.on("change", ".ub-re-only", (e) => reload({ show: e.target.checked ? "exceptions" : "all" }));
 		this.$root.on("keydown", ".ub-re-search", (e) => e.key === "Enter" && reload({ search: e.target.value }));
 		this.$root.on("click", ".ub-re-save", () => this.save());
+		this.$root.on("click", ".ub-re-bulk", () => this.approve_by_kind());
 		this.$root.on("click", ".ub-re-page", (e) => reload({ start: Math.max(0, this.q.start + Number($(e.currentTarget).attr("data-step")) * this.data.page) }));
 		this.$root.on("click", ".ub-re-open", (e) => frappe.set_route("Form", "Meter Reading", $(e.currentTarget).attr("data-name")));
 		this.$root.on("input change", ".ub-re-in", (e) => this.touched($(e.target).closest("tr")));
@@ -148,6 +149,7 @@ window.UtilityBillingReadingEntry = class UtilityBillingReadingEntry {
 					<span class="ub-re-count">${__("Rows {0} to {1}", [from, d.start + d.rows.length])}</span>
 					<button class="ub-btn ub-re-page" data-step="-1" ${d.start ? "" : "disabled"}>${__("Previous")}</button>
 					<button class="ub-btn ub-re-page" data-step="1" ${d.more ? "" : "disabled"}>${__("Next")}</button>
+					${d.can_review && d.totals.exceptions ? `<button class="ub-btn ub-re-bulk">${__("Approve by Kind")}</button>` : ""}
 					${d.can_write ? `<button class="ub-btn ub-btn-primary ub-re-save" disabled>${__("Save")}</button>` : ""}
 				</div>
 				<div class="ub-re-scroll"><table class="ub-tbl ub-re-tbl">
@@ -160,6 +162,54 @@ window.UtilityBillingReadingEntry = class UtilityBillingReadingEntry {
 					? __("Type the present reading and press Enter to go to the next account. Units are worked out from the readings when you save (Ctrl+S). A smart meter is typed only when Mute is ticked.")
 					: __("You can see these readings but not change them.")}</div>
 			</section>`;
+	}
+
+	// A reviewer accepts every flagged reading of one kind (zero use, say) with one reason, instead of opening each (increment 49).
+	approve_by_kind() {
+		const RDG = "utility_billing.utility_billing.readings.";
+		frappe.xcall(RDG + "exception_kinds", { cycle: this.q.cycle }).then((kinds) => {
+			const list = kinds.filter((k) => k.kind);
+			if (!list.length) {
+				return frappe.msgprint(__("Each flagged reading here has more than one flag. Open them one at a time."));
+			}
+			const d = new frappe.ui.Dialog({
+				title: __("Approve flagged readings of one kind"),
+				fields: [
+					{ fieldname: "kind", fieldtype: "Select", label: __("Kind of flag"), reqd: 1,
+					  options: list.map((k) => ({ value: k.kind, label: `${__(k.kind)} (${this.num(k.count)})` })) },
+					{ fieldname: "note", fieldtype: "Small Text", label: __("Why these readings are accepted"), reqd: 1,
+					  description: __("Kept on each reading. A reading with another flag as well is left for a look of its own.") },
+				],
+				primary_action_label: __("Approve as Read"),
+				primary_action: (v) => {
+					d.hide();
+					this.leave(() => this.approve_kind(RDG, v.kind, v.note, list.find((k) => k.kind === v.kind).count));
+				},
+			});
+			d.show();
+		});
+	}
+
+	approve_kind(RDG, kind, note, total) {
+		const title = __("Approving the readings");
+		let done = 0;
+		const end = (message, indicator) => {
+			frappe.hide_progress();
+			frappe.show_alert({ message, indicator }, 8);
+			this.load();
+		};
+		const next = () =>
+			frappe.xcall(RDG + "approve_kind", { cycle: this.q.cycle, kind, note, limit: 200 }).then(
+				(r) => {
+					done += r.approved;
+					frappe.show_progress(title, done, Math.max(total, done), __("{0} of {1}", [this.num(done), this.num(Math.max(total, done))]));
+					if (r.remaining && r.approved) return next();
+					end(done === 1 ? __("1 reading approved.") : __("{0} readings approved.", [this.num(done)]), "green");
+				},
+				() => end(__("{0} readings approved before it stopped.", [this.num(done)]), "orange")
+			);
+		frappe.show_progress(title, 0, total, __("Starting"));
+		return next();
 	}
 
 	touched($tr) {
