@@ -2037,6 +2037,7 @@ def t_flexibility(d: Desk):
 	eq(t["docstatus"], 1, "maintenance tariff approved without a rate per unit")
 	maint = d.save_doc({"doctype": "Connection", "society": soc, "property": p["name"], "consumer": S["owner"], "utility": "Maintenance",
 	                    "consumer_category": cat, "status": "Active"})["name"]
+	S["maint_conn"] = maint
 	ba = d.save_doc({"doctype": "Billing Account", "society": soc, "consumer": S["owner"], "bill_mode": "One combined bill",
 	                 "connections": [{"connection": maint}]})
 	eq((ba["name"][0], len(ba["name"])), ("9", 10), "billing account number")
@@ -2794,6 +2795,22 @@ def t_reading_entry(d: Desk):
 	kept = d.get("Meter Reading", rd["name"])
 	eq((late["updated"], "hand reading is kept" in late["errors"][0]["error"], float(kept["units"]), "The MDM then sent" in kept["checks"]), (0, True, 285.0, True),
 	   "the hand reading is kept when the MDM reports later")
+
+
+@case("QA-104", "Increment 53: the bill run wizard decides many exceptions at once (accept, hold, undo), as its buttons send them")
+def t_wizard_bulk(d: Desk):
+	bo, wiz = USERS["bo"], "utility_billing.utility_billing.billrun_wizard"
+	run = bo.save_doc({"doctype": "Bill Run", "naming_series": "BRUN-.YYYY.-.####", "society": S["society"], "utility": "Maintenance",
+	                   "billing_month": "2027-02-01", "issue_date": "2027-03-01"})
+	keys = json.dumps([f"problem:{S['maint_conn']}", f"problem:{S['maint_conn']}"])
+	eq(bo.call(f"{wiz}.decide_many", name=run["name"], keys=keys, decision="Accepted")["changed"], 0, "an account with no bill isn't accepted")
+	out = bo.call(f"{wiz}.decide_many", name=run["name"], keys=keys, decision="Held")
+	run = bo.get("Bill Run", run["name"])
+	eq((out["changed"], [x["connection"] for x in run["exclusions"]], run["calculation_status"]), (2, [S["maint_conn"]], "Not calculated"),
+	   "held out of the run once, and the run must be calculated again")
+	eq(bo.call(f"{wiz}.decide_many", name=run["name"], keys=keys, decision="")["changed"], 2, "decisions undone")
+	expect_error(lambda: USERS["cashier"].call(f"{wiz}.decide_many", name=run["name"], keys=keys, decision="Held"))
+	d.s.post(f"{URL}/api/method/frappe.client.delete", data={"doctype": "Bill Run", "name": run["name"]}).raise_for_status()
 
 
 def _notice_pdf(desk, run):

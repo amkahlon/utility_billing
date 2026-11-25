@@ -119,21 +119,47 @@ def load(name: str):
 @frappe.whitelist(methods=["POST"])
 def decide(name: str, key: str, decision: str):
 	"""Accept an exception, or hold its account out of the run (it is billed later in a supplementary run; the run is calculated again)."""
+	_decide(name, [key], decision)
+	return load(name)
+
+
+@frappe.whitelist(methods=["POST"])
+def decide_many(name: str, keys: str | list, decision: str):
+	"""The same decision for many exceptions at once (increment 53, the user: "do i need to review them one by one? must be available for
+	bulk action"), e.g. the 432 estimated bills of the demo run. An account the run couldn't bill can be held, not accepted."""
+	keys = json.loads(keys) if isinstance(keys, str) else list(keys or [])
+	done = _decide(name, keys, decision)
+	return {**load(name), "changed": done}
+
+
+def _decide(name, keys, decision):
 	run = frappe.get_doc("Bill Run", name)
 	run.check_permission("write")
 	if run.docstatus != 0:
 		frappe.throw(_("The run is posted; its bills can't be held any more."))
 	if decision not in ("Accepted", "Held", ""):
 		frappe.throw(_("Unknown decision."))
+	if decision == "Accepted":
+		keys = [k for k in keys if not k.startswith("problem:")]  # nothing to accept: the account has no bill
 	review = review_of(run)
-	if decision:
-		review[key] = decision
-	else:
-		review.pop(key, None)
+	for key in keys:
+		if decision:
+			review[key] = decision
+		else:
+			review.pop(key, None)
 	run.db_set("exception_review", json.dumps(review), update_modified=False)
 	if decision == "Held":
-		conn = key.split(":", 1)[1] if key.startswith("problem:") else frappe.db.get_value("Utility Bill", key, "connection")
-		if conn and not any(e.connection == conn for e in run.exclusions):
-			run.append("exclusions", {"connection": conn, "reason": _("Held at review")})
-			run.save()  # the run needs calculating again without it
-	return load(name)
+		bills = [k for k in keys if not k.startswith("problem:")]
+		of_bill = dict(frappe.get_all("Utility Bill", filters={"name": ["in", bills]}, fields=["name", "connection"], as_list=True)) if bills else {}
+		held = {e.connection for e in run.exclusions}
+		added = 0
+		for key in keys:
+			conn = key.split(":", 1)[1] if key.startswith("problem:") else of_bill.get(key)
+			if conn and conn not in held:
+				run.append("exclusions", {"connection": conn, "reason": _("Held at review")})
+				held.add(conn)
+				added += 1
+		if added:
+			run.flags.ignore_version = len(keys) > 50  # a long list of holds would make a large change-history record (increment 52)
+			run.save()  # the run needs calculating again without them
+	return len(keys)

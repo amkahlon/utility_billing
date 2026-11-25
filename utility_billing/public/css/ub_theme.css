@@ -343,6 +343,8 @@ body[data-path="login"] .web-footer, body[data-path="login"] footer { color: #94
 .ub-br-steps li.now span { background: var(--ub-blue); color: #fff; }
 .ub-br-act { white-space: nowrap; }
 .ub-br-act .ub-btn { margin-right: 4px; }
+.ub-br-bulkbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+.ub-br-bulkbar .ub-kpi-note { margin: 0; }
 .ub-br .ub-kpis { margin-bottom: 16px; }
 .ub-kpi-go[data-drill]:not([data-drill=""]) { cursor: pointer; transition: box-shadow .12s ease, transform .12s ease; }
 .ub-kpi-go[data-drill]:not([data-drill=""]):hover { box-shadow: var(--ub-shadow-lift); transform: translateY(-1px); }

@@ -140,6 +140,28 @@ class IntegrationTestScreens(BillingCase):
 		frappe.set_user("Administrator")
 		self.assertEqual(frappe.db.get_value("Bill Run", run.name, "bill_count"), 0)
 
+	def test_wizard_decides_many_at_once(self):
+		"""Increment 53: Accept, Hold or Undo for every exception shown, in one step. An account that couldn't be billed isn't accepted;
+		an account is held out of the run once, however many of its keys are held."""
+		self.october()
+		self.month_reading("2026-11-01", 3905 + 2500)
+		self.fpa("2026-11-01", 1.0)
+		run = self.make_run("2026-11-01", "2026-12-01")
+		key = billrun_wizard.load(run.name)["exceptions"][0]["key"]
+		problem = f"problem:{self.conn}"
+		frappe.set_user(BILLING_OFFICER)
+		d = billrun_wizard.decide_many(run.name, json.dumps([key, problem]), "Accepted")
+		self.assertEqual((d["changed"], d["left"], d["steps"][3]["done"]), (1, 0, True))
+		self.assertNotIn(problem, billrun_wizard.review_of(frappe.get_doc("Bill Run", run.name)))
+		d = billrun_wizard.decide_many(run.name, [key], "")
+		self.assertEqual((d["changed"], d["left"]), (1, 1))
+		d = billrun_wizard.decide_many(run.name, json.dumps([key, problem]), "Held")
+		frappe.set_user("Administrator")
+		run.reload()
+		self.assertEqual(([x.connection for x in run.exclusions], run.calculation_status), ([self.conn], "Not calculated"))
+		with self.assertRaises(frappe.ValidationError):
+			billrun_wizard.decide_many(run.name, [key], "Approved")
+
 	def test_wizard_pages_exist(self):
 		for page in ("ub-billrun", "ub-cash", "ub-review", "ub-tariff", "ub-consumer-360", "ub-recovery"):
 			self.assertTrue(frappe.db.exists("Page", page), page)
