@@ -308,16 +308,21 @@ def build_bill(run, connection, override=None) -> dict:
 		adj = approved_adjustment(run.society, run.utility, month, adj_type)
 		if not adj:
 			raise BillProblem(_("No approved {0} for {1}.").format(adj_type, month_label(month)))
-		ref_units = (netmeter.reference_units(connection, adj.reference_month, society.get("nm_adjustment_units") or netmeter.NET) if nm
+		nm_basis = society.get("nm_adjustment_units") or netmeter.NET
+		ref_units = (netmeter.reference_units(connection, adj.reference_month, nm_basis) if nm
 		             else readings.get_billable_units(connection, adj.reference_month))
-		exempt = None
-		if category in {e.consumer_category for e in adj.exempt_categories}:
-			exempt = _("{0} category").format(frappe.db.get_value("Consumer Category", category, "category_name"))
-		elif flt(adj.exempt_below_units) and ref_units is not None and ref_units < flt(adj.exempt_below_units):
-			exempt = _("below {0} units").format(adj.exempt_below_units)
+		reference = month_label(adj.reference_month)
+		if ref_units is None and (not nm or nm_basis == netmeter.NET):
+			# increment 57: a month before the society was billed here has no reading, but the previous system's history (Legacy Bill,
+			# brought over by the migration) has its units: the demo society's November FPA, on September, came out 0 on all 21,446 bills.
+			# (Its units are the net units billed, so a net-metering account takes them only when FPA is on net units.)
+			ref_units = readings.legacy_units(connection, adj.reference_month)
+			if ref_units is not None:
+				reference = _("{0} (previous system)").format(reference)
+		exempt = exemption_of(adj, category, ref_units)
 		adjustments.append(engine.Adjustment(
 			charge_of(adj.charge_type), units=None if ref_units is None else engine.D(ref_units),
-			rate=engine.D(adj.rate_per_unit), reference=month_label(adj.reference_month), exempt_reason=exempt,
+			rate=engine.D(adj.rate_per_unit), reference=reference, exempt_reason=exempt,
 		))
 
 	area = flt(prop.get("area"))
@@ -438,6 +443,21 @@ def check_adjustments(run):
 			               "this month), or untick \"{2}\" on society {3} if it doesn't charge {0}.").format(
 				adj_type, month_label(month), _(frappe.get_meta("Society").get_label(f"charges_{adj_type.lower()}")), run.society),
 				title=_("{0} not approved").format(adj_type))
+
+
+def exemption_of(adj, category, ref_units):
+	"""Why an account pays no FPA/QTA, or None (also used by the impact preview):
+	- its category is exempt as a whole (Exempt Categories);
+	- its reference units are within the units limit, up to and including it (increment 57, user: "my exempt was meant for not whole
+	  residential category but residential consumers upto 50 units"), and the limit is for its category (Units Limit Applies To;
+	  empty: every category)."""
+	if category in {e.consumer_category for e in adj.exempt_categories}:
+		return _("{0} category").format(frappe.db.get_value("Consumer Category", category, "category_name") or category)
+	limit = flt(adj.exempt_below_units)
+	limited = {e.consumer_category for e in adj.get("units_limit_categories") or []}
+	if limit and ref_units is not None and flt(ref_units) <= limit and (not limited or category in limited):
+		return _("up to {0} units").format(f"{limit:g}")
+	return None
 
 
 # ----- calculation progress (increment 52: a progress bar instead of "refresh in a minute") -----
