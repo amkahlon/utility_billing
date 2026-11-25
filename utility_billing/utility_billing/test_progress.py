@@ -106,6 +106,14 @@ class IntegrationTestProgress(BillingCase):
 		self.assertEqual(files, [{"file_url": again["file_url"], "is_private": 1}])
 		self.assertTrue(frappe.get_doc("File", {"file_url": again["file_url"]}).get_content().startswith(b"%PDF"))
 
+	def test_printing_marks_the_printed_bills_of_a_posted_run(self):
+		"""Increment 56: the job records Printed for the bills it printed (it used to be the screen, for the whole selection)."""
+		run = self.post(self.calculated())
+		frappe.set_user(BILLING_MANAGER)
+		bill_print.print_run_bills_to_file(run.name)
+		frappe.set_user("Administrator")
+		self.assertEqual(frappe.db.get_value("Utility Bill", {"bill_run": run.name}, "delivery_status"), "Printed")
+
 	def test_a_run_is_reversed_in_the_background(self):
 		run = self.post(self.calculated())
 		frappe.db.set_value("Bill Run", run.name, "cancellation_reason", "Run reversed: wrong readings")

@@ -178,19 +178,22 @@ utility_billing.track_job = function (j, resolve) {
 	);
 };
 
-// Print Bills in the background (increment 55): the PDF is drawn 50 bills at a time with the count shown, then offered to open. A
-// button inside the message opens it, since a browser blocks a window opened without a click.
-utility_billing.print_run_bills = function (run, block, route, mark_printed) {
-	return utility_billing.run_job("print_bills", { run, block: block || "", route: route || "" }, __("Printing the bills of {0}", [run])).then((r) => {
-		if (mark_printed) {
-			frappe.call({ method: "utility_billing.utility_billing.delivery.mark", args: { run, status: "Printed", block: block || "", route: route || "" }, silent: true });
-		}
-		frappe.msgprint({
-			title: __("Bills ready to print"),
-			indicator: "green",
-			message: `<p>${r.bills === 1 ? __("1 bill.") : __("{0} bills, in delivery order.", [format_number(r.bills, null, 0)])}</p>
-				<p><a class="btn btn-primary btn-sm" href="${encodeURI(r.file_url)}" target="_blank" rel="noopener">${__("Open the PDF")}</a></p>`,
-		});
+// Print Bills in the background (increments 55, 56): the PDFs are drawn 50 bills at a time with the count shown, then offered to open.
+// More bills than one PDF holds come as parts (`part`: one part's number, or empty for all). The server records the printed bills as
+// Printed. A button inside the message opens each PDF, since a browser blocks a window opened without a click.
+utility_billing.print_run_bills = function (run, block, route, part) {
+	const title = part ? __("Printing part {0} of the bills of {1}", [part, run]) : __("Printing the bills of {0}", [run]);
+	return utility_billing.run_job("print_bills", { run, block: block || "", route: route || "", part: part || "" }, title).then((r) => {
+		const n = (v) => format_number(v, null, 0);
+		const files = r.files || [{ file_url: r.file_url, bills: r.bills }];
+		const link = (f, label, kind = "btn-primary") =>
+			`<a class="btn ${kind} btn-sm" style="margin:0 6px 6px 0" href="${encodeURI(f.file_url)}" target="_blank" rel="noopener">${label}</a>`;
+		const body = files.length === 1 && !(r.parts > 1)
+			? `<p>${r.bills === 1 ? __("1 bill.") : __("{0} bills, in delivery order.", [n(r.bills)])}</p><p>${link(files[0], __("Open the PDF"))}</p>`
+			: `<p>${__("{0} bills in delivery order, in {1} PDFs of up to 500 bills. Open each to print it.", [n(r.bills), files.length])}</p>
+				<div>${files.map((f) => link(f, __("Part {0}: bills {1} to {2}", [f.part, n(f.first), n(f.last)]), "btn-default")).join("")}</div>
+				<p class="text-muted small">${__("They are kept on the bill run, under Attachments.")}</p>`;
+		frappe.msgprint({ title: __("Bills ready to print"), indicator: "green", message: body, wide: files.length > 1 });
 	});
 };
 

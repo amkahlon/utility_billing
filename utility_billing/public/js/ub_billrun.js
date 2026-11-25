@@ -217,8 +217,9 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 
 	print() {
 		frappe.xcall("utility_billing.utility_billing.bill_print.run_print_groups", { run: this.d.name }).then((g) => {
-			if (g.total > g.limit) return frappe.set_route("Form", "Bill Run", this.d.name).then(() => frappe.show_alert(__("Too many bills for one PDF; use Print Bills here to print a block or route at a time.")));
-			utility_billing.print_run_bills(this.d.name, "", "", false); // in the background with a progress bar (increment 55)
+			// more than one PDF holds: the run's Print Bills offers all parts or one part, and a block or route (increment 56)
+			if (g.total > g.limit) return frappe.set_route("Form", "Bill Run", this.d.name).then(() => frappe.show_alert(__("More bills than one PDF holds: use Print Bills here to print all parts, or one part at a time."), 10));
+			utility_billing.print_run_bills(this.d.name, "", "", ""); // in the background with a progress bar (increment 55)
 		});
 	}
 };

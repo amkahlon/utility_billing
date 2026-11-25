@@ -558,39 +558,68 @@ def _run_pdf_name(run, block=None, route=None) -> str:
 PRINT_GROUP = 50  # bills drawn at a time, so the progress bar moves while a run is printed
 
 
-def print_run_bills_to_file(run: str, block: str | None = None, route: str | None = None) -> dict:
-	"""Print Bills from a background job (increment 55): the same PDF as print_run_bills, drawn 50 bills at a time with the count
-	shown, kept as a private file on the run (an earlier copy of the same PDF is replaced). Returns its address."""
-	from pypdf import PdfReader, PdfWriter  # noqa: PLC0415
+def print_parts(total: int) -> int:
+	"""How many PDFs of at most MAX_BILLS_PER_PDF bills a selection of `total` bills is printed in."""
+	return max(1, -(-cint(total) // MAX_BILLS_PER_PDF))
 
-	from utility_billing.utility_billing import progress  # noqa: PLC0415
+
+def print_run_bills_to_file(run: str, block: str | None = None, route: str | None = None, part: int | str | None = None) -> dict:
+	"""Print Bills from a background job (increments 55, 56): the run's bills in delivery order, drawn 50 at a time with the count
+	shown, kept as private files on the run (an earlier copy of the same PDF is replaced).
+
+	A selection of more than MAX_BILLS_PER_PDF bills is printed in parts of that many, in delivery order (increment 56: the demo
+	society has one block and no routes, so 21,446 bills couldn't be printed at all): `part` is one part's number, or empty for all of
+	them. Returns {"files": [{file_url, file_name, part, first, last, bills}], "bills", "parts", "file_url" (the first file)}."""
+	from utility_billing.utility_billing import delivery, progress, rights  # noqa: PLC0415
 
 	doc = readable_run(run)
 	bills = run_bills(doc.name, block or None, route or None)
 	if not bills:
 		frappe.throw(_("No bills to print."))
-	if len(bills) > MAX_BILLS_PER_PDF:
-		frappe.throw(_("{0} bills is too many for one PDF; print one block or route at a time (up to {1}).").format(
-			len(bills), MAX_BILLS_PER_PDF))
 	names = [b.name for b in bills]
-	options = pdf_options_for(names)
+	parts = print_parts(len(names))
+	chosen = range(1, parts + 1) if not cint(part) else [cint(part)]
+	if not 1 <= chosen[0] <= parts or not 1 <= chosen[-1] <= parts:
+		frappe.throw(_("There are {0} parts of up to {1} bills; choose one of them, or all.").format(parts, MAX_BILLS_PER_PDF))
+	base = _run_pdf_name(doc.name, block, route)[:-4]
+	todo = sum(len(names[(n - 1) * MAX_BILLS_PER_PDF:n * MAX_BILLS_PER_PDF]) for n in chosen)
+	files, drawn = [], 0
+	for n in chosen:
+		first = (n - 1) * MAX_BILLS_PER_PDF
+		these = names[first:first + MAX_BILLS_PER_PDF]
+		file_name = f"{base}.pdf" if parts == 1 else f"{base}-part-{n:02d}-of-{parts:02d}.pdf"
+		# the earlier copy goes; its file leaves the disk only at the commit, so the new one may be given a code ("…0352468391.pdf",
+		# "…03546518c6.pdf"), which the next print recognises too (a block's or route's PDF has "-block-"/"-route-" and doesn't match;
+		# a part is matched whatever the number of parts was then)
+		earlier = re.compile(re.escape(base) + (r"[0-9a-f]*\.pdf" if parts == 1 else rf"-part-{n:02d}-of-\d+[0-9a-f]*\.pdf"))
+		for old in frappe.get_all("File", filters={"attached_to_doctype": "Bill Run", "attached_to_name": doc.name}, fields=["name", "file_name"]):
+			if earlier.fullmatch(old.file_name or ""):
+				frappe.delete_doc("File", old.name, ignore_permissions=True)
+		content = _draw(these, lambda k, drawn=drawn: progress.step(
+			_("Drawing the bills") if parts == 1 else _("Part {0} of {1}: drawing the bills").format(n, parts), drawn + k, todo))
+		drawn += len(these)
+		f = frappe.get_doc({"doctype": "File", "file_name": file_name, "is_private": 1, "content": content,
+		                    "attached_to_doctype": "Bill Run", "attached_to_name": doc.name}).insert(ignore_permissions=True)
+		if doc.docstatus == 1 and rights.can("delivery.record"):  # FS-RUN-10: these bills are printed (not the rest of the selection)
+			delivery.record(these, delivery.PRINTED, keep_stronger=True)
+		files.append({"file_url": f.file_url, "file_name": file_name, "part": n, "first": first + 1, "last": first + len(these), "bills": len(these)})
+		if len(chosen) > 1 and not frappe.flags.in_test:
+			frappe.db.commit()  # a part made is kept even if a later part fails
+	progress.step(_("Drawing the bills"), todo, todo)
+	return {"files": files, "bills": todo, "parts": parts, "file_url": files[0]["file_url"], "file_name": files[0]["file_name"]}
+
+
+def _draw(names, tell) -> bytes:
+	"""One PDF of these bills, drawn PRINT_GROUP at a time; tell(k) says how many are drawn so far."""
+	from pypdf import PdfReader, PdfWriter  # noqa: PLC0415
+
 	from utility_billing import pdf as ubpdf  # noqa: PLC0415
 
+	options = pdf_options_for(names)
 	writer = PdfWriter()
 	for k in range(0, len(names), PRINT_GROUP):
-		progress.step(_("Drawing the bills"), k, len(names))
-		part = ubpdf.render(document_html(names[k:k + PRINT_GROUP]), options=options)
-		writer.append(PdfReader(io.BytesIO(part)))
-	progress.step(_("Drawing the bills"), len(names), len(names))
+		tell(k)
+		writer.append(PdfReader(io.BytesIO(ubpdf.render(document_html(names[k:k + PRINT_GROUP]), options=options))))
 	out = io.BytesIO()
 	writer.write(out)
-	file_name = _run_pdf_name(doc.name, block, route)
-	# the earlier copy goes; its file leaves the disk only at the commit, so the new one may be given a code ("…0352468391.pdf",
-	# "…03546518c6.pdf"), which the next print recognises too (a block's or route's PDF has "-block-"/"-route-" and doesn't match)
-	earlier = re.compile(re.escape(file_name[:-4]) + r"[0-9a-f]*\.pdf")
-	for old in frappe.get_all("File", filters={"attached_to_doctype": "Bill Run", "attached_to_name": doc.name}, fields=["name", "file_name"]):
-		if earlier.fullmatch(old.file_name or ""):
-			frappe.delete_doc("File", old.name, ignore_permissions=True)
-	f = frappe.get_doc({"doctype": "File", "file_name": file_name, "is_private": 1, "content": out.getvalue(),
-	                    "attached_to_doctype": "Bill Run", "attached_to_name": doc.name}).insert(ignore_permissions=True)
-	return {"file_url": f.file_url, "file_name": file_name, "bills": len(names)}
+	return out.getvalue()
