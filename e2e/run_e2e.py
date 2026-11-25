@@ -447,14 +447,16 @@ def t_reject_cycle(d: Desk):
 	eq(stored.get("changes_since_last_submission"), "~ Rate per Unit: 70 → 72", "changes shown to the approver")
 	import time
 
-	for _ in range(20):  # notifications are created by a background job
+	# notifications are created by a background job; during the regression gate the workers are busy, and the notice came after
+	# 21 s on 2026-11-25 (and failed at 20 s on 2026-11-21), so up to 60 s
+	for _ in range(60):
 		notes = USERS["bm"].s.get(f"{URL}/api/resource/Notification Log", params={
 			"filters": json.dumps([["document_name", "=", t["name"]]]), "fields": json.dumps(["subject"])}).json()["data"]
 		if any("rejected" in n["subject"].lower() for n in notes):
 			break
 		time.sleep(1)
 	else:
-		raise AssertionError(f"maker not notified of rejection within 20 s: {notes}")
+		raise AssertionError(f"maker not notified of rejection within 60 s: {notes}")
 
 
 @case("QA-28", "Best practice: the submitter can withdraw a pending item; others can't")
