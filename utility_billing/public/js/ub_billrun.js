@@ -216,10 +216,9 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 	}
 
 	print() {
-		const args = new URLSearchParams({ run: this.d.name });
 		frappe.xcall("utility_billing.utility_billing.bill_print.run_print_groups", { run: this.d.name }).then((g) => {
 			if (g.total > g.limit) return frappe.set_route("Form", "Bill Run", this.d.name).then(() => frappe.show_alert(__("Too many bills for one PDF; use Print Bills here to print a block or route at a time.")));
-			window.open(`/api/method/utility_billing.utility_billing.bill_print.print_run_bills?${args}`);
+			utility_billing.print_run_bills(this.d.name, "", "", false); // in the background with a progress bar (increment 55)
 		});
 	}
 };

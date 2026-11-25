@@ -14,7 +14,7 @@ from frappe.utils import add_months, cstr, flt, getdate, now_datetime, nowdate
 from utility_billing.utility_billing import bulk, readcache
 from utility_billing.utility_billing import uniqueness
 from utility_billing.utility_billing import reading_engine as engine
-from utility_billing.utility_billing import routes
+from utility_billing.utility_billing import progress, routes
 from utility_billing.utility_billing import rights
 
 DONE = ("Valid", "Approved", "Estimated")
@@ -194,12 +194,14 @@ def create_reading_sheet(cycle: str):
 		order_by="name",
 	)
 	todo = [n for n in sorted(names, key=lambda n: (n not in routed, routed.get(n, {}).get("rank", 0))) if n not in existing]
+	progress.step(_("Adding the readings"), 0, len(todo))  # increment 55: a progress bar
 	if bulk.plain("Meter Reading"):
 		created = _create_readings(c, todo)
 	else:  # something on the site reacts to a reading being saved: one document at a time, so it still fires
 		for conn in todo:
 			frappe.get_doc({"doctype": "Meter Reading", "reading_cycle": c.name, "connection": conn, "source": "Office"}).insert()
 			created += 1
+	progress.step(_("Putting the readings in route order"), len(todo), len(todo))
 	routes.apply(c)
 	checks = routes.check_meters(c)  # the routes' check meters are read with the month (FS-RDG-12)
 	c.refresh_counts()
@@ -213,9 +215,10 @@ def estimate_unread(cycle: str):
 	c = cycle_doc(cycle)
 	method = frappe.db.get_value("Society", c.society, "estimation_method") or engine.AVG_3
 	done = 0
-	for name in frappe.get_all(
-		"Meter Reading", filters={"reading_cycle": c.name, "status": ["in", ["Pending", "Re-read Requested"]]}, pluck="name"
-	):
+	names = frappe.get_all("Meter Reading", filters={"reading_cycle": c.name, "status": ["in", ["Pending", "Re-read Requested"]]}, pluck="name")
+	for name in names:
+		if done % 100 == 0:
+			progress.step(_("Estimating the readings"), done, len(names))  # increment 55: a progress bar
 		r = frappe.get_doc("Meter Reading", name)
 		r.apply_estimate(method)
 		r.save()
@@ -287,7 +290,8 @@ def upload_readings(cycle: str, file_url: str, source: str = "Import"):
 		if ref:
 			lines.append((i, row, ref))
 	with readcache.for_cycle(c):
-		for group in bulk.in_chunks(lines, GROUP):
+		for k, group in enumerate(bulk.in_chunks(lines, GROUP)):
+			progress.step(_("Checking and applying the readings"), k * GROUP, len(lines))  # increment 55: a progress bar
 			loaded = _load_readings(c, [in_cycle[ref] for _i, _row, ref in group if ref in in_cycle]) if fast else {}
 			updated += _apply_rows(group, col, in_cycle, loaded, errors, fast, source)
 	c.refresh_counts()

@@ -764,7 +764,10 @@ def check_run_cancellable(doc):
 
 def cancel_run_bills(doc):
 	# the incoming holder's bill before the final bill: entries are undone newest first
-	for name in frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 1}, pluck="name", order_by="final_bill asc, name"):
+	names = frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 1}, pluck="name", order_by="final_bill asc, name")
+	for n, name in enumerate(names):
+		if n % 100 == 0:
+			progress.step(_("Reversing the bills"), n, len(names))  # increment 55: Cancel runs in the background with a progress bar
 		bill = frappe.get_doc("Utility Bill", name)
 		account.reverse_bill(bill)
 		bill.flags.from_bill_run = True

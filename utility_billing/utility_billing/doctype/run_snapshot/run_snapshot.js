@@ -16,13 +16,9 @@ frappe.ui.form.on("Run Snapshot", {
 				frappe.prompt(
 					[{ fieldname: "reason", fieldtype: "Small Text", label: __("Why is the run being restored?"), reqd: 1 }],
 					(v) =>
-						frappe
-							.call({
-								method: "utility_billing.utility_billing.snapshots.restore",
-								args: { snapshot: frm.doc.name, reason: v.reason },
-								freeze: true,
-							})
-							.then(({ message: r }) => {
+						utility_billing
+							.run_job("snapshot_restore", { snapshot: frm.doc.name, reason: v.reason }, __("Restoring bill run {0}", [frm.doc.bill_run]))
+							.then((r) => {
 								frappe.msgprint({ title: __("Run restored"), message: r.result, indicator: r.different.length ? "orange" : "green" });
 								frm.reload_doc();
 							}),

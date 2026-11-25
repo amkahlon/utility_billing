@@ -414,3 +414,15 @@ body[data-path="login"] .web-footer, body[data-path="login"] footer { color: #94
 .ub-re-state { min-width: 130px; } .ub-re-state .sub { white-space: normal; max-width: 150px; } .ub-re-err { color: var(--ub-red) !important; }
 .ub-re-hint { padding: 10px 16px; border-top: 1px solid var(--ub-line); }
 @media (max-width: 560px) { .ub-re-search { min-width: 0; width: 100%; max-width: none; } }
+
+/* Background jobs started from a button (increment 55): a panel at the bottom right that doesn't block the screen */
+.ub-jobs { position: fixed; right: 16px; bottom: 16px; z-index: 1030; display: flex; flex-direction: column; gap: 8px; width: 340px; max-width: calc(100vw - 32px); }
+.ub-job { background: var(--ub-card); color: var(--ub-ink); border: 1px solid var(--ub-line-strong); border-radius: 10px; box-shadow: var(--ub-shadow-lift); padding: 10px 12px; font-size: 13px; }
+.ub-job-head { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 6px; }
+.ub-job-head span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ub-job-close { border: 0; background: none; color: var(--ub-muted); font-size: 18px; line-height: 1; padding: 0 2px; cursor: pointer; }
+.ub-job .progress { height: 8px; margin: 0; }
+.ub-job-text { color: var(--ub-muted); margin-top: 6px; overflow-wrap: anywhere; }
+.ub-job.done .progress-bar { background: var(--ub-green); }
+.ub-job.failed { border-color: var(--ub-red); }
+.ub-job.failed .ub-job-text { color: var(--ub-red); }
