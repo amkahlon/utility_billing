@@ -9,7 +9,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
-from utility_billing.utility_billing import approval, migration
+from utility_billing.utility_billing import approval, migration, progress
 
 DEFAULT_APPROVER = "General Manager"
 EDITABLE = (None, "", approval.DRAFT, approval.REJECTED)
@@ -79,6 +79,7 @@ def load(name: str) -> dict:
 	if migration.is_large(doc) and not frappe.flags.in_test:
 		doc.load_status, doc.load_progress, doc.load_error = "Loading", _("Waiting to start"), None
 		doc.save()
+		progress.tell(migration.MIGRATION, doc.name, "Queued", text=_("Waiting to start"))
 		frappe.enqueue(migration.load_in_background, queue="long", timeout=6 * 3600, batch=doc.name, enqueue_after_commit=True)
 		return {"queued": True}
 	ok = migration.load(doc)
@@ -97,11 +98,31 @@ def undo(name: str) -> dict:
 		migration.check_undoable(doc)  # refuse now, not in the background, when the accounts are in use
 		doc.load_status, doc.load_progress = "Undoing", _("Waiting to start")
 		doc.save()
+		progress.tell(migration.MIGRATION, doc.name, "Queued", text=_("Waiting to start"))
 		frappe.enqueue(migration.undo_in_background, queue="long", timeout=6 * 3600, batch=doc.name, enqueue_after_commit=True)
 		return {"queued": True}
 	migration.undo(doc)
 	doc.save()
 	return {"removed": n}
+
+
+@frappe.whitelist()
+def background_progress(name: str):
+	"""How far the batch's background load or undo is: {state, done, total, text, error} (increment 54: a progress bar). One silent
+	for 20 minutes is taken as stopped: the batch is then "Load failed", and Undo Load removes what was loaded."""
+	doc = frappe.get_doc("Migration Batch", name)
+	doc.check_permission("read")
+	p = progress.get(migration.MIGRATION, name, stopped=_("It stopped: nothing was heard from it for {0} minutes. Use Workbook › Undo Load "
+	                                                      "to remove what was loaded, then load again.").format(progress.STALE_AFTER // 60))
+	if doc.load_status in BUSY:
+		if not p:
+			return {"state": "Running", "done": 0, "total": 0, "text": doc.load_progress}
+		if p.get("state") == "Failed":
+			frappe.db.set_value("Migration Batch", name, {"load_status": "Load failed", "load_error": p.get("error")}, update_modified=False)
+		elif p.get("state") == "Done":
+			p = {**p, "state": "Running"}  # the job's commit is a moment behind its news
+		return p
+	return None if progress.running(p) else p
 
 
 @frappe.whitelist()

@@ -13,7 +13,7 @@ from frappe.utils import add_months, cint, flt, getdate, now_datetime
 from utility_billing.utility_billing import bill_engine as engine
 from utility_billing.utility_billing import flags, holders, periods, plans, prorata, snapshots, split_engine, tax_engine
 from utility_billing.utility_billing import account, bill_print, bulk
-from utility_billing.utility_billing import netmeter, readings, runcache
+from utility_billing.utility_billing import netmeter, progress, readings, runcache
 from utility_billing.utility_billing.doctype.tariff.tariff import get_applicable_tariff as _applicable_tariff
 
 
@@ -445,21 +445,18 @@ STALE_AFTER = 10 * 60  # seconds without news from a running calculation before 
 
 
 def _progress_key(run) -> str:
-	return f"ub_billrun_progress:{run}"
+	return progress.key("calculation", run)
 
 
 def _tell(run, state, done=0, total=0, error=None):
-	frappe.cache.set_value(_progress_key(run), {"state": state, "done": cint(done), "total": cint(total), "error": error,
-	                                            "at": frappe.utils.now()}, expires_in_sec=6 * 3600)
+	progress.tell("calculation", run, state, done, total, error=error)
 
 
 def progress_of(run):
-	"""How far the run's calculation is: {state: Queued | Running | Done | Failed, done, total, error}, or None."""
-	p = frappe.cache.get_value(_progress_key(run), expires=True, use_local_cache=False)
-	if p and p.get("state") in ("Queued", "Running") and frappe.utils.time_diff_in_seconds(frappe.utils.now(), p.get("at")) > STALE_AFTER:
-		p = {**p, "state": "Failed", "error": _("The calculation stopped: nothing was heard from it for {0} minutes. Calculate again.").format(
-			STALE_AFTER // 60)}
-	return p
+	"""How far the run's calculation is: {state: Queued | Running | Done | Failed, done, total, error}, or None (the shared store,
+	increment 54)."""
+	return progress.get("calculation", run, STALE_AFTER,
+	                    _("The calculation stopped: nothing was heard from it for {0} minutes. Calculate again.").format(STALE_AFTER // 60))
 
 
 @frappe.whitelist()
@@ -658,14 +655,23 @@ def _post_bills(doc):
 	slow = set(one_by_one)
 	together = [r.name for r in names if r.name not in slow]
 	runcache.active()["primed"] = None
+	# the progress bar counts the bills posted, those posted before a "Post Again" included (increment 54)
+	total = frappe.db.count("Utility Bill", {"bill_run": doc.name, "docstatus": ["<", 2]})
+	posted = total - len(names)
+	progress.step(_("Posting the bills"), posted, total)
 	for n, name in enumerate(one_by_one, start=1):
 		if batch and n % batch == 0:
 			frappe.db.commit()
+			progress.step(_("Posting the bills"), posted + n - 1, total)
 		_post_one(name)
+	posted += len(one_by_one)
 	for group in bulk.in_chunks(together, batch or GROUP):
 		if batch:
 			frappe.db.commit()
+			progress.step(_("Posting the bills"), posted, total)
 		_post_group(doc, group)
+		posted += len(group)
+	progress.step(_("Posting the bills"), posted, total)
 	runcache.active()["primed"] = None
 	from utility_billing.utility_billing import billaccounts  # noqa: PLC0415
 

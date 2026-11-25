@@ -9,7 +9,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, cint, getdate
 
-from utility_billing.utility_billing import approval, billing, gl, notify
+from utility_billing.utility_billing import approval, billing, gl, notify, progress
 from utility_billing.utility_billing.readings import month_start
 
 APPROVER_ROLE = "Billing Manager"  # used only when the run has no active approval workflow
@@ -81,7 +81,7 @@ class BillRun(Document):
 		if tracked and cint(self.bill_count) > billing.BACKGROUND_THRESHOLD and not frappe.flags.in_test and not frappe.flags.post_in_foreground:
 			# FS-RUN-07: thousands of bills take minutes, longer than a web request may run; the approval returns at once
 			self.db_set({"posting_status": "Posting", "posting_error": None})
-			frappe.enqueue(post_in_background, queue="long", timeout=7200, run=self.name, enqueue_after_commit=True)
+			queue_posting(self.name, cint(self.bill_count))
 			return
 		post_now(self, tracked)
 
@@ -104,10 +104,20 @@ class BillRun(Document):
 # ---------------------------------------------------------------- posting (FS-RUN-07: a large run posts in the background)
 def post_now(run, tracked=True):
 	billing.post_run(run)
+	progress.step(_("Making the journal"))
 	gl.after_run_posted(run)
+	progress.step(_("Preparing the notices"))
 	notify.after_run_posted(run)
 	if tracked:
 		run.db_set({"posting_status": "Posted", "posting_error": None})
+
+
+POSTING = "posting"  # the run's posting in the shared progress store (increment 54: a progress bar, not "Reload in a few minutes")
+
+
+def queue_posting(run, total):
+	progress.tell(POSTING, run, "Queued", 0, total, _("Waiting to start"))
+	frappe.enqueue(post_in_background, queue="long", timeout=7200, run=run, enqueue_after_commit=True)
 
 
 def post_in_background(run):
@@ -118,15 +128,45 @@ def post_in_background(run):
 		return
 	frappe.flags.post_batch = 500
 	try:
-		post_now(doc)
+		with progress.reporting(POSTING, run):
+			post_now(doc)
 		frappe.db.commit()
-	except Exception:
+		progress.tell(POSTING, run, "Done", doc.bill_count, doc.bill_count, _("{0} bills posted.").format(cint(doc.bill_count)))
+	except Exception as e:
 		frappe.db.rollback()
+		said = (frappe.utils.strip_html(str(e)) if isinstance(e, frappe.ValidationError)
+		        else _("Posting stopped with an error ({0}).").format(e.__class__.__name__))
 		frappe.db.set_value("Bill Run", run, {"posting_status": "Posting failed", "posting_error": frappe.get_traceback()[-1000:]})
 		frappe.db.commit()
+		progress.tell(POSTING, run, "Failed", error=said)
 		raise
 	finally:
 		frappe.flags.post_batch = None
+
+
+@frappe.whitelist()
+def posting_progress(run: str):
+	"""How far the run's background posting is: {state, done, total, text, error}. A posting silent for 20 minutes is taken as stopped,
+	and the run then offers Post Again. With no news kept (Redis restarted), the bills already posted are counted instead."""
+	doc = frappe.get_doc("Bill Run", run)
+	doc.check_permission("read")
+	p = progress.get(POSTING, run, stopped=_("Posting stopped: nothing was heard from it for {0} minutes. Post Again carries on with the "
+	                                         "bills not yet posted.").format(progress.STALE_AFTER // 60))
+	if doc.posting_status == "Posting":
+		if not p:
+			done = frappe.db.count("Utility Bill", {"bill_run": run, "docstatus": 1})
+			return {"state": "Running", "done": done, "total": cint(doc.bill_count), "text": _("Posting the bills")}
+		if p.get("state") == "Failed":
+			frappe.db.set_value("Bill Run", run, {"posting_status": "Posting failed", "posting_error": p.get("error")}, update_modified=False)
+		elif p.get("state") == "Done":
+			p = {**p, "state": "Running"}  # the job's commit of "Posted" is a moment behind its news
+		return p
+	if p and progress.running(p):  # the run says it isn't posting: older news
+		p = None
+	if not p and doc.posting_status in ("Posted", "Posting failed"):
+		p = {"state": "Done" if doc.posting_status == "Posted" else "Failed", "done": cint(doc.bill_count), "total": cint(doc.bill_count),
+		     "error": doc.posting_error and _("Posting stopped before every bill was posted.")}
+	return p
 
 
 @frappe.whitelist(methods=["POST"])
@@ -137,6 +177,8 @@ def retry_posting(run: str):
 	doc = frappe.get_doc("Bill Run", run)
 	if doc.docstatus != 1 or doc.posting_status != "Posting failed":
 		frappe.throw(_("Run {0} isn't waiting to be posted again.").format(run))
+	if progress.running(progress.get(POSTING, run)):  # a job still at work: a second one would post the same bills
+		frappe.throw(_("Run {0} is still being posted. Wait for it to finish.").format(run))
 	doc.db_set({"posting_status": "Posting", "posting_error": None})
-	frappe.enqueue(post_in_background, queue="long", timeout=7200, run=run, enqueue_after_commit=True)
+	queue_posting(run, cint(doc.bill_count))
 	return {"queued": True}
