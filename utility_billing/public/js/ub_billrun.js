@@ -14,6 +14,7 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 			this.paint();
 		});
 		root.on("click", ".ub-br-decide", (e) => this.decide($(e.currentTarget).attr("data-key"), $(e.currentTarget).attr("data-d")));
+		root.on("click", ".ub-br-bulk", (e) => this.decide_many($(e.currentTarget).attr("data-d")));
 		root.on("click", ".ub-br-calc", () => this.calculate());
 		root.on("click", ".ub-br-print", () => this.print());
 		root.on("click", ".ub-link", (e) => {
@@ -90,7 +91,19 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 				<td class="num">${e.bill ? `<a class="ub-link" data-go="Utility Bill|${this.esc(e.bill)}">${this.n(e.amount)}</a>` : "—"}</td>
 				<td class="ub-br-act">${act(e)}</td></tr>`)
 			.join("");
-		return `<div class="ub-c360-tabs">${chips}</div><div style="overflow-x:auto"><table class="ub-tbl"><thead><tr><th>${__("Exception")}</th><th>${__("Consumer")}</th>
+		// the same decision for every exception shown (increment 53): the chip above narrows them to one kind first
+		const open = rows.filter((e) => !e.decision);
+		const acceptable = open.filter((e) => e.kind !== "Couldn't bill");
+		const decided = rows.filter((e) => e.decision);
+		const what = this.kind ? __(this.kind).toLowerCase() : __("shown");
+		const bulk = d.can_review && rows.length > 1
+			? `<div class="ub-br-bulkbar">
+				${acceptable.length ? `<button class="ub-btn ub-btn-sm ub-btn-primary ub-br-bulk" data-d="Accepted">${__("Accept all {0} {1}", [acceptable.length, what])}</button>` : ""}
+				${open.length ? `<button class="ub-btn ub-btn-sm ub-br-bulk" data-d="Held">${__("Hold all {0} {1}", [open.length, what])}</button>` : ""}
+				${decided.length ? `<button class="ub-btn ub-btn-sm ub-br-bulk" data-d="">${__("Undo {0} decisions", [decided.length])}</button>` : ""}
+				<span class="ub-kpi-note">${this.kind ? __("Only the {0} bills are included.", [__(this.kind)]) : __("Choose a kind above to decide one kind at a time.")}</span></div>`
+			: "";
+		return `<div class="ub-c360-tabs">${chips}</div>${bulk}<div style="overflow-x:auto"><table class="ub-tbl"><thead><tr><th>${__("Exception")}</th><th>${__("Consumer")}</th>
 			<th>${__("House")}</th><th class="num">${__("Units")}</th><th class="num">${__("Avg 3 mo.")}</th><th class="num">${__("Bill (Rs)")}</th><th>${__("Action")}</th></tr></thead>
 			<tbody>${body}</tbody></table></div>
 			<div class="ub-kpi-note">${__("Held bills are left out of this run and can be billed in a supplementary run. Holding one means calculating the run again. Posting locks this cycle's tariffs and settings.")}</div>`;
@@ -122,6 +135,32 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 					${d.bill_count && !stale ? `<button class="ub-btn ub-br-print">${__("Print bills")}</button>` : ""}
 					${approve}</div></section>`);
 		if (d.calculation_status === "Calculating") this.watch();
+	}
+
+	// Accept, hold or undo every exception shown (of the chosen kind, or all), after a confirmation (increment 53).
+	decide_many(decision) {
+		const rows = this.d.exceptions.filter((e) => !this.kind || e.kind === this.kind);
+		const keys = (decision === ""
+			? rows.filter((e) => e.decision)
+			: rows.filter((e) => !e.decision && (decision !== "Accepted" || e.kind !== "Couldn't bill"))).map((e) => e.key);
+		if (!keys.length) return;
+		const ask = {
+			Accepted: __("Accept these {0} bills as they are? They stay in the run.", [keys.length]),
+			Held: __("Hold these {0} accounts out of the run? They are billed later in a supplementary run, and this run must be calculated again.", [keys.length]),
+			"": __("Undo the decision on these {0} exceptions?", [keys.length]),
+		}[decision];
+		frappe.confirm(ask, () =>
+			frappe
+				.call({ method: "utility_billing.utility_billing.billrun_wizard.decide_many", args: { name: this.d.name, keys: JSON.stringify(keys), decision },
+				        freeze: true, freeze_message: __("Saving {0} decisions…", [keys.length]) })
+				.then(({ message: d }) => {
+					this.d = d;
+					this.paint();
+					const said = { Accepted: __("{0} accepted.", [d.changed]), Held: __("{0} held out of the run. Recalculate before approval.", [d.changed]),
+					               "": __("{0} decisions undone.", [d.changed]) }[decision];
+					frappe.show_alert({ message: said, indicator: decision === "Held" ? "orange" : "green" }, 7);
+				})
+		);
 	}
 
 	decide(key, decision) {
