@@ -387,6 +387,7 @@ class IntegrationTestMigration(IntegrationTestCase):
 		from utility_billing.utility_billing.doctype.migration_batch import migration_batch  # noqa: PLC0415
 
 		b = self.loaded()
+		progress.clear(migration.MIGRATION, b.name)  # a batch number given out again after an earlier test's rollback
 		self.addCleanup(progress.clear, migration.MIGRATION, b.name)
 		self.assertIsNone(migration_batch.background_progress(b.name))
 		frappe.db.set_value("Migration Batch", b.name, {"load_status": "Loading", "load_progress": "Waiting to start"})
