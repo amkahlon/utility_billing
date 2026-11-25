@@ -171,6 +171,19 @@ def get_billable_units(connection, month):
 	return flt(rows[0].units) if rows else None
 
 
+def legacy_units(connection, month):
+	"""The units the previous system billed the account for a month before the society was billed here (Legacy Bill, from the
+	migration), or None when its history doesn't have the month or the units (increment 57: FPA on a month before go-live). In a bill
+	run, the month's history is read once for every account."""
+	from utility_billing.utility_billing import runcache  # noqa: PLC0415
+
+	m = month_start(month)
+	known = runcache.bulk(("legacy_units", str(m)), lambda: {c: u for c, u in frappe.db.sql(
+		"select connection, units from `tabLegacy Bill` where billing_month = %s", m)})
+	units = known.get(connection) if known is not None else frappe.db.get_value("Legacy Bill", {"connection": connection, "billing_month": m}, "units")
+	return None if units is None else flt(units)
+
+
 # ----- reading cycle actions -----
 def cycle_doc(name):
 	cycle = frappe.get_doc("Reading Cycle", name)

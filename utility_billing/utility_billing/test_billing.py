@@ -232,6 +232,17 @@ class IntegrationTestBilling(BillingCase):
 		fpa = next(l for l in b.lines if l.label == "FPA Charges")
 		self.assertEqual((fpa.amount, fpa.note), (0, "No reading for August 2026"))
 
+	def test_fpa_on_a_month_from_the_previous_system(self):
+		"""Increment 57: the demo society's November FPA (on September) came out 0 on every bill: September was billed by the previous
+		system, whose units came over as history (Legacy Bill), and only readings were looked at. A reading still comes first."""
+		frappe.get_doc({"doctype": "Legacy Bill", "connection": self.conn, "billing_month": "2026-08-01", "units": 700, "bill_amount": 1}).insert()
+		self.month_reading("2026-10-01", 3905)  # no August reading here
+		self.fpa("2026-10-01", 1.30)
+		run = self.make_run("2026-10-01", "2026-11-01")
+		fpa = next(l for l in self.bill(run).lines if l.label == "FPA Charges")
+		self.assertEqual((fpa.amount, fpa.note), (910, "August 2026 (previous system) units 700 × 1.3"))
+		self.assertIsNone(readings.legacy_units(self.conn, "2026-07-01"))  # a month its history doesn't have
+
 	def test_adjustment_duplicate_and_maker_checker(self):
 		adj = self.fpa("2026-10-01", 1.30, approve_it=False)
 		with self.assertRaises(frappe.ValidationError):
