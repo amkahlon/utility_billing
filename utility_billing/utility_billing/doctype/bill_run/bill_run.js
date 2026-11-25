@@ -159,22 +159,43 @@ function print_run_bills(frm) {
 				{
 					fieldtype: "HTML",
 					options: `<p class="text-muted">${__(
-						"Bills in this run: {0}. They print in delivery order (block, route, property number), up to {1} per PDF.",
-						[g.total, g.limit]
+						"Bills in this run: {0}. They print in delivery order (block, route, property number), up to {1} per PDF; more are printed in parts.",
+						[format_number(g.total, null, 0), g.limit]
 					)}</p>`,
 				},
 				{ fieldname: "block", fieldtype: "Select", label: __("Block"), options: [{ value: "", label: __("All blocks") }, ...options(g.blocks)],
-					onchange: () => routes_for_block(d, g, options) },
-				{ fieldname: "route", fieldtype: "Select", label: __("Route"), options: [{ value: "", label: __("All routes") }, ...options(g.routes)] },
+					onchange: () => { routes_for_block(d, g, options); parts_for_selection(d, g); } },
+				{ fieldname: "route", fieldtype: "Select", label: __("Route"), options: [{ value: "", label: __("All routes") }, ...options(g.routes)],
+					onchange: () => parts_for_selection(d, g) },
+				{ fieldname: "part", fieldtype: "Select", label: __("Part"), hidden: 1,
+					description: __("All parts are made in one go in the background; one part is quicker when you print a batch at a time.") },
 			],
 			primary_action_label: __("Make PDF"),
 			primary_action(values) {
 				d.hide();
-				utility_billing.print_run_bills(frm.doc.name, values.block, values.route, frm.doc.docstatus === 1); // background (increment 55)
+				// background (increments 55, 56)
+				utility_billing.print_run_bills(frm.doc.name, values.block, values.route, values.part);
 			},
 		});
+		parts_for_selection(d, g);
 		d.show();
 	});
+}
+
+// Increment 56: more bills than one PDF holds are printed in parts of g.limit, in delivery order: all parts, or one of them.
+function parts_for_selection(d, g) {
+	const block = d.get_value("block");
+	const route = d.get_value("route");
+	const count = block && route ? ((g.pairs || {})[block] || {})[route] || 0 : block ? g.blocks[block] || 0 : route ? g.routes[route] || 0 : g.total;
+	const parts = Math.ceil(count / g.limit);
+	const n = (v) => format_number(v, null, 0);
+	const options = [{ value: "", label: __("All {0} parts ({1} bills)", [parts, n(count)]) }];
+	for (let k = 1; k <= parts; k++) {
+		options.push({ value: String(k), label: __("Part {0}: bills {1} to {2}", [k, n((k - 1) * g.limit + 1), n(Math.min(k * g.limit, count))]) });
+	}
+	d.set_df_property("part", "options", options);
+	d.set_df_property("part", "hidden", parts > 1 ? 0 : 1);
+	d.set_value("part", "");
 }
 
 // Choosing a block offers only that block's routes, with their bill counts; a route outside the block is cleared (user's request 2026-11-16).

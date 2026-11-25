@@ -224,7 +224,20 @@ class IntegrationTestBillPrint(BillingCase):
 		try:
 			bill_print.MAX_BILLS_PER_PDF = 1
 			with self.assertRaises(frappe.ValidationError):
-				bill_print.print_run_bills(run.name)
+				bill_print.print_run_bills(run.name)  # the direct one-PDF address keeps its limit
+			# increment 56: more bills than one PDF holds are printed in parts, in delivery order (the demo society has one block, no routes)
+			out = bill_print.print_run_bills_to_file(run.name)
+			self.assertEqual((out["parts"], out["bills"]), (2, 2))
+			self.assertEqual([(f["part"], f["first"], f["last"], f["file_name"]) for f in out["files"]],
+			                 [(1, 1, 1, f"{run.name}-part-01-of-02.pdf"), (2, 2, 2, f"{run.name}-part-02-of-02.pdf")])
+			first = frappe.get_doc("File", {"file_url": out["files"][0]["file_url"]}).get_content()
+			self.assertEqual(len(PdfReader(io.BytesIO(first)).pages), 1)
+			again = bill_print.print_run_bills_to_file(run.name, part=2)  # one part, replacing its earlier copy
+			self.assertEqual([(f["part"], f["first"]) for f in again["files"]], [(2, 2)])
+			names = frappe.get_all("File", filters={"attached_to_doctype": "Bill Run", "attached_to_name": run.name}, pluck="file_url")
+			self.assertEqual(sorted(names), sorted([out["files"][0]["file_url"], again["files"][0]["file_url"]]))
+			with self.assertRaises(frappe.ValidationError):
+				bill_print.print_run_bills_to_file(run.name, part=3)
 		finally:
 			bill_print.MAX_BILLS_PER_PDF = limit
 
