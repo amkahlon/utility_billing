@@ -31,7 +31,7 @@ frappe.ui.form.on("Bill Run", {
 			});
 		}
 		const editable = frm.doc.docstatus === 0 && ["Draft", "Rejected", "", undefined].includes(frm.doc.workflow_state);
-		if (editable) {
+		if (editable && frm.doc.calculation_status !== "Calculating") {
 			frm.add_custom_button(__("Calculate Bills"), () => {
 				const go = () =>
 					frappe
@@ -42,15 +42,19 @@ frappe.ui.form.on("Bill Run", {
 							freeze_message: __("Calculating bills..."),
 						})
 						.then(({ message }) => {
-							if (message.background) {
-								frappe.show_alert({ message: __("Calculating in the background; refresh in a minute."), indicator: "blue" });
-							}
+							// a large run calculates in the background: the progress bar shows how far it is (increment 52)
 							frm.reload_doc();
 						});
 				frm.is_dirty() ? frm.save().then(go) : go();
 			}).addClass("btn-primary");
 		}
-		if (frm.doc.calculation_status !== "Calculated" && editable) {
+		if (frm.doc.calculation_status === "Calculating") {
+			watch_calculation(frm);
+		} else if (frm.doc.calculation_status === "Failed" && editable) {
+			frappe.xcall("utility_billing.utility_billing.billing.calculation_progress", { run: frm.doc.name }).then((p) =>
+				frm.dashboard.set_headline_alert(
+					`${__("The last calculation didn't complete.")} ${frappe.utils.escape_html((p && p.error) || "")}`, "red"));
+		} else if (frm.doc.calculation_status !== "Calculated" && editable) {
 			frm.dashboard.set_headline_alert(__("Bills need to be calculated before submitting for approval."), "orange");
 		} else if ((frm.doc.problems || []).length) {
 			frm.dashboard.set_headline_alert(
@@ -63,6 +67,35 @@ frappe.ui.form.on("Bill Run", {
 		return utility_billing.before_workflow_action(frm);
 	},
 });
+
+// The calculation running in the background: a progress bar on the form, then the outcome (increment 52; it used to say "refresh
+// in a minute", with nothing to show whether it was still going or had stopped).
+const CALCULATING = __("Calculating bills");
+function watch_calculation(frm) {
+	const name = frm.doc.name;
+	if (frm.ub_watching === name) return;
+	frm.ub_watching = name;
+	frm.dashboard.show_progress(CALCULATING, 2, __("Waiting to start…"));
+	utility_billing.watch_calculation(
+		name,
+		(p) => frm.dashboard.show_progress(CALCULATING, utility_billing.calculation_percent(p), utility_billing.calculation_text(p)),
+		(p) => {
+			frm.ub_watching = null;
+			frm.dashboard.hide_progress(CALCULATING);
+			if (p.state === "Failed") {
+				frappe.msgprint({ title: __("Calculation didn't complete"), indicator: "red", message: frappe.utils.escape_html(p.error || "") });
+			} else {
+				frappe.show_alert({ message: __("Bills calculated."), indicator: "green" }, 7);
+			}
+			frm.reload_doc();
+		},
+		() => {
+			const here = cur_frm && cur_frm.doctype === "Bill Run" && cur_frm.doc.name === name && frappe.get_route()[0] === "Form";
+			if (!here) frm.ub_watching = null; // asked again when the form is opened again
+			return here;
+		}
+	);
+}
 
 // Record that a run's bills (all, or one block or route) were handed to a distributor, delivered, and so on (FS-RUN-10).
 function record_delivery(frm) {

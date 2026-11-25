@@ -585,6 +585,13 @@ def t_fpa(d: Desk):
 		            "bill_order": str(order), "bill_label": name.split(" ")[0] + " Charges", "rounding_rule": "Nearest rupee"})
 	soc = d.get("Society", S["society"])
 	d.save_doc(dict(soc, energy_charge_type=f"Energy {RUN}", charges_fpa=1))
+	# increment 52: before the FPA is approved, Calculate is refused once for the run, saying what to do (it used to list every account)
+	early = USERS["bo"].save_doc({"doctype": "Bill Run", "naming_series": "BRUN-.YYYY.-.####", "society": S["society"],
+	                              "utility": "Electricity", "billing_month": "2026-11-01", "issue_date": "2026-12-01"})
+	msg = expect_error(lambda: USERS["bo"].call(f"{BIL}.calculate_run", run=early["name"]), "No approved FPA for November 2026")
+	eq(("a rate of 0" in msg, USERS["bo"].get("Bill Run", early["name"])["calculation_status"] != "Calculating"), (True, True),
+	   "the refusal says how to go on, and the run isn't left calculating")
+	d.s.post(f"{URL}/api/method/frappe.client.delete", data={"doctype": "Bill Run", "name": early["name"]}).raise_for_status()
 	adj = USERS["bm"].save_doc({"doctype": "Tariff Adjustment", "naming_series": "ADJ-.YYYY.-.####", "adjustment_type": "FPA",
 	                            "society": S["society"], "utility": "Electricity", "billing_month": "2026-11-15",
 	                            "rate_per_unit": "1.30", "charge_type": f"FPA {RUN}"})
@@ -602,6 +609,8 @@ def t_run_calculate(d: Desk):
 	USERS["bo"].call(f"{BIL}.calculate_run", run=run["name"])
 	run = USERS["bo"].get("Bill Run", run["name"])
 	eq((run["calculation_status"], run["bill_count"]), ("Calculated", 1), "one bill calculated")
+	p = USERS["bo"].call(f"{BIL}.calculation_progress", run=run["name"])
+	eq((p["state"], p["done"], p["total"]), ("Done", 1, 1), "the calculation's progress, as the form's bar reads it (increment 52)")
 	S["run"] = run
 	bills = USERS["bo"].s.get(f"{URL}/api/resource/Utility Bill", params={
 		"filters": json.dumps([["bill_run", "=", run["name"]]]), "fields": json.dumps(["name"])}).json()["data"]

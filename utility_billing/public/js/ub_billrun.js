@@ -114,12 +114,14 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 				<div class="ub-tools"><a class="ub-btn ub-link" data-go="Bill Run|${this.esc(d.name)}">${__("Run record")}</a></div></div>
 			${this.steps(d)}
 			${d.posting_status === "Posting" ? `<div class="ub-card ub-kpi-note">${__("Posting the bills in the background. Reload in a few minutes.")}</div>` : ""}
+			${d.calculation_status === "Calculating" ? `<section class="ub-card ub-br-progress"></section>` : ""}
 			${this.kpis(d)}
 			<section class="ub-card"><div class="ub-cardhead"><h2>${__("Review exceptions")}</h2></div>${this.table(d)}
 				<div class="ub-cash-actions">
-					${d.can_calculate ? `<button class="ub-btn ${stale ? "ub-btn-primary" : ""} ub-br-calc">${stale ? __("Calculate bills") : __("Recalculate")}</button>` : ""}
+					${d.can_calculate && d.calculation_status !== "Calculating" ? `<button class="ub-btn ${stale ? "ub-btn-primary" : ""} ub-br-calc">${stale ? __("Calculate bills") : __("Recalculate")}</button>` : ""}
 					${d.bill_count && !stale ? `<button class="ub-btn ub-br-print">${__("Print bills")}</button>` : ""}
 					${approve}</div></section>`);
+		if (d.calculation_status === "Calculating") this.watch();
 	}
 
 	decide(key, decision) {
@@ -133,10 +135,38 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 	calculate() {
 		frappe
 			.call({ method: "utility_billing.utility_billing.billing.calculate_run", args: { run: this.d.name }, freeze: true, freeze_message: __("Calculating bills...") })
-			.then(({ message }) => {
-				if (message && message.background) frappe.show_alert({ message: __("Calculating in the background; reload in a minute."), indicator: "blue" });
-				this.load();
-			});
+			.then(() => this.load()); // a large run calculates in the background: load() shows its progress (increment 52)
+	}
+
+	// The calculation running in the background: a progress bar on the page until it ends, then the run as it now stands.
+	watch() {
+		const name = this.d.name;
+		const bar = (p) =>
+			this.$root.find(".ub-br-progress").html(`<div class="ub-cardhead"><h2>${__("Calculating bills")}</h2></div>
+				<div class="progress" style="height:10px"><div class="progress-bar" style="width:${utility_billing.calculation_percent(p)}%"></div></div>
+				<p class="ub-kpi-note" style="margin-top:8px">${utility_billing.calculation_text(p)}</p>`);
+		bar(this.last_progress || { state: "Queued" });
+		if (this.watching === name) return;
+		this.watching = name;
+		utility_billing.watch_calculation(
+			name,
+			(p) => {
+				this.last_progress = p;
+				bar(p);
+			},
+			(p) => {
+				this.watching = null;
+				this.last_progress = null;
+				if (p.state === "Failed") frappe.msgprint({ title: __("Calculation didn't complete"), indicator: "red", message: frappe.utils.escape_html(p.error || "") });
+				else frappe.show_alert({ message: __("Bills calculated."), indicator: "green" }, 7);
+				this.load(name);
+			},
+			() => {
+				const here = this.d && this.d.name === name && frappe.get_route_str().startsWith("ub-billrun");
+				if (!here) this.watching = null;
+				return here;
+			}
+		);
 	}
 
 	print() {

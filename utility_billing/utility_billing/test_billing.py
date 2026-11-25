@@ -160,12 +160,61 @@ class IntegrationTestBilling(BillingCase):
 			self.make_run("2026-10-01", "2026-11-01")
 
 	def test_problems_listed_not_hidden(self):
+		from unittest.mock import patch  # noqa: PLC0415
+
 		self.month_reading("2026-10-01", 3905)
-		run = self.make_run("2026-10-01", "2026-11-01")  # no FPA approved yet
+		self.fpa("2026-10-01", 1.30)
+		with patch.object(billing, "build_bill", side_effect=billing.BillProblem("Tariff TST has no amount for plot size 10 Marla.")):
+			run = self.make_run("2026-10-01", "2026-11-01")
 		self.assertEqual(run.bill_count, 0)
-		self.assertIn("No approved FPA", run.problems[0].problem)
+		self.assertIn("no amount for plot size", run.problems[0].problem)
 		with self.assertRaises(frappe.ValidationError):
 			act(run, "Submit for Approval", BILLING_OFFICER)  # nothing to approve
+
+	def test_missing_fpa_refused_once_for_the_run(self):
+		"""Increment 52: a missing FPA stops the run with one message, not one problem per account (21,446 on the demo site)."""
+		self.month_reading("2026-10-01", 3905)
+		run = self.make_run("2026-10-01", "2026-11-01", calculate=False)
+		frappe.set_user(BILLING_OFFICER)
+		with self.assertRaises(frappe.ValidationError) as e:
+			billing.calculate_run(run.name)
+		frappe.set_user("Administrator")
+		self.assertIn("No approved FPA for October 2026", str(e.exception))
+		self.assertIn("a rate of 0", str(e.exception))
+		self.assertNotEqual(frappe.db.get_value("Bill Run", run.name, "calculation_status"), "Calculating")
+
+	def test_calculation_progress_and_no_history_record(self):
+		"""Increment 52: the run says how far it is; its save writes no change-history record (that one grew past 16 MB)."""
+		self.month_reading("2026-10-01", 3905)
+		self.fpa("2026-10-01", 1.30)
+		run = self.make_run("2026-10-01", "2026-11-01", calculate=False)
+		before = frappe.db.count("Version", {"ref_doctype": "Bill Run", "docname": run.name})
+		frappe.set_user(BILLING_OFFICER)
+		billing.calculate_run(run.name)
+		p = billing.calculation_progress(run.name)
+		frappe.set_user("Administrator")
+		self.assertEqual((p["state"], p["done"], p["total"]), ("Done", 1, 1))
+		self.assertEqual(frappe.db.count("Version", {"ref_doctype": "Bill Run", "docname": run.name}), before)
+
+	def test_calculation_already_running_or_stopped(self):
+		"""Increment 52: a second Calculate while one runs is refused; a run left at Calculating with no news is shown as stopped."""
+		self.month_reading("2026-10-01", 3905)
+		self.fpa("2026-10-01", 1.30)
+		run = self.make_run("2026-10-01", "2026-11-01", calculate=False)
+		billing._tell(run.name, "Running", 500, 21446)
+		frappe.set_user(BILLING_OFFICER)
+		with self.assertRaises(frappe.ValidationError) as e:
+			billing.calculate_run(run.name)
+		self.assertIn("being calculated already: 500 of 21446", str(e.exception))
+		frappe.set_user("Administrator")
+		frappe.cache.delete_value(billing._progress_key(run.name))
+		frappe.db.set_value("Bill Run", run.name, "calculation_status", "Calculating")
+		frappe.set_user(BILLING_OFFICER)
+		p = billing.calculation_progress(run.name)
+		frappe.set_user("Administrator")
+		self.assertEqual(p["state"], "Failed")
+		self.assertIn("Calculate again", p["error"])
+		self.assertEqual(frappe.db.get_value("Bill Run", run.name, "calculation_status"), "Failed")
 
 	def test_fpa_exempt_category(self):
 		self.month_reading("2026-08-01", 2830)
