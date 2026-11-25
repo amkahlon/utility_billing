@@ -126,15 +126,15 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 				<h1>${__("Bill run: {0}, {1}", [this.esc(d.utility), this.esc(d.month)])}</h1><p>${facts.join(" · ")}</p></div>
 				<div class="ub-tools"><a class="ub-btn ub-link" data-go="Bill Run|${this.esc(d.name)}">${__("Run record")}</a></div></div>
 			${this.steps(d)}
-			${d.posting_status === "Posting" ? `<div class="ub-card ub-kpi-note">${__("Posting the bills in the background. Reload in a few minutes.")}</div>` : ""}
-			${d.calculation_status === "Calculating" ? `<section class="ub-card ub-br-progress"></section>` : ""}
+			${d.posting_status === "Posting" || d.calculation_status === "Calculating" ? `<section class="ub-card ub-br-progress"></section>` : ""}
 			${this.kpis(d)}
 			<section class="ub-card"><div class="ub-cardhead"><h2>${__("Review exceptions")}</h2></div>${this.table(d)}
 				<div class="ub-cash-actions">
 					${d.can_calculate && d.calculation_status !== "Calculating" ? `<button class="ub-btn ${stale ? "ub-btn-primary" : ""} ub-br-calc">${stale ? __("Calculate bills") : __("Recalculate")}</button>` : ""}
 					${d.bill_count && !stale ? `<button class="ub-btn ub-br-print">${__("Print bills")}</button>` : ""}
 					${approve}</div></section>`);
-		if (d.calculation_status === "Calculating") this.watch();
+		if (d.posting_status === "Posting") this.watch("posting");
+		else if (d.calculation_status === "Calculating") this.watch("calculation");
 	}
 
 	// Accept, hold or undo every exception shown (of the chosen kind, or all), after a confirmation (increment 53).
@@ -177,18 +177,23 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 			.then(() => this.load()); // a large run calculates in the background: load() shows its progress (increment 52)
 	}
 
-	// The calculation running in the background: a progress bar on the page until it ends, then the run as it now stands.
-	watch() {
+	// The calculation or the posting running in the background: a progress bar on the page until it ends, then the run as it now
+	// stands (increments 52 and 54).
+	watch(kind) {
 		const name = this.d.name;
+		const posting = kind === "posting";
+		const title = posting ? __("Posting the bills") : __("Calculating bills");
 		const bar = (p) =>
-			this.$root.find(".ub-br-progress").html(`<div class="ub-cardhead"><h2>${__("Calculating bills")}</h2></div>
+			this.$root.find(".ub-br-progress").html(posting ? utility_billing.progress_card(title, p)
+				: `<div class="ub-cardhead"><h2>${title}</h2></div>
 				<div class="progress" style="height:10px"><div class="progress-bar" style="width:${utility_billing.calculation_percent(p)}%"></div></div>
 				<p class="ub-kpi-note" style="margin-top:8px">${utility_billing.calculation_text(p)}</p>`);
 		bar(this.last_progress || { state: "Queued" });
-		if (this.watching === name) return;
-		this.watching = name;
-		utility_billing.watch_calculation(
-			name,
+		if (this.watching === name + kind) return;
+		this.watching = name + kind;
+		utility_billing.watch_progress(
+			posting ? "utility_billing.utility_billing.doctype.bill_run.bill_run.posting_progress" : "utility_billing.utility_billing.billing.calculation_progress",
+			{ run: name },
 			(p) => {
 				this.last_progress = p;
 				bar(p);
@@ -196,8 +201,10 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 			(p) => {
 				this.watching = null;
 				this.last_progress = null;
-				if (p.state === "Failed") frappe.msgprint({ title: __("Calculation didn't complete"), indicator: "red", message: frappe.utils.escape_html(p.error || "") });
-				else frappe.show_alert({ message: __("Bills calculated."), indicator: "green" }, 7);
+				if (p.state === "Failed") {
+					frappe.msgprint({ title: posting ? __("Posting didn't complete") : __("Calculation didn't complete"), indicator: "red",
+						message: frappe.utils.escape_html(p.error || "") });
+				} else frappe.show_alert({ message: posting ? __("Bills posted.") : __("Bills calculated."), indicator: "green" }, 7);
 				this.load(name);
 			},
 			() => {

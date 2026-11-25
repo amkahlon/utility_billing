@@ -638,6 +638,9 @@ def t_run_post(d: Desk):
 	eq((run["docstatus"], run["workflow_state"]), (1, "Approved"), "run approved")
 	bill = USERS["bm"].get("Utility Bill", S["bill"])
 	eq((bill["docstatus"], bill["status"], float(bill["outstanding_amount"])), (1, "Posted", 22700.0), "bill posted")
+	# increment 54: the posting's progress, as the form's progress bar asks for it
+	p = USERS["bo"].call("utility_billing.utility_billing.doctype.bill_run.bill_run.posting_progress", run=run["name"])
+	eq((p["state"], p["done"], p["total"]), ("Done", run["bill_count"], run["bill_count"]), "posting progress")
 
 
 @case("QA-36", "FS-BIL-10: a posted bill can't be changed or cancelled on its own")

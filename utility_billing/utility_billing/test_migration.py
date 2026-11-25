@@ -381,6 +381,28 @@ class IntegrationTestMigration(IntegrationTestCase):
 			"Feeder": 1, "Transformer": 1, "Meter": 4, "Property": 3, "Consumer": 2, "Connection": 3, "Legacy Bill": 3, "Opening Balance Import": 1})
 		self.assertEqual(frappe.db.count("Connection", {"migration_batch": b.name}), 3)
 
+	def test_background_load_progress_as_the_screen_reads_it(self):
+		"""Increment 54: a background load or undo shows a progress bar; one silent for 20 minutes is stopped and offers Undo Load."""
+		from utility_billing.utility_billing import progress  # noqa: PLC0415
+		from utility_billing.utility_billing.doctype.migration_batch import migration_batch  # noqa: PLC0415
+
+		b = self.loaded()
+		progress.clear(migration.MIGRATION, b.name)  # a batch number given out again after an earlier test's rollback
+		self.addCleanup(progress.clear, migration.MIGRATION, b.name)
+		self.assertIsNone(migration_batch.background_progress(b.name))
+		frappe.db.set_value("Migration Batch", b.name, {"load_status": "Loading", "load_progress": "Waiting to start"})
+		self.assertEqual(migration_batch.background_progress(b.name)["text"], "Waiting to start")
+		progress.tell(migration.MIGRATION, b.name, "Running", 2, 3, "Accounts")  # as _progress() says it (which commits, so not here)
+		p = migration_batch.background_progress(b.name)
+		self.assertEqual((p["state"], p["text"], p["done"], p["total"]), ("Running", "Accounts", 2, 3))
+		progress.tell(migration.MIGRATION, b.name, "Done", text="Loaded: 3 accounts.")
+		self.assertEqual(migration_batch.background_progress(b.name)["state"], "Running")  # the batch isn't marked Loaded yet
+		frappe.cache.set_value(progress.key(migration.MIGRATION, b.name), {"state": "Running", "done": 2, "total": 3, "at": "2026-01-01 00:00:00"})
+		p = migration_batch.background_progress(b.name)
+		self.assertEqual(p["state"], "Failed")
+		self.assertIn("Undo Load", p["error"])
+		self.assertEqual(frappe.db.get_value("Migration Batch", b.name, "load_status"), "Load failed")
+
 	def test_old_numbers_work_until_the_window_closes(self):
 		self.loaded()
 		c1 = self.conn("MIG-1001")

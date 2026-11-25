@@ -4,9 +4,14 @@ frappe.ui.form.on("Bill Run", {
 	refresh(frm) {
 		utility_billing.setup_approval_form(frm);
 		if (frm.is_new()) return;
-		// FS-RUN-07: a large run posts in the background after approval
+		// FS-RUN-07: a large run posts in the background after approval; a progress bar shows how far it is (increment 54)
 		if (frm.doc.posting_status === "Posting") {
-			frm.dashboard.set_headline_alert(__("Posting the bills in the background. Reload in a few minutes."), "blue");
+			utility_billing.form_progress(frm, {
+				method: "utility_billing.utility_billing.doctype.bill_run.bill_run.posting_progress",
+				args: { run: frm.doc.name },
+				title: __("Posting the bills"),
+				failed_title: __("Posting didn't complete"),
+			});
 		} else if (frm.doc.posting_status === "Posting failed") {
 			frm.dashboard.set_headline_alert(__("Posting stopped before every bill was posted. Fix the cause shown below, then Post Again: it carries on with the rest."), "red");
 			if (frappe.perm.has_perm("Bill Run", 0, "submit")) {

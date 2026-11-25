@@ -47,11 +47,12 @@ utility_billing.show_impact = function (r) {
 	new frappe.ui.Dialog({ title: __("Impact Preview"), size: "large", fields: [{ fieldtype: "HTML", fieldname: "body", options: html }] }).show();
 };
 
-// A bill run calculating in the background (increment 52): asks every 2 seconds how far it is. show(p) while it runs, ended(p) once
-// it is Done or Failed; it stops asking when still_here() says the user went elsewhere. p = {state, done, total, error}.
-utility_billing.watch_calculation = function (run, show, ended, still_here) {
+// Work running in the background (increments 52 and 54): asks `method` every 2 seconds how far it is. show(p) while it runs,
+// ended(p) once it is Done or Failed; it stops asking when still_here() says the user went elsewhere.
+// p = {state: Queued | Running | Done | Failed, done, total, text, error}.
+utility_billing.watch_progress = function (method, args, show, ended, still_here) {
 	const ask = () =>
-		frappe.xcall("utility_billing.utility_billing.billing.calculation_progress", { run }).then(
+		frappe.xcall(method, args).then(
 			(p) => {
 				if (!still_here()) return;
 				if (p && (p.state === "Queued" || p.state === "Running")) {
@@ -63,6 +64,54 @@ utility_billing.watch_calculation = function (run, show, ended, still_here) {
 		);
 	ask();
 };
+
+utility_billing.watch_calculation = (run, show, ended, still_here) =>
+	utility_billing.watch_progress("utility_billing.utility_billing.billing.calculation_progress", { run }, show, ended, still_here);
+
+utility_billing.progress_percent = (p) =>
+	p.total ? Math.max(3, Math.round((Math.min(p.done, p.total) / p.total) * 100)) : p.state === "Queued" ? 2 : 5;
+
+// "Posting the bills: 1,500 of 21,446"
+utility_billing.progress_text = function (p) {
+	if (!p || p.state === "Queued") return __("Waiting to start…");
+	const count = p.total ? __("{0} of {1}", [format_number(Math.min(p.done, p.total), null, 0), format_number(p.total, null, 0)]) : "";
+	return [p.text ? __(p.text) : __("Working…"), count].filter(Boolean).join(": ");
+};
+
+// A progress bar on a form while its background work runs, then the outcome and the form reloaded (increment 54). Call it from
+// refresh while the document says the work is running; o = {method, args, title, failed_title}.
+utility_billing.form_progress = function (frm, o) {
+	const name = frm.doc.name;
+	const paint = (p) => frm.dashboard.show_progress(o.title, utility_billing.progress_percent(p), utility_billing.progress_text(p));
+	paint(frm._ub_progress || { state: "Queued" });
+	if (frm._ub_watching === name) return;
+	frm._ub_watching = name;
+	utility_billing.watch_progress(
+		o.method,
+		o.args,
+		(p) => {
+			frm._ub_progress = p;
+			paint(p);
+		},
+		(p) => {
+			frm._ub_watching = frm._ub_progress = null;
+			frm.dashboard.hide_progress(o.title);
+			if (p.state === "Failed") frappe.msgprint({ title: o.failed_title, indicator: "red", message: frappe.utils.escape_html(p.error || "") });
+			else frappe.show_alert({ message: p.text ? __(p.text) : __("Done."), indicator: "green" }, 10);
+			frm.reload_doc();
+		},
+		() => {
+			const here = cur_frm === frm && frm.doc.name === name;
+			if (!here) frm._ub_watching = frm._ub_progress = null;
+			return here;
+		}
+	);
+};
+
+// The same bar as a card on a page: <section class="ub-card ub-progress-card"> filled with this.
+utility_billing.progress_card = (title, p) => `<div class="ub-cardhead"><h2>${frappe.utils.escape_html(title)}</h2></div>
+	<div class="progress" style="height:10px"><div class="progress-bar" style="width:${utility_billing.progress_percent(p)}%"></div></div>
+	<p class="ub-kpi-note" style="margin-top:8px">${frappe.utils.escape_html(utility_billing.progress_text(p))}</p>`;
 
 utility_billing.calculation_text = function (p) {
 	if (p.state === "Queued") return __("Waiting to start…");

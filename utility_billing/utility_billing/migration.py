@@ -24,7 +24,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate, nowdate
 
-from utility_billing.utility_billing import reading_engine, uniqueness
+from utility_billing.utility_billing import progress, reading_engine, uniqueness
 
 TARGETS = {
 	"Connections": ["old_account_no", "old_customer_id", "old_collection_no", "consumer_name", "cnic", "ntn", "filer", "mobile", "address",
@@ -667,10 +667,14 @@ def _new_account(batch, ref, r, consumers, properties):
 	                    "meters": meters}).name
 
 
-def _progress(batch, text):
+MIGRATION = "migration"  # a batch's background load or undo in the shared progress store (increment 54: a progress bar)
+
+
+def _progress(batch, text, done=0, total=0):
 	"""Background loads say where they are, and keep what is done so far."""
 	frappe.db.set_value("Migration Batch", batch.name, "load_progress", text, update_modified=False)
 	frappe.db.commit()
+	progress.tell(MIGRATION, batch.name, "Running", done, total, text)
 
 
 def _legacy_bills(batch, history, made):
@@ -721,6 +725,8 @@ def load(batch, commit=False) -> bool:
 		frappe.throw(_("This batch is already loaded."))
 	if frappe.db.count("Connection", {"migration_batch": batch.name}):
 		frappe.throw(_("An earlier load of this batch stopped part-way. Undo it first."))
+	if commit:
+		progress.tell(MIGRATION, batch.name, "Running", text=_("Checking the workbook"))
 	a = analyse(batch)
 	_store_results(batch, a)
 	if batch.error_count:
@@ -746,11 +752,11 @@ def load(batch, commit=False) -> bool:
 			for ref, r in refs[k:k + CHUNK]:
 				made[ref] = _new_account(batch, ref, r, consumers, properties)
 			if commit:
-				_progress(batch, _("{0} of {1} accounts").format(min(k + CHUNK, len(refs)), len(refs)))
+				_progress(batch, _("Accounts"), min(k + CHUNK, len(refs)), len(refs))
 		for k in range(0, len(a.history), 5000):
 			_legacy_bills(batch, a.history[k:k + 5000], made)
 			if commit:
-				_progress(batch, _("History: {0} of {1} months").format(min(k + 5000, len(a.history)), len(a.history)))
+				_progress(batch, _("History months"), min(k + 5000, len(a.history)), len(a.history))
 		if a.balances:
 			if commit:
 				_progress(batch, _("Opening balances"))
@@ -780,10 +786,12 @@ def load_in_background(batch: str):
 		load(doc, commit=True)
 		doc.save(ignore_permissions=True)
 		frappe.db.commit()
-	except Exception:
+		progress.tell(MIGRATION, batch, "Done", text=_("Loaded: {0} accounts.").format(doc.account_count or 0))
+	except Exception as e:
 		frappe.db.rollback()
 		frappe.db.set_value("Migration Batch", batch, {"load_status": "Load failed", "load_error": frappe.get_traceback()[-1500:]})
 		frappe.db.commit()
+		progress.tell(MIGRATION, batch, "Failed", error=frappe.utils.strip_html(str(e)) or e.__class__.__name__)
 		raise
 
 
@@ -846,7 +854,7 @@ def _undo(batch, commit):
 				for name in names[k:k + CHUNK]:
 					frappe.delete_doc(dt, name, force=True, ignore_permissions=True)
 				if commit:
-					_progress(batch, _("Removing: {0} {1} left").format(max(len(names) - k - CHUNK, 0), _(dt)))
+					_progress(batch, _("Removing: {0}").format(_(dt)), min(k + CHUNK, len(names)), len(names))
 	finally:
 		frappe.flags.in_migration_undo = False
 	batch.set("records", [])
@@ -862,10 +870,12 @@ def undo_in_background(batch: str):
 		undo(doc, commit=True)
 		doc.save(ignore_permissions=True)
 		frappe.db.commit()
-	except Exception:
+		progress.tell(MIGRATION, batch, "Done", text=_("The loaded records are removed."))
+	except Exception as e:
 		frappe.db.rollback()
 		frappe.db.set_value("Migration Batch", batch, {"load_status": "Load failed", "load_error": frappe.get_traceback()[-1500:]})
 		frappe.db.commit()
+		progress.tell(MIGRATION, batch, "Failed", error=frappe.utils.strip_html(str(e)) or e.__class__.__name__)
 		raise
 
 

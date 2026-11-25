@@ -8,6 +8,7 @@ from unittest.mock import patch
 import frappe
 
 from utility_billing.utility_billing import bulk, migration, readcache, readings
+from utility_billing.utility_billing import progress as progress_store
 from utility_billing.utility_billing.test_billing import SOC, BillingCase
 from utility_billing.utility_billing.test_migration import workbook
 
@@ -182,18 +183,22 @@ class IntegrationTestMigrationInBackground(BillingCase):
 		if bad:
 			history.append(["BG-0", "2026-04-01", "abc", 1])
 		url = workbook({"Connections": rows, "History": history, "Balances": [["old_account_no", "arrears"], ["BG-1", 1500]]})
-		return frappe.get_doc({"doctype": "Migration Batch", "society": SOC, "profile": profile.name, "as_of_date": "2026-05-31", "workbook": url}).insert()
+		doc = frappe.get_doc({"doctype": "Migration Batch", "society": SOC, "profile": profile.name, "as_of_date": "2026-05-31", "workbook": url}).insert()
+		# the job's progress news is kept in Redis, outside the rolled-back transaction, and the batch number is given out again
+		self.addCleanup(progress_store.clear, migration.MIGRATION, doc.name)
+		return doc
 
 	def test_a_background_load_keeps_each_group_and_counts_what_it_made(self):
 		b = self.batch()
 		b.db_set("load_status", "Loading")
 		progress = []
 		with patch.object(migration, "CHUNK", 3), patch.object(frappe.db, "commit"), \
-				patch.object(migration, "_progress", side_effect=lambda batch, text: progress.append(text)):
+				patch.object(migration, "_progress", side_effect=lambda batch, text, done=0, total=0: progress.append((text, done, total))):
 			migration.load_in_background(b.name)
 		b.reload()
 		self.assertEqual(b.load_status, "Loaded")
-		self.assertEqual(progress[:3], ["3 of 7 accounts", "6 of 7 accounts", "7 of 7 accounts"])
+		self.assertEqual(progress[:3], [("Accounts", 3, 7), ("Accounts", 6, 7), ("Accounts", 7, 7)])
+		self.assertEqual(progress_store.get(migration.MIGRATION, b.name)["state"], "Done")  # the screen's bar ends (increment 54)
 		self.assertEqual({r.record_type: r.record_count for r in b.records},
 		                 {"Meter": 7, "Property": 7, "Consumer": 7, "Connection": 7, "Legacy Bill": 7, "Opening Balance Import": 1})
 		self.assertEqual(frappe.db.get_value("Legacy Bill", {"migration_batch": b.name, "units": 103}, ["consumer_name", "society"]), ("BG Consumer 3", SOC))

@@ -38,10 +38,15 @@ frappe.ui.form.on("Migration Batch", {
 		const busy = ["Loading", "Undoing"].includes(frm.doc.load_status);
 		const holding = ["Loaded", "Load failed"].includes(frm.doc.load_status);  // records exist: only Undo Load is offered
 		if (busy) {
-			// a large workbook is loaded or removed in the background: show where it is, and look again every few seconds
-			frm.dashboard.set_headline(`${frm.doc.load_status === "Loading" ? __("Loading in the background") : __("Removing in the background")}: ${frappe.utils.escape_html(frm.doc.load_progress || "")}. ${__("You can leave this page.")}`, "blue");
-			clearTimeout(frm._mb_poll);
-			frm._mb_poll = setTimeout(() => { if (cur_frm === frm && !frm.is_dirty()) frm.reload_doc(); }, 5000);
+			// a large workbook is loaded or removed in the background: a progress bar until it ends (increment 54)
+			const loading = frm.doc.load_status === "Loading";
+			frm.dashboard.set_headline(__("Working in the background. You can leave this page and come back."), "blue");
+			utility_billing.form_progress(frm, {
+				method: `${MB}background_progress`,
+				args: { name: frm.doc.name },
+				title: loading ? __("Loading the workbook") : __("Removing the loaded records"),
+				failed_title: loading ? __("The load didn't complete") : __("Undo Load didn't complete"),
+			});
 			return;
 		}
 		if (editable && !holding) {
