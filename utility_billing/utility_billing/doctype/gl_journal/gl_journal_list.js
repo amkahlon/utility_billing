@@ -8,7 +8,7 @@ frappe.listview_settings["GL Journal"] = {
 		if (!utility_billing.can("gl.export")) return;
 		listview.page.add_inner_button(__("Make Journals"), () =>
 			ask_society(__("Make Journals"), [], (v) =>
-				frappe.call({ method: `${GL}.make_journals`, args: { society: v.society }, freeze: true }).then(({ message }) => {
+				utility_billing.run_job("gl_journals", { society: v.society }, __("Making journals")).then((message) => {
 					frappe.show_alert({ message: __("{0} journals made", [message.length]), indicator: "green" });
 					listview.refresh();
 				})
@@ -28,7 +28,7 @@ frappe.listview_settings["GL Journal"] = {
 		);
 		listview.page.add_inner_button(__("Reconcile"), () =>
 			ask_society(__("Receivables Reconciliation"), [], (v) =>
-				frappe.call({ method: `${GL}.reconcile_now`, args: { society: v.society }, freeze: true }).then(({ message: r }) => {
+				utility_billing.run_job("gl_reconcile", { society: v.society }, __("Receivables reconciliation")).then((r) => {
 					frappe.msgprint({
 						title: __("Receivables Reconciliation: {0}", [__(r.status)]),
 						indicator: r.status === "Matched" ? "green" : r.status === "Difference" ? "red" : "orange",

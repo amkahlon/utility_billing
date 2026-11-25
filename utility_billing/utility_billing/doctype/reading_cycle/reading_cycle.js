@@ -10,7 +10,7 @@ frappe.ui.form.on("Reading Cycle", {
 		}
 		if (frm.is_new() || frm.doc.status !== "Open") return;
 		frm.add_custom_button(__("Create Reading Sheet"), () =>
-			frappe.call({ method: `${RDG}.create_reading_sheet`, args: { cycle: frm.doc.name }, freeze: true }).then(({ message: r }) => {
+			utility_billing.run_job("reading_sheet", { cycle: frm.doc.name }, __("Creating the reading sheet")).then((r) => {
 				frappe.show_alert({ message: __("{0} readings added ({1} in total)", [r.created, r.total]), indicator: "green" });
 				frm.reload_doc();
 			})
@@ -42,7 +42,7 @@ frappe.ui.form.on("Reading Cycle", {
 			__("Estimate Unread"),
 			() =>
 				frappe.confirm(__("Estimate every reading that is still pending or not read?"), () =>
-					frappe.call({ method: `${RDG}.estimate_unread`, args: { cycle: frm.doc.name }, freeze: true }).then(({ message: r }) => {
+					utility_billing.run_job("estimate_unread", { cycle: frm.doc.name }, __("Estimating unread meters")).then((r) => {
 						frappe.show_alert({ message: __("{0} readings estimated", [r.estimated]), indicator: "orange" });
 						frm.reload_doc();
 					})
@@ -66,10 +66,9 @@ function upload_readings(frm, source) {
 		docname: frm.doc.name,
 		restrictions: { allowed_file_types: [".xlsx", ".csv", ".txt"] },
 		on_success(file) {
-			frappe
-				.call({ method: `${RDG}.upload_readings`, args: { cycle: frm.doc.name, file_url: file.file_url, source: source || "Import" },
-				        freeze: true, freeze_message: __("Checking and applying the readings…") })
-				.then(({ message: r }) => {
+			utility_billing
+				.run_job("upload_readings", { cycle: frm.doc.name, file_url: file.file_url, source: source || "Import" }, __("Uploading readings"))
+				.then((r) => {
 					const n = (v) => format_number(v || 0, null, 0);
 					const SHOWN = 50; // a file can have hundreds of rows that weren't applied: the first are listed, the rest counted
 					const rows = (r.errors || []).slice(0, SHOWN)

@@ -69,7 +69,18 @@ frappe.ui.form.on("Bill Run", {
 		}
 	},
 	before_workflow_action(frm) {
-		return utility_billing.before_workflow_action(frm);
+		const shared = utility_billing.before_workflow_action(frm); // asks the reason for a rejection or a cancellation
+		if (frm.selected_workflow_action !== "Cancel") return shared;
+		// increment 55: reversing a run undoes every bill one at a time, minutes for a whole society: a background job with a
+		// progress bar, not a greyed screen (and not cut off by the server's time limit for a web request)
+		return Promise.resolve(shared).then(() => {
+			frappe.dom.unfreeze();
+			utility_billing.run_job("run_cancel", { run: frm.doc.name }, __("Reversing bill run {0}", [frm.doc.name])).then(() => {
+				frappe.show_alert({ message: __("Bill run {0} reversed.", [frm.doc.name]), indicator: "green" }, 7);
+				frm.reload_doc();
+			});
+			return Promise.reject(); // the workflow's own call doesn't run
+		});
 	},
 });
 
@@ -126,13 +137,11 @@ function record_delivery(frm) {
 			],
 			primary_action_label: __("Record"),
 			primary_action(values) {
-				frappe
-					.call({ method: `${method}.delivery.mark`, args: { run: frm.doc.name, ...values }, freeze: true })
-					.then(({ message: r }) => {
-						frappe.show_alert({ message: __("{0} of {1} bills updated.", [r.changed, r.bills]), indicator: "green" });
-						d.hide();
-						frm.reload_doc();
-					});
+				d.hide();
+				utility_billing.run_job("delivery", { run: frm.doc.name, ...values }, __("Recording delivery")).then((r) => {
+					frappe.show_alert({ message: __("{0} of {1} bills updated.", [r.changed, r.bills]), indicator: "green" });
+					frm.reload_doc();
+				});
 			},
 		});
 		d.show();
@@ -158,18 +167,10 @@ function print_run_bills(frm) {
 					onchange: () => routes_for_block(d, g, options) },
 				{ fieldname: "route", fieldtype: "Select", label: __("Route"), options: [{ value: "", label: __("All routes") }, ...options(g.routes)] },
 			],
-			primary_action_label: __("Open PDF"),
+			primary_action_label: __("Make PDF"),
 			primary_action(values) {
-				const args = new URLSearchParams({ run: frm.doc.name, block: values.block || "", route: values.route || "" });
-				window.open(`/api/method/${method}.print_run_bills?${args}`);
-				if (frm.doc.docstatus === 1) {
-					frappe.call({
-						method: "utility_billing.utility_billing.delivery.mark",
-						args: { run: frm.doc.name, status: "Printed", block: values.block || "", route: values.route || "" },
-						silent: true,
-					});
-				}
 				d.hide();
+				utility_billing.print_run_bills(frm.doc.name, values.block, values.route, frm.doc.docstatus === 1); // background (increment 55)
 			},
 		});
 		d.show();

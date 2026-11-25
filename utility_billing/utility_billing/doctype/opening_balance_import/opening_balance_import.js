@@ -17,10 +17,9 @@ frappe.ui.form.on("Opening Balance Import", {
 		if (!frm.is_new() && frm.doc.docstatus === 0 && ["Draft", "Rejected", undefined, ""].includes(frm.doc.workflow_state)) {
 			frm.add_custom_button(__("Load File"), () => {
 				const load = () =>
-					frappe.call({ method: OB + "load_file", args: { name: frm.doc.name, file_url: frm.doc.import_file }, freeze: true, freeze_message: __("Loading and checking…") })
-						.then((r) => {
+					utility_billing.run_job("opening_load", { name: frm.doc.name, file_url: frm.doc.import_file }, __("Loading and checking the file"))
+						.then((m) => {  // in the background with a progress bar (increment 55)
 							frm.reload_doc();
-							const m = r.message;
 							frappe.show_alert({ message: __("{0} accounts loaded, {1} with problems", [m.rows, m.errors]), indicator: m.errors ? "orange" : "green" });
 						});
 				// a large import isn't saved from the form (it shows the first rows only): the file is handed over with the call

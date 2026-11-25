@@ -12,13 +12,7 @@ frappe.listview_settings["RA Finding"] = {
 				  default: frappe.defaults.get_user_default("Society") },
 				{ fieldname: "month", fieldtype: "Date", label: __("Month"), description: __("Leave empty for the latest month with posted bills.") },
 			], (v) => {
-				frappe.call({
-					method: "utility_billing.utility_billing.revenue_assurance.run_now",
-					args: v,
-					freeze: true,
-					freeze_message: __("Running the checks…"),
-				}).then((r) => {
-					const out = r.message;
+				utility_billing.run_job("ra_checks", v, __("Revenue assurance checks")).then((out) => {
 					frappe.show_alert({ message: __("{0} new findings, {1} updated", [out.new, out.updated]), indicator: out.new ? "orange" : "green" });
 					listview.refresh();
 				});

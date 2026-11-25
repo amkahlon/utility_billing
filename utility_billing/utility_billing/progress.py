@@ -14,7 +14,7 @@ import contextlib
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, cstr
 
 STALE_AFTER = 20 * 60  # seconds without news before a job is taken as stopped
 KEEP = 6 * 3600  # seconds the last news is kept
@@ -24,9 +24,9 @@ def key(kind: str, name: str) -> str:
 	return f"ub_progress:{kind}:{name}"
 
 
-def tell(kind: str, name: str, state: str = "Running", done=0, total=0, text: str | None = None, error: str | None = None):
+def tell(kind: str, name: str, state: str = "Running", done=0, total=0, text: str | None = None, error: str | None = None, **extra):
 	frappe.cache.set_value(key(kind, name), {"state": state, "done": cint(done), "total": cint(total), "text": text, "error": error,
-	                                         "at": frappe.utils.now()}, expires_in_sec=KEEP)
+	                                         "at": frappe.utils.now(), **extra}, expires_in_sec=KEEP)
 
 
 def get(kind: str, name: str, stale_after: int = STALE_AFTER, stopped: str | None = None):
@@ -60,4 +60,96 @@ def reporting(kind: str, name: str):
 def step(text: str, done=0, total=0):
 	job = frappe.flags.get("ub_progress")
 	if job:
-		tell(job[0], job[1], "Running", done, total, text)
+		now = frappe.cache.get_value(key(*job), expires=True, use_local_cache=False) or {}
+		tell(job[0], job[1], "Running", done, total, text, by=now.get("by"), title=now.get("title"))
+
+
+# ---------------------------------------------------------------- buttons whose work runs in the background (increment 55)
+# User, 2026-11-25: the society-wide buttons that greyed the screen run here instead, with a progress bar that doesn't block the
+# screen. Each is the same whitelisted function as before, run in a worker as the user who pressed the button, so its own permission
+# checks and refusals are unchanged. Only these functions can be started: {job: (function, the argument naming the record)}.
+_U = "utility_billing.utility_billing."
+JOBS = {
+	"reading_sheet": (_U + "readings.create_reading_sheet", "cycle"),
+	"estimate_unread": (_U + "readings.estimate_unread", "cycle"),
+	"upload_readings": (_U + "readings.upload_readings", "cycle"),
+	"migration_check": (_U + "doctype.migration_batch.migration_batch.check", "name"),
+	"opening_load": (_U + "opening.load_file", "name"),
+	"parallel_payments": (_U + "doctype.parallel_run_month.parallel_run_month.load_payments", "name"),
+	"parallel_compare": (_U + "doctype.parallel_run_month.parallel_run_month.compare", "name"),
+	"ra_checks": (_U + "revenue_assurance.run_now", "society"),
+	"gl_journals": (_U + "gl.make_journals", "society"),
+	"gl_reconcile": (_U + "gl.reconcile_now", "society"),
+	"period_checklist": (_U + "periods.preview", "period"),
+	"period_close": (_U + "periods.close", "period"),
+	"period_reopen": (_U + "periods.reopen", "period"),
+	"year_prepare": (_U + "yearend.prepare", "name"),
+	"year_close": (_U + "yearend.close", "name"),
+	"delivery": (_U + "delivery.mark", "run"),
+	"solar_figures": (_U + "doctype.solar_rebate_pool.solar_rebate_pool.get_figures", "name"),
+	"snapshot_restore": (_U + "snapshots.restore", "snapshot"),
+	"run_cancel": (_U + "doctype.bill_run.bill_run.cancel_in_background", "run"),
+	"print_bills": (_U + "bill_print.print_run_bills_to_file", "run"),
+}
+JOB = "job"
+JOB_STALE_AFTER = 30 * 60  # some steps report no count for minutes at a time
+
+
+def job_key(job: str, record: str) -> str:
+	return f"{job}:{record}"
+
+
+@frappe.whitelist(methods=["POST"])
+def start(job: str, args: str | dict | None = None, title: str | None = None) -> dict:
+	"""Start one of JOBS for a record. A second start of the same job on the same record is refused while the first runs."""
+	if job not in JOBS:
+		frappe.throw(_("{0} can't run in the background.").format(job))
+	args = frappe.parse_json(args or {}) or {}
+	if not isinstance(args, dict):
+		frappe.throw(_("Send the job's arguments as an object."))
+	record = cstr(args.get(JOBS[job][1]))
+	if not record:
+		frappe.throw(_("Say which record the job is for ({0}).").format(JOBS[job][1]))
+	k = job_key(job, record)
+	now = get(JOB, k, JOB_STALE_AFTER)
+	if running(now):
+		frappe.throw(_("This is already running: {0}. Wait for it to finish.").format(now.get("text") or now.get("title") or job), title=_("Already running"))
+	user = frappe.session.user
+	tell(JOB, k, "Queued", text=_("Waiting to start"), by=user, title=title)
+	at_once = bool(frappe.flags.in_test)
+	frappe.enqueue(_U + "progress.run", queue="long", timeout=3 * 3600, now=at_once, enqueue_after_commit=not at_once,
+	               job=job, record=record, args=args, user=user, title=title, at_once=at_once)
+	return {"job": job, "record": record}
+
+
+def run(job, record, args, user, title=None, at_once=False):
+	"""The worker: the job's function as the user who started it, all of it or none of it."""
+	k = job_key(job, record)
+	frappe.set_user(user)
+	if at_once:  # a test: inside the caller's transaction, undoing only its own work and committing nothing
+		frappe.db.savepoint("ub_job")
+	try:
+		with reporting(JOB, k):
+			result = frappe.get_attr(JOBS[job][0])(**args)
+		result = frappe.parse_json(frappe.as_json(result)) if result is not None else None  # as the web reply would carry it
+		if not at_once:
+			frappe.db.commit()
+		tell(JOB, k, "Done", by=user, title=title, result=result)
+	except Exception as e:
+		frappe.db.rollback(save_point="ub_job") if at_once else frappe.db.rollback()
+		said = (frappe.utils.strip_html(cstr(e)) if isinstance(e, frappe.ValidationError | frappe.PermissionError) else "") or _(
+			"It stopped with an error ({0}). Nothing was changed; the error is logged for support.").format(e.__class__.__name__)
+		tell(JOB, k, "Failed", error=said, by=user, title=title)
+		if at_once:
+			raise
+		frappe.log_error(title=f"Background job {job} on {record} failed")
+		frappe.db.commit()
+
+
+@frappe.whitelist()
+def job_progress(job: str, record: str):
+	"""How far the job is, for its progress bar. Its result goes only to the user who started it."""
+	p = get(JOB, job_key(job, record), JOB_STALE_AFTER)
+	if p and p.get("by") != frappe.session.user:
+		p = {k: v for k, v in p.items() if k != "result"}
+	return p

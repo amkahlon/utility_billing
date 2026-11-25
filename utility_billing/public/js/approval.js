@@ -108,6 +108,99 @@ utility_billing.form_progress = function (frm, o) {
 	);
 };
 
+// ---- Buttons whose work runs in the background (increment 55) ----
+// utility_billing.run_job(job, args, title) starts one of the server's progress.JOBS and resolves with its result when it is done. While
+// it runs, a panel at the bottom right shows a progress bar; the screen stays usable, the user can go elsewhere, and after a page
+// reload the panel picks the job up again. A failure is shown there and in a message, and the promise is then left unresolved.
+const UB_JOBS = "ub_background_jobs";
+const ub_saved_jobs = () => {
+	try {
+		return JSON.parse(localStorage.getItem(UB_JOBS) || "[]");
+	} catch (e) {
+		return [];
+	}
+};
+const ub_save_jobs = (list) => {
+	try {
+		localStorage.setItem(UB_JOBS, JSON.stringify(list));
+	} catch (e) {
+		/* private window or blocked storage: the panel just won't come back after a reload */
+	}
+};
+
+utility_billing.run_job = function (job, args, title) {
+	return frappe
+		.xcall("utility_billing.utility_billing.progress.start", { job, args: JSON.stringify(args), title })
+		.then((r) => new Promise((resolve) => utility_billing.track_job({ job, record: r.record, title, at: Date.now() }, resolve)));
+};
+
+utility_billing.track_job = function (j, resolve) {
+	const id = `${j.job}:${j.record}`;
+	ub_save_jobs([...ub_saved_jobs().filter((x) => `${x.job}:${x.record}` !== id), j]);
+	let $tray = $(".ub-jobs");
+	if (!$tray.length) $tray = $('<div class="ub-jobs" aria-live="polite"></div>').appendTo(document.body);
+	$tray.find(`[data-job="${CSS.escape(id)}"]`).remove();
+	const e = frappe.utils.escape_html;
+	const $card = $(`<div class="ub-job" data-job="${e(id)}"><div class="ub-job-head"><span>${e(j.title || __("Working"))}</span>
+		<button class="ub-job-close" title="${__("Hide")}" aria-label="${__("Hide")}">×</button></div>
+		<div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div></div>
+		<div class="ub-job-text">${__("Waiting to start…")}</div></div>`).appendTo($tray);
+	$card.find(".ub-job-close").on("click", () => $card.hide()); // hides the panel only; the work and its follow-up go on
+	const paint = (p) => {
+		const $bar = $card.find(".progress-bar");
+		$bar.toggleClass("progress-bar-striped progress-bar-animated", !p.total).css("width", p.total ? `${utility_billing.progress_percent(p)}%` : "100%");
+		$card.find(".ub-job-text").text(utility_billing.progress_text(p));
+	};
+	utility_billing.watch_progress(
+		"utility_billing.utility_billing.progress.job_progress",
+		{ job: j.job, record: j.record },
+		paint,
+		(p) => {
+			ub_save_jobs(ub_saved_jobs().filter((x) => `${x.job}:${x.record}` !== id));
+			if (!p.by) { // watch_progress's stand-in when the server has no news: every job's real news names who started it
+				// no news kept about it (kept 6 hours; or the server was restarted): it has ended, but nothing says how
+				$card.find(".progress-bar").removeClass("progress-bar-striped progress-bar-animated").css("width", "100%");
+				$card.find(".ub-job-text").text(__("It has ended. Open the record to see the outcome."));
+				return;
+			}
+			if (p.state === "Failed") {
+				$card.addClass("failed").find(".progress-bar").removeClass("progress-bar-striped progress-bar-animated").css("width", "100%");
+				$card.find(".ub-job-text").text(p.error || __("It didn't complete."));
+				frappe.msgprint({ title: __("{0}: didn't complete", [j.title || __("Background work")]), indicator: "red", message: e(p.error || "") });
+				return;
+			}
+			$card.addClass("done").find(".progress-bar").removeClass("progress-bar-striped progress-bar-animated").css("width", "100%");
+			$card.find(".ub-job-text").text(__("Done."));
+			setTimeout(() => $card.fadeOut(400, () => $card.remove()), 6000);
+			if (resolve) resolve(p.result || {});
+		},
+		() => document.body.contains($card[0])
+	);
+};
+
+// Print Bills in the background (increment 55): the PDF is drawn 50 bills at a time with the count shown, then offered to open. A
+// button inside the message opens it, since a browser blocks a window opened without a click.
+utility_billing.print_run_bills = function (run, block, route, mark_printed) {
+	return utility_billing.run_job("print_bills", { run, block: block || "", route: route || "" }, __("Printing the bills of {0}", [run])).then((r) => {
+		if (mark_printed) {
+			frappe.call({ method: "utility_billing.utility_billing.delivery.mark", args: { run, status: "Printed", block: block || "", route: route || "" }, silent: true });
+		}
+		frappe.msgprint({
+			title: __("Bills ready to print"),
+			indicator: "green",
+			message: `<p>${r.bills === 1 ? __("1 bill.") : __("{0} bills, in delivery order.", [format_number(r.bills, null, 0)])}</p>
+				<p><a class="btn btn-primary btn-sm" href="${encodeURI(r.file_url)}" target="_blank" rel="noopener">${__("Open the PDF")}</a></p>`,
+		});
+	});
+};
+
+// after a reload: the jobs still running come back to the panel (their outcome is shown, without the screen's own follow-up)
+$(document).on("app_ready", () => {
+	const fresh = ub_saved_jobs().filter((x) => Date.now() - (x.at || 0) < 6 * 3600 * 1000);
+	ub_save_jobs(fresh);
+	fresh.forEach((x) => utility_billing.track_job(x, null));
+});
+
 // The same bar as a card on a page: <section class="ub-card ub-progress-card"> filled with this.
 utility_billing.progress_card = (title, p) => `<div class="ub-cardhead"><h2>${frappe.utils.escape_html(title)}</h2></div>
 	<div class="progress" style="height:10px"><div class="progress-bar" style="width:${utility_billing.progress_percent(p)}%"></div></div>

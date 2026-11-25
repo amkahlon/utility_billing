@@ -9,12 +9,12 @@ frappe.ui.form.on("Parallel Run Month", {
 	},
 	refresh(frm) {
 		if (frm.is_new()) return;
-		const run = (method, message, done) => frm.save().then(() =>
-			frappe.call({ method: PRM + method, args: { name: frm.doc.name }, freeze: true, freeze_message: message })
-				.then((r) => { frm.reload_doc(); done(r.message); }));
-		frm.add_custom_button(__("Load Payments"), () => run("load_payments", __("Recording payments…"), (m) =>
+		// in the background with a progress bar (increment 55)
+		const run = (job, title, done) => frm.save().then(() =>
+			utility_billing.run_job(job, { name: frm.doc.name }, title).then((m) => { frm.reload_doc(); done(m); }));
+		frm.add_custom_button(__("Load Payments"), () => run("parallel_payments", __("Recording payments"), (m) =>
 			frappe.show_alert({ message: __("{0} payments recorded, {1} skipped", [m.recorded, m.skipped]), indicator: "green" })), __("Parallel Run"));
-		frm.add_custom_button(__("Compare"), () => run("compare", __("Comparing…"), (m) =>
+		frm.add_custom_button(__("Compare"), () => run("parallel_compare", __("Comparing with the previous system"), (m) =>
 			frappe.show_alert({ message: __("{0} of {1} accounts match", [m.matched, m.compared]), indicator: m.different ? "orange" : "green" })), __("Parallel Run"));
 		const d = frm.doc;
 		if (d.comparison_status === "Clean") {

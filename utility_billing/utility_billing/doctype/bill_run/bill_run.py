@@ -182,3 +182,13 @@ def retry_posting(run: str):
 	doc.db_set({"posting_status": "Posting", "posting_error": None})
 	queue_posting(run, cint(doc.bill_count))
 	return {"queued": True}
+
+
+def cancel_in_background(run: str) -> dict:
+	"""The workflow's Cancel (reverse the run), from a background job with a progress bar (increment 55): every bill and its ledger
+	entry are reversed one at a time, minutes for a whole society. The workflow's own rules (who may cancel, the reason, a later run
+	already posted) apply as before."""
+	from frappe.model.workflow import apply_workflow  # noqa: PLC0415
+
+	doc = apply_workflow(frappe.get_doc("Bill Run", run), "Cancel")
+	return {"workflow_state": doc.workflow_state, "bills": cint(doc.bill_count)}

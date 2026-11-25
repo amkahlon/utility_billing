@@ -643,6 +643,37 @@ def t_run_post(d: Desk):
 	eq((p["state"], p["done"], p["total"]), ("Done", run["bill_count"], run["bill_count"]), "posting progress")
 
 
+PRG = "utility_billing.utility_billing.progress"
+
+
+def run_job(desk, job, args, title="e2e", wait=180):
+	"""Start a background job the way the screen's button does, then ask how far it is every second, as the progress panel does."""
+	started = desk.call(f"{PRG}.start", job=job, args=json.dumps(args), title=title)
+	for _ in range(wait):
+		p = desk.call(f"{PRG}.job_progress", job=job, record=started["record"])
+		if p and p["state"] in ("Done", "Failed"):
+			return p
+		time.sleep(1)
+	raise AssertionError(f"{job} still not finished after {wait} s: {p}")
+
+
+# Placed after QA-35 so the run is posted (and not yet reversed) when its bills are printed.
+@case("QA-105", "Increment 55: buttons that ran with a greyed screen run in the background with a progress bar: Print Bills, Reconcile")
+def t_background_jobs(d: Desk):
+	bm, run = USERS["bm"], S["run"]["name"]
+	p = run_job(bm, "print_bills", {"run": run, "block": "", "route": ""}, "Printing")
+	eq((p["state"], p["by"], p["result"]["bills"]), ("Done", EMAIL["bm"], 1), "printed in the background")
+	pdf = bm.s.get(f"{URL}{p['result']['file_url']}")
+	eq((pdf.status_code, pdf.content[:4]), (200, b"%PDF"), "the PDF opens for the user who printed it")
+	guest = requests.Session()
+	eq(guest.get(f"{URL}{p['result']['file_url']}").status_code in (403, 404), True, "the PDF is private")
+	p = run_job(USERS["ao"], "gl_reconcile", {"society": S["society"]}, "Reconcile")
+	eq((p["state"], "status" in p["result"]), ("Done", True), "reconciliation in the background")
+	expect_error(lambda: bm.call(f"{PRG}.start", job="frappe.client.delete", args=json.dumps({"doctype": "User"})), "can't run in the background")
+	p = run_job(USERS["cashier"], "gl_reconcile", {"society": S["society"]})
+	eq((p["state"], "result" in p), ("Failed", False), "the function's own refusal reaches the screen")
+
+
 @case("QA-36", "FS-BIL-10: a posted bill can't be changed or cancelled on its own")
 def t_bill_locked(d: Desk):
 	bill = d.get("Utility Bill", S["bill"])

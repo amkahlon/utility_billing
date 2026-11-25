@@ -5,12 +5,7 @@ frappe.ui.form.on("Solar Rebate Pool", {
 		utility_billing.setup_approval_form(frm);
 		if (frm.doc.docstatus === 0 && !frm.is_new()) {
 			frm.add_custom_button(__("Get Figures"), () =>
-				frappe.call({
-					method: "utility_billing.utility_billing.doctype.solar_rebate_pool.solar_rebate_pool.get_figures",
-					args: { name: frm.doc.name },
-					freeze: true,
-					callback: () => frm.reload_doc(),
-				})
+				utility_billing.run_job("solar_figures", { name: frm.doc.name }, __("Getting the month's figures")).then(() => frm.reload_doc())
 			);
 		}
 	},

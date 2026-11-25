@@ -12,7 +12,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
 
-from utility_billing.utility_billing import account
+from utility_billing.utility_billing import account, progress
 from utility_billing.utility_billing import rights
 
 RESTORERS = {"System Manager", "General Manager", "Billing Manager"}
@@ -58,7 +58,10 @@ def restore(snapshot: str, reason: str):
 	run.cancel()
 	data = json.loads(snap.data or "{}")
 	different = []
-	for connection, before in (data.get("balances") or {}).items():
+	balances = data.get("balances") or {}
+	for n, (connection, before) in enumerate(balances.items()):
+		if n % 500 == 0:
+			progress.step(_("Comparing the balances"), n, len(balances))  # increment 55: a progress bar
 		now = {k: flt(v) for k, v in account.balances(connection).items()}
 		if any(abs(now.get(k, 0) - flt(before.get(k))) > 0.005 for k in before):
 			different.append(connection)

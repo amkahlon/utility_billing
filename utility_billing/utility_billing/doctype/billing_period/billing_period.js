@@ -12,21 +12,12 @@ frappe.ui.form.on("Billing Period", {
 		);
 		if (open) {
 			frm.add_custom_button(__("Show Checklist"), () => {
-				frappe.call({
-					method: "utility_billing.utility_billing.periods.preview",
-					args: { period: frm.doc.name },
-					callback: (r) => show_checks(r.message || [], __("Month-end checklist"), false),
-				});
+				utility_billing.run_job("period_checklist", { period: frm.doc.name }, __("Month-end checklist"))
+					.then((rows) => show_checks(rows || [], __("Month-end checklist"), false));
 			});
 			frm.add_custom_button(__("Close Month"), () => {
 				frappe.confirm(__("Close {0}? Nothing can be dated in it afterwards.", [frm.doc.period_title]), () => {
-					frappe.call({
-						method: "utility_billing.utility_billing.periods.close",
-						args: { period: frm.doc.name },
-						freeze: true,
-						callback: () => frm.reload_doc(),
-						error: () => frm.reload_doc(),
-					});
+					utility_billing.run_job("period_close", { period: frm.doc.name }, __("Closing {0}", [frm.doc.period_title])).then(() => frm.reload_doc());
 				});
 			}).addClass("btn-primary");
 		} else if (utility_billing.can("period.reopen")) {
@@ -34,12 +25,8 @@ frappe.ui.form.on("Billing Period", {
 				frappe.prompt(
 					[{ fieldname: "reason", fieldtype: "Small Text", label: __("Why is it being reopened?"), reqd: 1 }],
 					(v) => {
-						frappe.call({
-							method: "utility_billing.utility_billing.periods.reopen",
-							args: { period: frm.doc.name, reason: v.reason },
-							freeze: true,
-							callback: () => frm.reload_doc(),
-						});
+						utility_billing.run_job("period_reopen", { period: frm.doc.name, reason: v.reason }, __("Reopening {0}", [frm.doc.period_title]))
+							.then(() => frm.reload_doc());
 					},
 					__("Reopen {0}", [frm.doc.period_title]),
 					__("Reopen")

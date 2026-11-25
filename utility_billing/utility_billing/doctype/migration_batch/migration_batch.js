@@ -3,6 +3,10 @@
 const MB = "utility_billing.utility_billing.doctype.migration_batch.migration_batch.";
 
 function mb_run(frm, method, message) {
+	if (method === "check") { // in the background with a progress bar (increment 55)
+		return frm.save().then(() => utility_billing.run_job("migration_check", { name: frm.doc.name }, __("Checking the workbook"))
+			.then((m) => { frm.reload_doc(); return m; }));
+	}
 	return frm.save().then(() =>
 		frappe.call({ method: MB + method, args: { name: frm.doc.name }, freeze: true, freeze_message: message })
 			.then((r) => { frm.reload_doc(); return r.message; }));

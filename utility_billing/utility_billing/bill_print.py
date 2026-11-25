@@ -9,6 +9,7 @@ notices or bank accounts, or the consumer's details change (FS-RUN-09).
 """
 
 import base64
+import io
 import json
 import mimetypes
 import re
@@ -546,6 +547,50 @@ def print_run_bills(run: str, block: str | None = None, route: str | None = None
 	if len(bills) > MAX_BILLS_PER_PDF:
 		frappe.throw(_("{0} bills is too many for one PDF; print one block or route at a time (up to {1}).").format(
 			len(bills), MAX_BILLS_PER_PDF))
-	suffix = "".join(f"-{'no-' + kind if x == '(none)' else frappe.scrub(x)}"
-	                 for kind, x in (("block", block), ("route", route)) if x)
-	send_pdf(pdf_of([b.name for b in bills]), f"{doc.name}{suffix}.pdf")
+	send_pdf(pdf_of([b.name for b in bills]), _run_pdf_name(doc.name, block, route))
+
+
+def _run_pdf_name(run, block=None, route=None) -> str:
+	suffix = "".join(f"-{'no-' + kind if x == '(none)' else frappe.scrub(x)}" for kind, x in (("block", block), ("route", route)) if x)
+	return f"{run}{suffix}.pdf"
+
+
+PRINT_GROUP = 50  # bills drawn at a time, so the progress bar moves while a run is printed
+
+
+def print_run_bills_to_file(run: str, block: str | None = None, route: str | None = None) -> dict:
+	"""Print Bills from a background job (increment 55): the same PDF as print_run_bills, drawn 50 bills at a time with the count
+	shown, kept as a private file on the run (an earlier copy of the same PDF is replaced). Returns its address."""
+	from pypdf import PdfReader, PdfWriter  # noqa: PLC0415
+
+	from utility_billing.utility_billing import progress  # noqa: PLC0415
+
+	doc = readable_run(run)
+	bills = run_bills(doc.name, block or None, route or None)
+	if not bills:
+		frappe.throw(_("No bills to print."))
+	if len(bills) > MAX_BILLS_PER_PDF:
+		frappe.throw(_("{0} bills is too many for one PDF; print one block or route at a time (up to {1}).").format(
+			len(bills), MAX_BILLS_PER_PDF))
+	names = [b.name for b in bills]
+	options = pdf_options_for(names)
+	from utility_billing import pdf as ubpdf  # noqa: PLC0415
+
+	writer = PdfWriter()
+	for k in range(0, len(names), PRINT_GROUP):
+		progress.step(_("Drawing the bills"), k, len(names))
+		part = ubpdf.render(document_html(names[k:k + PRINT_GROUP]), options=options)
+		writer.append(PdfReader(io.BytesIO(part)))
+	progress.step(_("Drawing the bills"), len(names), len(names))
+	out = io.BytesIO()
+	writer.write(out)
+	file_name = _run_pdf_name(doc.name, block, route)
+	# the earlier copy goes; its file leaves the disk only at the commit, so the new one may be given a code ("…0352468391.pdf",
+	# "…03546518c6.pdf"), which the next print recognises too (a block's or route's PDF has "-block-"/"-route-" and doesn't match)
+	earlier = re.compile(re.escape(file_name[:-4]) + r"[0-9a-f]*\.pdf")
+	for old in frappe.get_all("File", filters={"attached_to_doctype": "Bill Run", "attached_to_name": doc.name}, fields=["name", "file_name"]):
+		if earlier.fullmatch(old.file_name or ""):
+			frappe.delete_doc("File", old.name, ignore_permissions=True)
+	f = frappe.get_doc({"doctype": "File", "file_name": file_name, "is_private": 1, "content": out.getvalue(),
+	                    "attached_to_doctype": "Bill Run", "attached_to_name": doc.name}).insert(ignore_permissions=True)
+	return {"file_url": f.file_url, "file_name": file_name, "bills": len(names)}
