@@ -319,11 +319,7 @@ def build_bill(run, connection, override=None) -> dict:
 			ref_units = readings.legacy_units(connection, adj.reference_month)
 			if ref_units is not None:
 				reference = _("{0} (previous system)").format(reference)
-		exempt = None
-		if category in {e.consumer_category for e in adj.exempt_categories}:
-			exempt = _("{0} category").format(frappe.db.get_value("Consumer Category", category, "category_name"))
-		elif flt(adj.exempt_below_units) and ref_units is not None and ref_units < flt(adj.exempt_below_units):
-			exempt = _("below {0} units").format(adj.exempt_below_units)
+		exempt = exemption_of(adj, category, ref_units)
 		adjustments.append(engine.Adjustment(
 			charge_of(adj.charge_type), units=None if ref_units is None else engine.D(ref_units),
 			rate=engine.D(adj.rate_per_unit), reference=reference, exempt_reason=exempt,
@@ -447,6 +443,21 @@ def check_adjustments(run):
 			               "this month), or untick \"{2}\" on society {3} if it doesn't charge {0}.").format(
 				adj_type, month_label(month), _(frappe.get_meta("Society").get_label(f"charges_{adj_type.lower()}")), run.society),
 				title=_("{0} not approved").format(adj_type))
+
+
+def exemption_of(adj, category, ref_units):
+	"""Why an account pays no FPA/QTA, or None (also used by the impact preview):
+	- its category is exempt as a whole (Exempt Categories);
+	- its reference units are within the units limit, up to and including it (increment 57, user: "my exempt was meant for not whole
+	  residential category but residential consumers upto 50 units"), and the limit is for its category (Units Limit Applies To;
+	  empty: every category)."""
+	if category in {e.consumer_category for e in adj.exempt_categories}:
+		return _("{0} category").format(frappe.db.get_value("Consumer Category", category, "category_name") or category)
+	limit = flt(adj.exempt_below_units)
+	limited = {e.consumer_category for e in adj.get("units_limit_categories") or []}
+	if limit and ref_units is not None and flt(ref_units) <= limit and (not limited or category in limited):
+		return _("up to {0} units").format(f"{limit:g}")
+	return None
 
 
 # ----- calculation progress (increment 52: a progress bar instead of "refresh in a minute") -----

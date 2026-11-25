@@ -22,11 +22,22 @@ class TariffAdjustment(Document):
 		self.reference_month = month_start(self.reference_month) if self.reference_month else add_months(self.billing_month, -2)
 		if getdate(self.reference_month) >= getdate(self.billing_month):
 			frappe.throw(_("The reference month must be before the billing month."))
-		seen = set()
+		whole = set()
 		for row in self.exempt_categories:
-			if row.consumer_category in seen:
+			if row.consumer_category in whole:
 				frappe.throw(_("{0} is listed twice.").format(row.consumer_category))
-			seen.add(row.consumer_category)
+			whole.add(row.consumer_category)
+		limited = set()
+		for row in self.get("units_limit_categories") or []:  # increment 57: a units limit for some categories only
+			if row.consumer_category in limited:
+				frappe.throw(_("{0} is listed twice.").format(row.consumer_category))
+			if row.consumer_category in whole:
+				frappe.throw(_("{0} is exempt as a whole category and also given a units limit. Keep it in one list: Exempt Categories "
+				               "for every account of it, or Units Limit Applies To for accounts up to {1} units.").format(
+					row.consumer_category, frappe.utils.flt(self.exempt_below_units)))
+			limited.add(row.consumer_category)
+		if limited and not frappe.utils.flt(self.exempt_below_units):
+			frappe.throw(_("Set Exempt Consumers Up To (units) for the categories under Units Limit Applies To."))
 		self.adjustment_title = (
 			f"{self.adjustment_type} {getdate(self.billing_month).strftime('%b %Y')} "
 			f"(on {getdate(self.reference_month).strftime('%b %Y')} units)"

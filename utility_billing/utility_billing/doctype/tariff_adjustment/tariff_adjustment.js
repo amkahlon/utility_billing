@@ -2,7 +2,9 @@
 
 frappe.ui.form.on("Tariff Adjustment", {
 	setup(frm) {
-		frm.set_query("consumer_category", "exempt_categories", () => ({ filters: { utility: frm.doc.utility } }));
+		for (const table of ["exempt_categories", "units_limit_categories"]) {
+			frm.set_query("consumer_category", table, () => ({ filters: { utility: frm.doc.utility } }));
+		}
 		// an FPA or QTA is its own per-unit charge, never the society's energy charge
 		frm.set_query("charge_type", () => {
 			const filters = { calculation_basis: "Per Unit" };

@@ -114,14 +114,17 @@ def adjustment_impact(name: str) -> dict:
 	a = frappe.get_doc("Tariff Adjustment", name)
 	a.check_permission("read")
 	month, bills = last_cycle(a.society)
-	exempt_cats = {e.consumer_category for e in a.exempt_categories}
+	from utility_billing.utility_billing import billing  # noqa: PLC0415
+
 	rows, unavailable = [], 0
 	for b in bills:
 		units = readings.get_billable_units(b.connection, a.reference_month)
+		if units is None:  # a month billed by the previous system: its history (increment 57, as the bill does)
+			units = readings.legacy_units(b.connection, a.reference_month)
 		if units is None:
 			unavailable += 1
 			continue
-		exempt = b.consumer_category in exempt_cats or (flt(a.exempt_below_units) and flt(units) < flt(a.exempt_below_units))
+		exempt = billing.exemption_of(a, b.consumer_category, units)  # the bill's own rule (increment 57)
 		new = 0.0 if exempt else float(engine.rnd(engine.D(units) * engine.D(a.rate_per_unit)))
 		old = sum(flt(l.amount) for l in frappe.get_all("Bill Line", filters={"parent": b.name, "parenttype": "Utility Bill", "charge_type": a.charge_type},
 		                                                fields=["amount"]))

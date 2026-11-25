@@ -24,6 +24,7 @@
   "charge_type",
   "cb2",
   "exempt_below_units",
+  "units_limit_categories",
   "notification",
   "exempt_categories",
   "remarks",
@@ -144,10 +145,18 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "0 = no unit limit",
+   "description": "Accounts that used this many units or fewer in the reference month pay no adjustment (50 exempts 50 units and below). 0 = no units limit.",
    "fieldname": "exempt_below_units",
    "fieldtype": "Float",
-   "label": "Exempt Consumers Below (units)"
+   "label": "Exempt Consumers Up To (units)"
+  },
+  {
+   "depends_on": "eval:doc.exempt_below_units",
+   "description": "The categories the units limit is for, for example Residential. Leave empty for every category.",
+   "fieldname": "units_limit_categories",
+   "fieldtype": "Table",
+   "label": "Units Limit Applies To",
+   "options": "Adjustment Exemption"
   },
   {
    "fieldname": "notification",
@@ -155,9 +164,10 @@
    "label": "Regulator Notification"
   },
   {
+   "description": "Every account in these categories pays no adjustment, whatever its units. For a category exempt only up to a number of units, use Units Limit Applies To instead.",
    "fieldname": "exempt_categories",
    "fieldtype": "Table",
-   "label": "Exempt Categories",
+   "label": "Exempt Categories (whole category)",
    "options": "Adjustment Exemption"
   },
   {
@@ -257,7 +267,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-14 05:36:55.557166",
+ "modified": "2026-11-25 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Tariff Adjustment",

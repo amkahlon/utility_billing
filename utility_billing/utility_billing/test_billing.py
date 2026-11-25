@@ -243,6 +243,45 @@ class IntegrationTestBilling(BillingCase):
 		self.assertEqual((fpa.amount, fpa.note), (910, "August 2026 (previous system) units 700 × 1.3"))
 		self.assertIsNone(readings.legacy_units(self.conn, "2026-07-01"))  # a month its history doesn't have
 
+	def test_fpa_units_limit_for_some_categories_only(self):
+		"""Increment 57, user: "my exempt was meant for not whole residential category but residential consumers upto 50 units".
+		The units limit includes the limit itself and, when categories are listed for it, is for those categories only."""
+		other = "Electricity-TST Other"
+		if not frappe.db.exists("Consumer Category", other):
+			frappe.get_doc({"doctype": "Consumer Category", "category_name": "TST Other", "utility": "Electricity"}).insert()
+		adj = frappe._dict(exempt_categories=[], exempt_below_units=50, units_limit_categories=[frappe._dict(consumer_category=self.cat)])
+		self.assertEqual(billing.exemption_of(adj, self.cat, 50), "up to 50 units")  # 50 itself is exempt
+		self.assertIsNone(billing.exemption_of(adj, self.cat, 51))
+		self.assertIsNone(billing.exemption_of(adj, other, 10))  # another category pays at any units
+		adj.units_limit_categories = []  # no categories listed: every category, as before
+		self.assertEqual(billing.exemption_of(adj, other, 10), "up to 50 units")
+		adj.exempt_categories = [frappe._dict(consumer_category=other)]
+		self.assertIn("category", billing.exemption_of(adj, other, 900))  # a whole category, whatever its units
+
+		frappe.get_doc({"doctype": "Legacy Bill", "connection": self.conn, "billing_month": "2026-08-01", "units": 50, "bill_amount": 1}).insert()
+		self.month_reading("2026-10-01", 3905)
+		fpa = self.fpa("2026-10-01", 1.30, approve_it=False)
+		fpa.exempt_below_units = 50
+		fpa.append("units_limit_categories", {"consumer_category": self.cat})
+		fpa.save()
+		act(fpa, "Submit for Approval", BILLING_MANAGER)
+		act(fpa, "Approve", GENERAL_MANAGER)
+		line = next(l for l in self.bill(self.make_run("2026-10-01", "2026-11-01")).lines if l.label == "FPA Charges")
+		self.assertEqual((line.amount, line.note), (0, "Exempt: up to 50 units"))
+
+	def test_fpa_category_cant_be_exempt_as_a_whole_and_by_units(self):
+		fpa = self.fpa("2026-10-01", 1.30, approve_it=False, exempt=[self.cat])
+		fpa.exempt_below_units = 50
+		fpa.append("units_limit_categories", {"consumer_category": self.cat})
+		with self.assertRaises(frappe.ValidationError):
+			fpa.save()
+		fpa.reload()
+		fpa.exempt_below_units = 0
+		fpa.set("exempt_categories", [])
+		fpa.append("units_limit_categories", {"consumer_category": self.cat})
+		with self.assertRaises(frappe.ValidationError):  # a category list with no units limit
+			fpa.save()
+
 	def test_adjustment_duplicate_and_maker_checker(self):
 		adj = self.fpa("2026-10-01", 1.30, approve_it=False)
 		with self.assertRaises(frappe.ValidationError):
