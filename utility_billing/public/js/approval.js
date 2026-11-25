@@ -47,6 +47,31 @@ utility_billing.show_impact = function (r) {
 	new frappe.ui.Dialog({ title: __("Impact Preview"), size: "large", fields: [{ fieldtype: "HTML", fieldname: "body", options: html }] }).show();
 };
 
+// A bill run calculating in the background (increment 52): asks every 2 seconds how far it is. show(p) while it runs, ended(p) once
+// it is Done or Failed; it stops asking when still_here() says the user went elsewhere. p = {state, done, total, error}.
+utility_billing.watch_calculation = function (run, show, ended, still_here) {
+	const ask = () =>
+		frappe.xcall("utility_billing.utility_billing.billing.calculation_progress", { run }).then(
+			(p) => {
+				if (!still_here()) return;
+				if (p && (p.state === "Queued" || p.state === "Running")) {
+					show(p);
+					setTimeout(ask, 2000);
+				} else ended(p || { state: "Done" });
+			},
+			() => still_here() && setTimeout(ask, 5000)
+		);
+	ask();
+};
+
+utility_billing.calculation_text = function (p) {
+	if (p.state === "Queued") return __("Waiting to start…");
+	return p.total ? __("Calculating bills: {0} of {1} accounts", [format_number(Math.min(p.done, p.total), null, 0), format_number(p.total, null, 0)])
+		: __("Calculating bills…");
+};
+
+utility_billing.calculation_percent = (p) => (p.total ? Math.max(3, Math.round((Math.min(p.done, p.total) / p.total) * 100)) : 2);
+
 // For any document using the shared approval module: call from refresh, and return
 // utility_billing.before_workflow_action(frm) from the form's before_workflow_action.
 utility_billing.setup_approval_form = function (frm) {

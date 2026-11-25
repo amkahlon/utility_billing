@@ -8,7 +8,7 @@ from decimal import Decimal
 
 import frappe
 from frappe import _
-from frappe.utils import add_months, flt, getdate, now_datetime
+from frappe.utils import add_months, cint, flt, getdate, now_datetime
 
 from utility_billing.utility_billing import bill_engine as engine
 from utility_billing.utility_billing import flags, holders, periods, plans, prorata, snapshots, split_engine, tax_engine
@@ -423,7 +423,55 @@ def check_run_prerequisites(run):
 		frappe.throw(_("There's no reading cycle for {0}.").format(month_label(run.billing_month)))
 	if cycle.status != "Closed":
 		frappe.throw(_("Close reading cycle {0} before calculating bills.").format(cycle.name))
+	check_adjustments(run)
 	return cycle.name
+
+
+def check_adjustments(run):
+	"""A society that charges FPA or QTA needs the month's adjustment approved before any metered bill can be worked out. Checked once
+	for the run (increment 52: on the demo site every one of 21,446 accounts was refused for the same missing FPA, one line each)."""
+	society = frappe.get_cached_doc("Society", run.society)
+	month = readings.month_start(run.billing_month)
+	for adj_type, used in (("FPA", society.get("charges_fpa")), ("QTA", society.get("charges_qta"))):
+		if used and not approved_adjustment(run.society, run.utility, month, adj_type):
+			frappe.throw(_("No approved {0} for {1}. Enter and approve this month's {0} under Tariff Adjustment (a rate of 0 if there is none "
+			               "this month), or untick \"{2}\" on society {3} if it doesn't charge {0}.").format(
+				adj_type, month_label(month), _(frappe.get_meta("Society").get_label(f"charges_{adj_type.lower()}")), run.society),
+				title=_("{0} not approved").format(adj_type))
+
+
+# ----- calculation progress (increment 52: a progress bar instead of "refresh in a minute") -----
+STALE_AFTER = 10 * 60  # seconds without news from a running calculation before it is taken as stopped
+
+
+def _progress_key(run) -> str:
+	return f"ub_billrun_progress:{run}"
+
+
+def _tell(run, state, done=0, total=0, error=None):
+	frappe.cache.set_value(_progress_key(run), {"state": state, "done": cint(done), "total": cint(total), "error": error,
+	                                            "at": frappe.utils.now()}, expires_in_sec=6 * 3600)
+
+
+def progress_of(run):
+	"""How far the run's calculation is: {state: Queued | Running | Done | Failed, done, total, error}, or None."""
+	p = frappe.cache.get_value(_progress_key(run), expires=True, use_local_cache=False)
+	if p and p.get("state") in ("Queued", "Running") and frappe.utils.time_diff_in_seconds(frappe.utils.now(), p.get("at")) > STALE_AFTER:
+		p = {**p, "state": "Failed", "error": _("The calculation stopped: nothing was heard from it for {0} minutes. Calculate again.").format(
+			STALE_AFTER // 60)}
+	return p
+
+
+@frappe.whitelist()
+def calculation_progress(run: str):
+	doc = frappe.get_doc("Bill Run", run)
+	doc.check_permission("read")
+	p = progress_of(run)
+	if not p and doc.calculation_status == "Calculating":  # a calculation from before increment 52, or one whose news has expired
+		p = {"state": "Failed", "done": 0, "total": 0, "error": _("The calculation stopped before it finished. Nothing was changed. Calculate again.")}
+	if p and p.get("state") == "Failed" and doc.calculation_status == "Calculating":
+		frappe.db.set_value("Bill Run", run, "calculation_status", "Failed", update_modified=False)  # so Calculate Bills is offered again
+	return p
 
 
 @frappe.whitelist()
@@ -432,12 +480,16 @@ def calculate_run(run: str):
 	doc.check_permission("write")
 	if doc.docstatus != 0 or doc.workflow_state not in ("Draft", "Rejected", None, ""):
 		frappe.throw(_("Only a draft or rejected bill run can be calculated."))
+	now = progress_of(run)
+	if now and now.get("state") in ("Queued", "Running"):
+		frappe.throw(_("This run is being calculated already: {0} of {1} accounts done.").format(now.get("done"), now.get("total") or "…"))
 	doc.reading_cycle = check_run_prerequisites(doc)
 	count = frappe.db.count("Connection", {"society": doc.society, "utility": doc.utility, "status": "Active"})
 	doc.db_set({"reading_cycle": doc.reading_cycle, "calculation_status": "Calculating"})
 	if count > BACKGROUND_THRESHOLD:
+		_tell(run, "Queued", 0, count)
 		frappe.enqueue(_calculate, queue="long", timeout=3600, run=run, enqueue_after_commit=True)
-		return {"background": True}
+		return {"background": True, "progress": progress_of(run)}
 	_calculate(run)
 	return {"background": False}
 
@@ -471,7 +523,10 @@ def _calculate_bills(run):
 		connections = frappe.get_all("Connection", filters={"society": doc.society, "utility": doc.utility, "status": ["in", statuses]},
 		                             pluck="name", order_by="name")
 		writer = bulk.Inserter()
-		for group in bulk.in_chunks(connections, GROUP):
+		_tell(run, "Running", 0, len(connections))
+		for done, group in enumerate(bulk.in_chunks(connections, GROUP)):
+			if done:
+				_tell(run, "Running", done * GROUP, len(connections))
 			# the performance step: the group's accounts, consumers, balances and bill history in a handful of statements
 			runcache.prime([c for c in group if c not in excluded and c not in billed], month, bill_print.history_months(society))
 			for conn in group:
@@ -507,9 +562,19 @@ def _calculate_bills(run):
 		doc.calculation_status = "Calculated"
 		doc.calculated_on = now_datetime()
 		doc.flags.from_calculation = True
+		# no change-history record: it would hold every bill problem and total, and 21,446 problems made one bigger than the database
+		# takes in one statement (16 MB), which stopped the calculation with nothing shown (increment 52)
+		doc.flags.ignore_version = True
+		_tell(run, "Running", len(connections), len(connections))
 		doc.save(ignore_permissions=True)
-	except Exception:
-		frappe.db.rollback()
+		_tell(run, "Done", len(connections), len(connections))
+	except Exception as e:
+		_tell(run, "Failed", error=str(e) if isinstance(e, frappe.ValidationError) else _("The calculation stopped with an error ({0}). "
+		      "Nothing was changed. Calculate again; if it stops again, tell support.").format(type(e).__name__))
+		try:
+			frappe.db.rollback()
+		except Exception:  # noqa: BLE001  the connection itself was lost: a new one to record the failure
+			frappe.db.connect()
 		frappe.db.set_value("Bill Run", run, "calculation_status", "Failed")
 		frappe.db.commit()
 		raise
