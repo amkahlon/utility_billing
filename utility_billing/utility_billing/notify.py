@@ -419,6 +419,19 @@ def after_run_posted(run):
 	frappe.enqueue("utility_billing.utility_billing.notify.bills_issued", run_name=run.name, queue="long", enqueue_after_commit=True)
 
 
+def after_run_reversed(run) -> int:
+	"""A reversed run's bills are cancelled, so their messages not yet sent are cancelled too (increment 59): a consumer must never be
+	told about a bill that no longer stands. Messages already sent stay as they are. Returns how many were cancelled."""
+	bills = "select name from `tabUtility Bill` where bill_run = %s"
+	n = frappe.db.sql(f"""select count(*) from `tabMessage Log` where status = 'Queued' and reference_doctype = 'Utility Bill'
+		and reference_name in ({bills})""", run.name)[0][0]
+	if n:
+		frappe.db.sql(f"""update `tabMessage Log` set status = 'Cancelled', error = %s, modified = %s where status = 'Queued'
+			and reference_doctype = 'Utility Bill' and reference_name in ({bills})""",
+			(_("Not sent: bill run {0} was reversed.").format(run.name), now_datetime(), run.name))
+	return n
+
+
 def _already_sent(event, doctype, name) -> bool:
 	return bool(frappe.db.exists("Message Log", {"event": event, "reference_doctype": doctype, "reference_name": name,
 	                                              "status": ["!=", "Cancelled"]}))

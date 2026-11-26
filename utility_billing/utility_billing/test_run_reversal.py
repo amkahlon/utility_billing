@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import frappe
 
-from utility_billing.utility_billing import account, billing, bulk, readings
+from utility_billing.utility_billing import account, billing, billrun_wizard, bulk, gl, readings
 from utility_billing.utility_billing.doctype.bill_run import bill_run
 from utility_billing.utility_billing.test_billing import SOC, BillingCase
 from utility_billing.utility_billing.testing import BILLING_MANAGER, BILLING_OFFICER
@@ -17,7 +17,9 @@ from utility_billing.utility_billing.testing import BILLING_MANAGER, BILLING_OFF
 OTHERS = 4  # with the shared fixture's account, five bills: three batches of two
 
 
-class IntegrationTestRunReversal(BillingCase):
+class ReversalCase(BillingCase):
+	"""Helpers only (no tests of its own)."""
+
 	def posted_run(self):
 		others = []
 		for i in range(OTHERS):
@@ -47,6 +49,7 @@ class IntegrationTestRunReversal(BillingCase):
 	def reverse(self, run, batch=2, plain=True, **patches):
 		"""The background job's work (bill_run.cancel_in_background) as the Billing Manager, committing every `batch` bills: the commits
 		are counted, not made, so the test's own transaction is undone afterwards."""
+		patches = patches or {"wraps": billing._reverse_group}  # the real group reversal, counted
 		frappe.flags.reverse_batch = batch
 		frappe.set_user(BILLING_MANAGER)
 		try:
@@ -78,6 +81,8 @@ class IntegrationTestRunReversal(BillingCase):
 		doc = frappe.get_doc("Bill Run", run.name)
 		self.assertEqual((doc.docstatus, doc.workflow_state, doc.reversal_status), (2, "Cancelled", "Reversed"))
 
+
+class IntegrationTestRunReversal(ReversalCase):
 	def test_a_run_is_reversed_a_batch_at_a_time(self):
 		run = self.posted_run()
 		out, commits, groups = self.reverse(run, wraps=billing._reverse_group)
@@ -144,3 +149,109 @@ class IntegrationTestRunReversal(BillingCase):
 		self.assertIn("Reverse it first", str(e.exception))
 		self.assertIn(entry.voucher_no, str(e.exception))
 		self.assertEqual(frappe.db.get_value("Utility Bill", bill.name, "docstatus"), 1)
+
+
+class IntegrationTestReversedRunLeavesNothing(ReversalCase):
+	"""Increment 59. The user, after reversing the demo run: "there must not be any impact of previous Bill Run process anywhere in the
+	system". The customer accounts were back, but the run's journal (Rs 223.9M) still stood in the general ledger and 21,113 bill messages
+	were still queued to be sent."""
+
+	def setUp(self):
+		super().setUp()
+		from utility_billing.utility_billing.test_gl import ACCOUNTS, CHARGE_ACCOUNTS  # noqa: PLC0415
+
+		for code, name, kind in ACCOUNTS:
+			if not frappe.db.exists("Ledger Account", code):
+				frappe.get_doc({"doctype": "Ledger Account", "account_code": code, "account_name": name, "account_type": kind}).insert()
+		for ct, acct in CHARGE_ACCOUNTS.items():
+			frappe.db.set_value("Charge Type", ct, "account_code", acct)
+		self.map_receivables("T-1200")
+
+	def map_receivables(self, acct):
+		soc = frappe.get_doc("Society", SOC)
+		soc.update({"receivables_account": acct, "surcharge_income_account": "T-4900", "other_income_account": "T-4990",
+		            "adjustments_account": "T-5100"})
+		soc.set("payment_accounts", [{"mode": "Cash", "account": "T-1010"}])
+		soc.save()
+
+	def lines(self, journal):
+		return {l.account: round(l.debit - l.credit, 2) for l in frappe.get_doc("GL Journal", journal).lines}
+
+	def reversal_entries(self, run):
+		return frappe.db.sql("""select e.name, e.gl_journal from `tabCustomer Ledger Entry` e join `tabUtility Bill` b on b.name = e.voucher_no
+			where e.voucher_type = 'Utility Bill' and e.entry_type = 'Reversal' and b.bill_run = %s""", run.name, as_dict=True)
+
+	def test_the_run_journal_is_taken_back_out_of_the_general_ledger(self):
+		run = self.posted_run()
+		journal = frappe.db.get_value("Bill Run", run.name, "gl_journal")
+		self.assertTrue(journal)
+		self.reverse(run)
+		rev = frappe.db.get_value("Bill Run", run.name, "reversal_journal")
+		self.assertTrue(rev)
+		j, r = frappe.get_doc("GL Journal", journal), frappe.get_doc("GL Journal", rev)
+		self.assertEqual((r.journal_type, r.bill_run, r.entry_count), ("Bill Run Reversal", run.name, OTHERS + 1))
+		self.assertIn("Wrong readings", r.narration)
+		self.assertEqual(self.lines(rev), {a: -v for a, v in self.lines(journal).items()})  # the exact opposite, account by account
+		self.assertEqual(r.receivables_change, -j.receivables_change)
+		self.assertEqual({e.gl_journal for e in self.reversal_entries(run)}, {rev})
+		# Make Journals afterwards: nothing more to make, no daily journal takes the reversals a second time
+		self.assertEqual(gl.make_journals_for(SOC), [])
+
+	def test_a_run_reversed_before_its_journal_was_made_nets_out(self):
+		self.map_receivables(None)  # no receivables account: the run's journal waits (as at posting on a site not yet mapped)
+		run = self.posted_run()
+		self.assertFalse(frappe.db.get_value("Bill Run", run.name, "gl_journal"))
+		self.reverse(run)
+		self.assertFalse(frappe.db.get_value("Bill Run", run.name, "reversal_journal"))  # still not mapped: it waits too
+		self.map_receivables("T-1200")
+		made = gl.make_journals_for(SOC)
+		rev = frappe.db.get_value("Bill Run", run.name, "reversal_journal")
+		self.assertEqual(made, [rev])  # one journal: no run journal for a reversed run, no daily journal of its reversals
+		r = frappe.get_doc("GL Journal", rev)
+		self.assertEqual((r.entry_count, r.total_debit, r.total_credit, r.receivables_change), (2 * (OTHERS + 1), 0, 0, 0))
+		self.assertFalse(frappe.db.sql("""select count(*) from `tabCustomer Ledger Entry` e join `tabUtility Bill` b on b.name = e.voucher_no
+			where b.bill_run = %s and ifnull(e.gl_journal, '') = ''""", run.name)[0][0])
+
+	def message(self, bill, status):
+		return frappe.get_doc({"doctype": "Message Log", "event": "bill.issued", "channel": "SMS", "status": status, "society": SOC,
+		                       "connection": bill.connection, "recipient": "03001234567", "body": "Your bill",
+		                       "reference_doctype": "Utility Bill", "reference_name": bill.name}).insert(ignore_permissions=True).name
+
+	def test_messages_not_yet_sent_are_cancelled(self):
+		run = self.posted_run()
+		bills = frappe.get_all("Utility Bill", filters={"bill_run": run.name}, fields=["name", "connection"], order_by="name")
+		queued = [self.message(b, "Queued") for b in bills[:3]]
+		sent = self.message(bills[3], "Sent")
+		self.reverse(run)
+		for name in queued:
+			m = frappe.db.get_value("Message Log", name, ["status", "error"], as_dict=True)
+			self.assertEqual(m.status, "Cancelled")
+			self.assertIn(f"bill run {run.name} was reversed", m.error)
+		self.assertEqual(frappe.db.get_value("Message Log", sent, "status"), "Sent")  # what was sent stays on record
+		info = billrun_wizard.load(run.name)["reversed"]
+		self.assertEqual(info["messages_cancelled"], 3)
+
+	def test_the_wizard_shows_a_reversed_run_and_starts_the_month_again(self):
+		run = self.posted_run()
+		self.assertIsNone(billrun_wizard.load(run.name)["reversed"])
+		self.reverse(run)
+		info = billrun_wizard.load(run.name)["reversed"]
+		self.assertEqual((info["bills"], info["reason"], info["next_run"]), (OTHERS + 1, "Wrong readings: the run is reversed", None))
+		self.assertTrue(info["reversal_journal"])
+		frappe.set_user(BILLING_OFFICER)
+		out = billrun_wizard.start_again(run.name)
+		frappe.set_user("Administrator")
+		self.assertTrue(out["new"])
+		new = frappe.get_doc("Bill Run", out["name"])
+		self.assertEqual((new.name, new.amended_from, new.docstatus), (f"{run.name}-1", run.name, 0))
+		self.assertEqual((str(new.billing_month), str(new.issue_date), new.reading_cycle), (str(run.billing_month), str(run.issue_date), run.reading_cycle))
+		# nothing of the reversed run is carried over: not posted, not reversed, no journal, no totals
+		self.assertEqual([new.get(f) or None for f in ("posting_status", "posting_error", "reversal_status", "gl_journal", "reversal_journal",
+		                                                "cancellation_reason", "bill_count")], [None] * 7)
+		self.assertNotEqual(new.calculation_status, "Calculated")
+		billing.calculate_run(new.name)
+		self.assertEqual(frappe.db.count("Utility Bill", {"bill_run": new.name, "docstatus": 0}), OTHERS + 1)
+		self.assertEqual(billrun_wizard.load(run.name)["reversed"]["next_run"], new.name)
+		self.assertEqual(billrun_wizard.start_again(run.name), {"name": new.name, "new": False})  # once a month
+		with self.assertRaises(frappe.ValidationError):
+			billrun_wizard.start_again(new.name)  # not reversed

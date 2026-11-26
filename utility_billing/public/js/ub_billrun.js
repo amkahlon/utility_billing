@@ -17,6 +17,8 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 		root.on("click", ".ub-br-bulk", (e) => this.decide_many($(e.currentTarget).attr("data-d")));
 		root.on("click", ".ub-br-calc", () => this.calculate());
 		root.on("click", ".ub-br-print", () => this.print());
+		root.on("click", ".ub-br-again", () => this.start_again());
+		root.on("click", ".ub-br-open", (e) => this.load($(e.currentTarget).attr("data-run")));
 		root.on("click", ".ub-link", (e) => {
 			const [dt, name] = $(e.currentTarget).attr("data-go").split("|");
 			if (dt === "c360") return frappe.set_route("ub-consumer-360", { account: name });
@@ -109,8 +111,44 @@ window.UtilityBillingRunWizard = class UtilityBillingRunWizard {
 			<div class="ub-kpi-note">${__("Held bills are left out of this run and can be billed in a supplementary run. Holding one means calculating the run again. Posting locks this cycle's tariffs and settings.")}</div>`;
 	}
 
+	// Increment 59: a reversed run is over. It used to show here as if it were waiting at "Approve and post", with its old figures.
+	paint_reversed(d) {
+		const r = d.reversed;
+		const link = (dt, name) => (name ? `<a class="ub-link" data-go="${this.esc(dt)}|${this.esc(name)}">${this.esc(name)}</a>` : "");
+		const facts = [
+			__("{0} bills cancelled; every customer account is back to its balance before posting.", [this.n(r.bills)]),
+			r.journal && r.reversal_journal ? __("Journal {0} is taken back out of the general ledger by journal {1}.", [link("GL Journal", r.journal), link("GL Journal", r.reversal_journal)])
+				: r.journal ? __("Journal {0} still waits for its reversal journal: use Make Journals.", [link("GL Journal", r.journal)]) : "",
+			r.messages_cancelled ? __("{0} bill messages not yet sent were cancelled.", [this.n(r.messages_cancelled)]) : "",
+		].filter(Boolean);
+		const next = r.next_run
+			? `<button class="ub-btn ub-btn-primary ub-br-open" data-run="${this.esc(r.next_run)}">${__("Open {0}, the month's run now", [this.esc(r.next_run)])}</button>`
+			: r.can_start_again ? `<button class="ub-btn ub-btn-primary ub-br-again">${__("Start the run again")}</button>` : "";
+		this.$root.html(`
+			<div class="ub-head"><div><div class="ub-hello">${this.esc(d.name)} · <span class="ub-pill red">${__("Reversed")}</span></div>
+				<h1>${__("Bill run: {0}, {1}", [this.esc(d.utility), this.esc(d.month)])}</h1>
+				<p>${__("Reversed on {0} by {1}", [moment(r.on).format("D MMM, HH:mm"), this.esc(r.by)])}</p></div>
+				<div class="ub-tools"><a class="ub-btn ub-link" data-go="Bill Run|${this.esc(d.name)}">${__("Run record")}</a></div></div>
+			<section class="ub-card"><div class="ub-cardhead"><h2>${__("This run was reversed")}</h2></div>
+				${r.reason ? `<p><b>${__("Reason")}:</b> ${this.esc(r.reason)}</p>` : ""}
+				<ul class="ub-br-reversed">${facts.map((f) => `<li>${f}</li>`).join("")}</ul>
+				<p class="ub-kpi-note">${r.next_run ? __("The month is being billed again in the run below.")
+					: __("To bill {0} again, start the run again: a new draft run for the same month, cycle and issue date, ready to calculate with the tariffs and adjustments as they are now.", [this.esc(d.month)])}</p>
+				<div class="ub-cash-actions">${next}</div></section>`);
+	}
+
+	start_again() {
+		frappe.confirm(__("Start a new run for {0}? It is a draft until it is calculated and approved.", [this.esc(this.d.month)]), () =>
+			frappe.xcall("utility_billing.utility_billing.billrun_wizard.start_again", { name: this.d.name }).then((r) => {
+				frappe.show_alert({ message: r.new ? __("Run {0} started.", [r.name]) : __("Run {0} already bills this month.", [r.name]), indicator: "green" }, 7);
+				frappe.set_route("ub-billrun", { run: r.name });
+				this.load(r.name);
+			}));
+	}
+
 	paint() {
 		const d = this.d;
+		if (d.reversed) return this.paint_reversed(d);
 		const c = d.cycle;
 		const facts = [
 			c && c.reading_from ? __("Reading cycle {0}–{1}", [moment(c.reading_from).format("D MMM"), moment(c.reading_to).format("D MMM")]) : null,
