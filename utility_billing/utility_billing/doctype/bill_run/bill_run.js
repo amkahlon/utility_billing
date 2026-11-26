@@ -19,6 +19,7 @@ frappe.ui.form.on("Bill Run", {
 					frappe.xcall("utility_billing.utility_billing.doctype.bill_run.bill_run.retry_posting", { run: frm.doc.name }).then(() => frm.reload_doc()));
 			}
 		}
+		if (frm.doc.docstatus === 1 && ["Reversing", "Reversal stopped"].includes(frm.doc.reversal_status)) show_reversal(frm);
 		frm.add_custom_button(__("Open Wizard"), () => frappe.set_route("ub-billrun", { run: frm.doc.name }));
 		frm.add_custom_button(__("Open Bills"), () => frappe.set_route("List", "Utility Bill", { bill_run: frm.doc.name }));
 		if (frm.doc.bill_count && frm.doc.calculation_status === "Calculated" && frm.doc.docstatus < 2) {
@@ -75,14 +76,46 @@ frappe.ui.form.on("Bill Run", {
 		// progress bar, not a greyed screen (and not cut off by the server's time limit for a web request)
 		return Promise.resolve(shared).then(() => {
 			frappe.dom.unfreeze();
-			utility_billing.run_job("run_cancel", { run: frm.doc.name }, __("Reversing bill run {0}", [frm.doc.name])).then(() => {
-				frappe.show_alert({ message: __("Bill run {0} reversed.", [frm.doc.name]), indicator: "green" }, 7);
-				frm.reload_doc();
-			});
+			reverse_run(frm);
 			return Promise.reject(); // the workflow's own call doesn't run
 		});
 	},
 });
+
+function reverse_run(frm) {
+	const name = frm.doc.name;
+	utility_billing.run_job("run_cancel", { run: name }, __("Reversing bill run {0}", [name])).then(() => {
+		frappe.show_alert({ message: __("Bill run {0} reversed.", [name]), indicator: "green" }, 7);
+		frm.reload_doc();
+	}, () => frm.reload_doc());
+	setTimeout(() => frm.doc.name === name && frm.reload_doc(), 1500); // the run now says Reversing
+}
+
+// Increment 58: a run is reversed a batch of bills at a time. While it is going the form shows how far; if it stopped (an error, or
+// nothing heard for 30 minutes) the bills reversed so far stay reversed, and Reverse Again carries on with the rest.
+function show_reversal(frm) {
+	const name = frm.doc.name;
+	frappe
+		.xcall("utility_billing.utility_billing.progress.job_progress", { job: "run_cancel", record: name })
+		.then((p) => {
+			if (frm.doc.name !== name) return;
+			if (frm.doc.reversal_status === "Reversing" && p && ["Queued", "Running"].includes(p.state)) {
+				utility_billing.form_progress(frm, {
+					method: "utility_billing.utility_billing.progress.job_progress",
+					args: { job: "run_cancel", record: name },
+					title: __("Reversing the bills"),
+					failed_title: __("Reversing didn't complete"),
+				});
+				return;
+			}
+			const why = (p && p.state === "Failed" && p.error) || frm.doc.reversal_error || __("It stopped before every bill was reversed.");
+			frm.dashboard.set_headline_alert(
+				`${__("This run is only partly reversed.")} ${frappe.utils.escape_html(why)}`, "red");
+			if (frappe.perm.has_perm("Bill Run", 0, "cancel") || frappe.perm.has_perm("Bill Run", 0, "submit")) {
+				frm.add_custom_button(__("Reverse Again"), () => reverse_run(frm)).addClass("btn-danger");
+			}
+		});
+}
 
 // The calculation running in the background: a progress bar on the form, then the outcome (increment 52; it used to say "refresh
 // in a minute", with nothing to show whether it was still going or had stopped).

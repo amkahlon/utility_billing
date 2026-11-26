@@ -184,11 +184,63 @@ def retry_posting(run: str):
 	return {"queued": True}
 
 
+REVERSING, REVERSAL_STOPPED, REVERSED = "Reversing", "Reversal stopped", "Reversed"
+REVERSE_BATCH = 500
+
+
 def cancel_in_background(run: str) -> dict:
-	"""The workflow's Cancel (reverse the run), from a background job with a progress bar (increment 55): every bill and its ledger
-	entry are reversed one at a time, minutes for a whole society. The workflow's own rules (who may cancel, the reason, a later run
-	already posted) apply as before."""
+	"""The workflow's Cancel (reverse the run), from a background job with a progress bar (increment 55).
+	Increment 58: the bills are reversed and committed REVERSE_BATCH at a time (all of a society's bills in one transaction were more
+	than the database takes). A stop leaves the run Approved and part-reversed (Reversal stopped); starting it again (Reverse Again)
+	carries on with the bills still posted. Once none is left, the workflow's Cancel closes the run. The workflow's rules (who may
+	cancel, the reason, a closed month, entries posted after the bills) are checked before anything is reversed."""
 	from frappe.model.workflow import apply_workflow  # noqa: PLC0415
 
-	doc = apply_workflow(frappe.get_doc("Bill Run", run), "Cancel")
+	doc = frappe.get_doc("Bill Run", run)
+	if doc.docstatus == 2:
+		return {"workflow_state": doc.workflow_state, "bills": cint(doc.bill_count)}
+	check_may_reverse(doc)
+	doc = reverse_in_batches(doc, lambda: apply_workflow(frappe.get_doc("Bill Run", run), "Cancel"))  # no bills are left for its on_cancel
 	return {"workflow_state": doc.workflow_state, "bills": cint(doc.bill_count)}
+
+
+def reverse_in_batches(doc, close):
+	"""Reverse a posted run's bills, committed a batch at a time, then `close()` cancels the run itself and returns it. Used by the
+	workflow's Cancel and by a snapshot restore. On a stop the run is marked Reversal stopped and a ValidationError says how far it got."""
+	run = doc.name
+	doc.before_cancel()  # the reason, a closed month, entries after the bills: refused with nothing changed
+	commits = not frappe.flags.in_test or frappe.flags.reverse_batch  # a test runs inside its own transaction unless it sets a batch
+	frappe.flags.reverse_batch = frappe.flags.reverse_batch or (REVERSE_BATCH if commits else None)
+	doc.db_set({"reversal_status": REVERSING, "reversal_error": None}, update_modified=False)
+	if commits:
+		frappe.db.commit()
+	try:
+		billing.cancel_run_bills(doc)
+		progress.step(_("Closing the run"))
+		doc = close()
+		doc.db_set("reversal_status", REVERSED, update_modified=False)
+	except Exception as e:
+		if not commits:
+			raise
+		frappe.db.rollback()
+		left = frappe.db.count("Utility Bill", {"bill_run": run, "docstatus": 1})
+		cause = frappe.utils.strip_html(str(e)) if isinstance(e, frappe.ValidationError | frappe.PermissionError) else e.__class__.__name__
+		said = _("Reversing stopped with {0} of {1} bills still posted ({2}). The bills reversed so far stay reversed; Reverse Again on "
+		         "the run carries on with the rest.").format(left, cint(doc.bill_count), cause)
+		frappe.db.set_value("Bill Run", run, {"reversal_status": REVERSAL_STOPPED, "reversal_error": said}, update_modified=False)
+		frappe.db.commit()
+		raise frappe.ValidationError(said) from e
+	finally:
+		frappe.flags.reverse_batch = None
+	return doc
+
+
+def check_may_reverse(doc):
+	"""Whether this user may reverse the run: the workflow's Cancel is open to them (or, with no workflow, the cancel permission)."""
+	from frappe.model.workflow import get_transitions  # noqa: PLC0415
+
+	if approval.workflow_active(doc.doctype):
+		if "Cancel" not in {t.get("action") for t in get_transitions(doc)}:
+			raise frappe.PermissionError(_("You can't reverse bill run {0}.").format(doc.name))
+	else:
+		doc.check_permission("cancel")
