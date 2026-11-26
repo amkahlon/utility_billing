@@ -53,9 +53,19 @@ def restore(snapshot: str, reason: str):
 	run = frappe.get_doc("Bill Run", snap.bill_run)
 	if run.docstatus != 1:
 		frappe.throw(_("Bill run {0} isn't posted, so there is nothing to restore.").format(run.name))
-	run.cancellation_reason = reason
-	run.flags.ignore_permissions = True
-	run.cancel()
+	from utility_billing.utility_billing.doctype.bill_run.bill_run import reverse_in_batches  # noqa: PLC0415
+
+	run.db_set("cancellation_reason", reason, update_modified=False)  # kept for a Restore or Reverse Again after a stop
+
+	def close():
+		r = frappe.get_doc("Bill Run", run.name)
+		r.flags.ignore_permissions = True
+		r.cancel()
+		return r
+
+	# increment 58: the bills are reversed a batch at a time (a whole society's run was more than one transaction takes); after a stop,
+	# restoring again carries on with the bills still posted
+	run = reverse_in_batches(run, close)
 	data = json.loads(snap.data or "{}")
 	different = []
 	balances = data.get("balances") or {}

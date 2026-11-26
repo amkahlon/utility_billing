@@ -772,27 +772,107 @@ def _post_one(name):
 
 def check_run_cancellable(doc):
 	periods.assert_open(doc.society, doc.issue_date, "Bill run")  # a closed month's bills can't be undone (FS-ACC-10)
-	for name in frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 1}, pluck="name"):
-		bill = frappe.get_doc("Utility Bill", name)
-		if frappe.utils.cint(bill.final_bill):
-			fob = frappe.db.get_value("Former Occupant Balance", {"final_bill": name})
-			if fob and holders.paid_by(fob):
-				frappe.throw(_("Final bill {0} has payments against former occupant balance {1}; reverse them first.").format(name, fob))
-			continue  # checked after the incoming holder's bill is undone (cancel_run_bills does that one first)
-		account.check_bill_reversible(bill)
+	for name in frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 1, "final_bill": 1}, pluck="name"):
+		fob = frappe.db.get_value("Former Occupant Balance", {"final_bill": name})
+		if fob and holders.paid_by(fob):
+			frappe.throw(_("Final bill {0} has payments against former occupant balance {1}; reverse them first.").format(name, fob))
+		# the rest of a final bill's check comes after the incoming holder's bill is undone (cancel_run_bills does that one first)
+	# what account.check_bill_reversible asks of each bill, for the whole run in one statement (increment 58: it read every bill)
+	_refuse_later_entries("b.bill_run = %s and b.docstatus = 1 and ifnull(b.final_bill, 0) = 0", doc.name)
+
+
+def _refuse_later_entries(where, value):
+	later = frappe.db.sql(f"""select b.name bill, b.connection, l.entry_type, l.voucher_no from `tabUtility Bill` b
+		join `tabCustomer Ledger Entry` e on e.name = b.ledger_entry
+		join `tabCustomer Ledger Entry` l on l.connection = b.connection and l.seq > e.seq
+		where {where} and ifnull(l.voucher_no, '') != b.name and ifnull(l.reversed_by, '') = '' and ifnull(l.reverses, '') = ''
+		order by b.name, l.seq limit 1""", (value,), as_dict=True)
+	if later:
+		x = later[0]
+		frappe.throw(_("Bill {0} can't be cancelled: {1} {2} was posted to account {3} after it. Reverse it first.").format(
+			x.bill, _(x.entry_type), x.voucher_no, x.connection))
 
 
 def cancel_run_bills(doc):
+	"""Undo the run's posted bills and their ledger entries (FS-RUN-06).
+	Increment 58: a whole society's run (21,446 bills) was more than the database takes in one transaction, so it was never reversed.
+	The background job sets `frappe.flags.reverse_batch`: the work is then committed that many bills at a time, a stop leaves the run
+	part-reversed, and Reverse Again carries on with the bills still posted. The bills of accounts with nothing unusual are reversed a
+	group at a time, as posting does (_reverse_group); the rest one by one, as before."""
+	batch = frappe.flags.reverse_batch
 	# the incoming holder's bill before the final bill: entries are undone newest first
-	names = frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 1}, pluck="name", order_by="final_bill asc, name")
-	for n, name in enumerate(names):
+	rows = frappe.get_all("Utility Bill", filters={"bill_run": doc.name, "docstatus": 1},
+	                      fields=["name", "connection", "final_bill", "surcharge_entry", "ledger_entry"], order_by="final_bill asc, name")
+	total = len(rows) + frappe.db.count("Utility Bill", {"bill_run": doc.name, "docstatus": 2, "status": "Cancelled"})
+	done = total - len(rows)  # reversed before a Reverse Again
+	progress.step(_("Reversing the bills"), done, total)
+	if not rows:
+		return
+	per_account = {}
+	for r in rows:
+		per_account[r.connection] = per_account.get(r.connection, 0) + 1
+	fast = bulk.plain(*BILL_TABLES, "Customer Ledger Entry")
+	linked = _bills_linked_from([r.name for r in rows]) if fast else set()
+	one_by_one = [r.name for r in rows if not fast or cint(r.final_bill) or r.surcharge_entry or not r.ledger_entry
+	              or per_account[r.connection] > 1 or r.name in linked]
+	slow = set(one_by_one)
+	together = [r.name for r in rows if r.name not in slow]
+	for n, name in enumerate(one_by_one, start=1):
+		_reverse_one(name)
+		done += 1
+		if batch and n % batch == 0:
+			frappe.db.commit()
 		if n % 100 == 0:
-			progress.step(_("Reversing the bills"), n, len(names))  # increment 55: Cancel runs in the background with a progress bar
-		bill = frappe.get_doc("Utility Bill", name)
-		account.reverse_bill(bill)
-		bill.flags.from_bill_run = True
-		bill.flags.ignore_permissions = True
-		bill.cancel()
-		if frappe.utils.cint(bill.final_bill):
-			for fob in frappe.get_all("Former Occupant Balance", filters={"final_bill": name}, pluck="name"):
-				frappe.delete_doc("Former Occupant Balance", fob, force=True, ignore_permissions=True)
+			progress.step(_("Reversing the bills"), done, total)
+	if batch and one_by_one:
+		frappe.db.commit()
+	for group in bulk.in_chunks(together, batch or GROUP):
+		_reverse_group(group)
+		done += len(group)
+		if batch:
+			frappe.db.commit()
+		progress.step(_("Reversing the bills"), done, total)
+
+
+def _reverse_one(name):
+	bill = frappe.get_doc("Utility Bill", name)
+	account.reverse_bill(bill)
+	bill.flags.from_bill_run = True
+	bill.flags.ignore_permissions = True
+	bill.cancel()
+	if cint(bill.final_bill):
+		for fob in frappe.get_all("Former Occupant Balance", filters={"final_bill": name}, pluck="name"):
+			frappe.delete_doc("Former Occupant Balance", fob, force=True, ignore_permissions=True)
+
+
+def _reverse_group(names):
+	"""What _reverse_one does, for bills of accounts with one bill in the run, no surcharge and nothing else linked to the bill: the
+	accounts locked and read together, the reversal entries written together. The bill's own cancel only sets its status (Cancelled,
+	nothing outstanding), which is done here."""
+	bills = frappe.db.sql("select name, connection, ledger_entry from `tabUtility Bill` where name in %s and docstatus = 1 order by name",
+	                      (names,), as_dict=True)
+	if not bills:
+		return
+	names = [b.name for b in bills]
+	frappe.db.sql("select name from `tabConnection` where name in %s for update", ([b.connection for b in bills],))
+	# checked again under the lock: a payment may have reached one of these accounts since the run's check
+	_refuse_later_entries("b.name in %s and b.docstatus = 1", names)
+	account.reverse_bills_together(bills, _("Bill cancelled"))
+	frappe.db.sql("""update `tabUtility Bill` set docstatus = 2, status = 'Cancelled', outstanding_amount = 0, modified = %s, modified_by = %s
+	                 where name in %s""", (frappe.utils.now(), frappe.session.user, names))
+	for table in BILL_TABLES[:-1]:
+		frappe.db.sql(f"update `tab{table}` set docstatus = 2 where parenttype = 'Utility Bill' and parent in %s", (names,))
+
+
+def _bills_linked_from(names) -> set:
+	"""Bills that a submitted document links to (a revision, a plan, a dispute...). They are cancelled one by one, so Frappe's own
+	check of linked documents still stops on them as before."""
+	found = set()
+	fields = frappe.db.sql("""select parent, fieldname from `tabDocField` where fieldtype = 'Link' and options = 'Utility Bill' and parent != 'Utility Bill'
+	                          union select dt, fieldname from `tabCustom Field` where fieldtype = 'Link' and options = 'Utility Bill' and dt != 'Utility Bill'""")
+	for dt, field in fields:
+		if not frappe.db.table_exists(dt) or not frappe.db.has_column(dt, field):
+			continue
+		for chunk in bulk.in_chunks(names, 1000):
+			found.update(frappe.db.sql(f"select distinct `{field}` from `tab{dt}` where `{field}` in %s and docstatus = 1", (chunk,), pluck=True))
+	return found

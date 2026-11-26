@@ -115,6 +115,39 @@ def reverse_entry(entry_name, voucher_type, voucher_no, posting_date=None, remar
 	return post(e.connection, "Reversal", deltas, voucher_type, voucher_no, posting_date, remarks, reverses=entry_name)
 
 
+def reverse_bills_together(bills, remarks):
+	"""The reversal entries of many posted bills ({name, connection, ledger_entry}) at once, each as reverse_entry writes it: a bill
+	run's reversal (increment 58). The caller has locked the accounts and checked that nothing later is in force on them; each account
+	has one of these bills."""
+	from utility_billing.utility_billing import bulk  # noqa: PLC0415
+
+	conns = list({b.connection for b in bills})
+	info = {r.name: r for r in frappe.db.sql("select name, consumer, consumer_name, society from `tabConnection` where name in %s",
+	                                         (conns,), as_dict=True)}
+	last = {r.connection: r for r in frappe.db.sql(f"""select e.connection, e.name, e.seq, e.balance, {', '.join('e.' + f for f in FIELDS.values())}
+		from `tabCustomer Ledger Entry` e join (select connection, max(seq) seq from `tabCustomer Ledger Entry` where connection in %s
+		group by connection) m on m.connection = e.connection and m.seq = e.seq""", (conns,), as_dict=True)}
+	entries = {r.name: r for r in frappe.db.sql(f"""select name, reversed_by, {', '.join('d_' + b for b in engine.ALL)}
+		from `tabCustomer Ledger Entry` where name in %s""", ([b.ledger_entry for b in bills],), as_dict=True)}
+	today = getdate(nowdate())
+	for society in {r.society for r in info.values()}:
+		periods.assert_open(society, today, "Reversal")  # a closed month is locked (FS-ACC-10)
+	writer, made = bulk.Inserter(), []
+	for b in bills:
+		e = entries[b.ledger_entry]
+		if e.reversed_by:
+			frappe.throw(_("Ledger entry {0} is already reversed by {1}.").format(e.name, e.reversed_by))
+		before = balances_of(last.get(b.connection))
+		deltas = engine.reverse(before, {x: engine.D(e[f"d_{x}"]) for x in engine.ALL})
+		made.append((e.name, writer.add(entry_fields(b.connection, info[b.connection], last.get(b.connection), before,
+		                                             engine.apply(before, deltas), deltas, "Reversal", "Utility Bill", b.name, today,
+		                                             remarks, reverses=e.name))))
+	writer.flush()
+	for original, entry in made:
+		frappe.db.sql("update `tabCustomer Ledger Entry` set reversed_by = %s where name = %s", (entry.name, original))
+	return [entry for _original, entry in made]
+
+
 # ---------------------------------------------------------------- bills
 def balances_of(last) -> dict:
 	"""The balances an entry leaves (an empty account when there's none)."""
