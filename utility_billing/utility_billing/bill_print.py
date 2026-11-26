@@ -9,6 +9,7 @@ notices or bank accounts, or the consumer's details change (FS-RUN-09).
 """
 
 import base64
+import contextlib
 import io
 import json
 import mimetypes
@@ -351,6 +352,17 @@ def charge_groups(lines) -> list:
 	return list(groups.values())
 
 
+@contextlib.contextmanager
+def walk_print():
+	"""Inside, bills are drawn for a run's bulk print: each shows its route and walk place."""
+	before = frappe.flags.get("ub_walk_print")
+	frappe.flags.ub_walk_print = True
+	try:
+		yield
+	finally:
+		frappe.flags.ub_walk_print = before
+
+
 def walk_label(bill) -> str:
 	if not bill.get("connection") or not frappe.db.exists("Connection", bill.connection):
 		return ""
@@ -388,9 +400,10 @@ def bill_context(bill, duplicate=0) -> dict:
 		"notices_second": soc.get("notices_second") or [], "payment_instructions_second": soc.get("payment_instructions_second"),
 		"watermark": watermark_of(bill, duplicate),
 		"duplicate": duplicate,
-		# increment 60: the account's route and place for the distributor ("Route 07 · 123"). Unlike the rest of the bill it is read
-		# from the routes now, not the snapshot: it says how to deliver this print, not what was billed
-		"walk": walk_label(bill),
+		# increment 60: the account's route and place for the distributor ("Route 07 · 123"), on a run's bulk print only. It is read
+		# from the routes now, not the snapshot (it says how to deliver this print, not what was billed), so a bill downloaded or
+		# reprinted on its own leaves it out and still matches what was issued (QA-90)
+		"walk": walk_label(bill) if frappe.flags.get("ub_walk_print") else "",
 		"money": money, "qty": qty, "date": date, "month_name": month_name,
 	}
 
@@ -567,7 +580,9 @@ def print_run_bills(run: str, block: str | None = None, route: str | None = None
 	if len(bills) > MAX_BILLS_PER_PDF:
 		frappe.throw(_("{0} bills is too many for one PDF; print one block or route at a time (up to {1}).").format(
 			len(bills), MAX_BILLS_PER_PDF))
-	send_pdf(pdf_of([b.name for b in bills]), _run_pdf_name(doc.name, block, route))
+	with walk_print():
+		content = pdf_of([b.name for b in bills])
+	send_pdf(content, _run_pdf_name(doc.name, block, route))
 
 
 def _run_pdf_name(run, block=None, route=None) -> str:
@@ -620,8 +635,9 @@ def print_run_bills_to_file(run: str, block: str | None = None, route: str | Non
 			if earlier.fullmatch(old.file_name or ""):
 				frappe.delete_doc("File", old.name, ignore_permissions=True)
 		sheets = route_covers(doc, bills, first, len(these)) if cint(covers) else None
-		content = _draw(these, lambda k, drawn=drawn: progress.step(
-			_("Drawing the bills") if parts == 1 else _("Part {0} of {1}: drawing the bills").format(n, parts), drawn + k, todo), sheets)
+		with walk_print():
+			content = _draw(these, lambda k, drawn=drawn: progress.step(
+				_("Drawing the bills") if parts == 1 else _("Part {0} of {1}: drawing the bills").format(n, parts), drawn + k, todo), sheets)
 		drawn += len(these)
 		f = frappe.get_doc({"doctype": "File", "file_name": file_name, "is_private": 1, "content": content,
 		                    "attached_to_doctype": "Bill Run", "attached_to_name": doc.name}).insert(ignore_permissions=True)

@@ -139,7 +139,9 @@ class IntegrationTestWalkPrint(WalkCase):
 		conn_of = dict(frappe.get_all("Utility Bill", filters={"bill_run": run.name}, fields=["name", "connection"], as_list=True))
 		self.assertEqual([(conn_of[b.name], b.route, cint(b.position)) for b in bills], [(first, "W1", 1), (self.conn, "W1", 2)])
 		self.assertEqual(bill_print.run_print_groups(run.name)["routed"], 2)
-		self.assertIn("Route W1 · 2", bill_print.bill_html(bills[1].name))
+		with bill_print.walk_print():  # a run's bulk print shows the walk place
+			self.assertIn("Route W1 · 2", bill_print.bill_html(bills[1].name))
+		self.assertNotIn("Route W1 · 2", bill_print.bill_html(bills[1].name))  # a bill on its own prints as issued (QA-90)
 
 		covers = bill_print.route_covers(run, bills, 0, len(bills))
 		self.assertEqual(list(covers), [0])
