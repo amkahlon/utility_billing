@@ -102,6 +102,7 @@
 						<div class="small muted">{{ t("Reference No") }}</div>
 						<div class="ref">{{ (con.reference_no or "") | e }}</div>
 						{%- if con.legacy_account_no %}<div class="small muted">{{ t("Old account no") }} {{ con.legacy_account_no | e }}</div>{% endif %}
+						{%- if walk %}<div class="small strong">{{ walk | e }}</div>{% endif %}
 						{%- if barcode %}<img class="barcode" src="{{ barcode }}" alt="{{ (con.reference_no or "") | e }}">{% endif %}
 						<table class="kv" style="margin-top: 1mm;">
 							<tr><td class="k">{{ t("Bill month") }}</td><td>{{ month | e }}</td></tr>

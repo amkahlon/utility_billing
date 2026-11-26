@@ -50,6 +50,8 @@ FIELDS = {
 	"phase": ("Phase", lambda c: c["con"].get("phase")),
 	"meter_no": ("Meter No", lambda c: (c.get("reading") or {}).get("meter")),
 	"route": ("Route", lambda c: c["con"].get("route")),
+	# increment 60: route and walk place for the distributor, read from the routes at print time (bill_print.walk_label)
+	"walk": ("Walk order", lambda c: c.get("walk")),
 	"plot_size": ("Plot size", lambda c: f'{c["qty"](c["con"].get("area"))} {c["con"].get("area_unit") or ""}'.strip() if c["con"].get("area") else ""),
 	"billing_month": ("Bill month", lambda c: c["month"]),
 	"billing_month_short": ("Bill month", lambda c: c["month_name"](c["bill"].billing_month, True)),
@@ -115,6 +117,8 @@ BLOCKS = {
 		_opt("barcode", "Barcode", "check", 1),
 		_opt("dates", "Bill month, issue and due date", "check", 1),
 		_opt("boxed", "Boxed", "check", 1),
+		# increment 60: the route and walk place ("Route 07 · 123") under the number, for the distributor; on in every template
+		_opt("walk", "Route and walk place", "check", 1),
 	]},
 	"qr": {"label": "QR code", "description": "The reference number or the society's payment link, as the society chose.", "options": [
 		_opt("size", "Size (mm)", "int", 23, min=12, max=45),
@@ -385,6 +389,8 @@ def render_bill(bill, settings, duplicate=0, ctx=None, designer=False) -> str:
 		from utility_billing.utility_billing import barcode  # noqa: PLC0415
 
 		ctx["barcode"] = barcode.png_data_uri(ref)
+	if bill.get("name") == SAMPLE_BILL and not ctx.get("walk"):  # previews: a stand-in walk place, so the space it takes is seen
+		ctx["walk"] = _("Route {0} · {1}").format("07", 123)
 	if bill.get("name") == SAMPLE_BILL and _has_block(layout, "solar") and not bill.get("nm_method"):
 		make_solar(bill, ctx)
 	if _has_block(layout, "meter_photo") and not ctx.get("meter_photo"):

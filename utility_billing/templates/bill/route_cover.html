@@ -1,0 +1,23 @@
+{#- A route's cover sheet, printed before its bills (increment 60). Tables only: the PDF engine has no flexbox or grid. -#}
+<div style="font-family: 'Helvetica Neue', Arial, sans-serif; color: #1d2329; padding: 18mm 14mm;">
+	<div style="font-size: 10pt; color: #5b6670;">{{ society | e }}{% if month %} · {{ month | e }}{% endif %} · {{ _("Bill run") }} {{ run | e }}</div>
+	<div style="font-size: 30pt; font-weight: 700; margin: 8mm 0 2mm;">{{ _("Route") }} {{ (route.route_code if route else "") | e }}</div>
+	{%- if route and route.description %}<div style="font-size: 13pt; color: #3b4650;">{{ route.description | e }}</div>{% endif %}
+	{%- if continued %}
+	<div style="display: inline-block; border: 1.5px solid #b42318; color: #b42318; font-weight: 700; padding: 1mm 3mm; margin-top: 5mm; font-size: 11pt;">
+		{{ _("Continued: from place {0}").format(starts_at) }}</div>
+	{%- endif %}
+	<table style="border-collapse: collapse; margin-top: 10mm; font-size: 12pt; width: 100%;">
+		<tr><td style="padding: 2.5mm 0; color: #5b6670; width: 40%; border-bottom: 1px solid #e3e7ea;">{{ _("Bills on this route") }}</td>
+			<td style="padding: 2.5mm 0; font-weight: 700; border-bottom: 1px solid #e3e7ea;">{{ "{:,}".format(bills) }}</td></tr>
+		<tr><td style="padding: 2.5mm 0; color: #5b6670; border-bottom: 1px solid #e3e7ea;">{{ _("Walk places") }}</td>
+			<td style="padding: 2.5mm 0; font-weight: 700; border-bottom: 1px solid #e3e7ea;">{{ from }} – {{ to }}</td></tr>
+		<tr><td style="padding: 2.5mm 0; color: #5b6670; border-bottom: 1px solid #e3e7ea;">{{ _("Distributor") }}</td>
+			<td style="padding: 2.5mm 0; font-weight: 700; border-bottom: 1px solid #e3e7ea;">{{ ((route.distributor if route else "") or "______________________") | e }}</td></tr>
+		<tr><td style="padding: 2.5mm 0; color: #5b6670; border-bottom: 1px solid #e3e7ea;">{{ _("Handed over on") }}</td>
+			<td style="padding: 2.5mm 0; border-bottom: 1px solid #e3e7ea;">______________________</td></tr>
+		<tr><td style="padding: 2.5mm 0; color: #5b6670; border-bottom: 1px solid #e3e7ea;">{{ _("Signature") }}</td>
+			<td style="padding: 2.5mm 0; border-bottom: 1px solid #e3e7ea;">______________________</td></tr>
+	</table>
+	<div style="margin-top: 8mm; font-size: 9pt; color: #5b6670;">{{ _("The bills follow in walk order. Each bill shows its route and place, so a dropped pile can be put back in order.") }}</div>
+</div>

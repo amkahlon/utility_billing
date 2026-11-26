@@ -181,7 +181,8 @@ function record_delivery(frm) {
 	});
 }
 
-// Bulk print in delivery order (block, route, property), all bills or one block or route (FS-RUN-08).
+// Bulk print in delivery order, all bills or one block or route (FS-RUN-08). Increment 60: the walk order, route by route in each
+// route's order with a cover sheet per route; accounts on no route after them, by block and house number.
 function print_run_bills(frm) {
 	const method = "utility_billing.utility_billing.bill_print";
 	frappe.call({ method: `${method}.run_print_groups`, args: { run: frm.doc.name } }).then(({ message: g }) => {
@@ -192,9 +193,9 @@ function print_run_bills(frm) {
 				{
 					fieldtype: "HTML",
 					options: `<p class="text-muted">${__(
-						"Bills in this run: {0}. They print in delivery order (block, route, property number), up to {1} per PDF; more are printed in parts.",
+						"Bills in this run: {0}. They print in walk order: route by route, each in its route's order, then the accounts on no route by block and house number. Up to {1} per PDF; more are printed in parts.",
 						[format_number(g.total, null, 0), g.limit]
-					)}</p>`,
+					)}</p>${g.routed ? "" : `<p class="text-warning">${__("None of these accounts is on a reading route yet, so they print by block and house number. Reading Routes > Walk Order sets up the walk.")}</p>`}`,
 				},
 				{ fieldname: "block", fieldtype: "Select", label: __("Block"), options: [{ value: "", label: __("All blocks") }, ...options(g.blocks)],
 					onchange: () => { routes_for_block(d, g, options); parts_for_selection(d, g); } },
@@ -202,12 +203,14 @@ function print_run_bills(frm) {
 					onchange: () => parts_for_selection(d, g) },
 				{ fieldname: "part", fieldtype: "Select", label: __("Part"), hidden: 1,
 					description: __("All parts are made in one go in the background; one part is quicker when you print a batch at a time.") },
+				{ fieldname: "covers", fieldtype: "Check", label: __("A cover sheet before each route"), default: g.routed ? 1 : 0, hidden: g.routed ? 0 : 1,
+					description: __("The route, its distributor and its bill count, so each pile is handed out as it comes off the printer.") },
 			],
 			primary_action_label: __("Make PDF"),
 			primary_action(values) {
 				d.hide();
 				// background (increments 55, 56)
-				utility_billing.print_run_bills(frm.doc.name, values.block, values.route, values.part);
+				utility_billing.print_run_bills(frm.doc.name, values.block, values.route, values.part, values.covers ? 1 : 0);
 			},
 		});
 		parts_for_selection(d, g);
