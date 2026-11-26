@@ -10,6 +10,7 @@
   "cb1",
   "description",
   "reader",
+  "distributor",
   "enabled",
   "stops_count",
   "stops_section",
@@ -58,6 +59,12 @@
    "description": "Filled in as the reader when this route is added to a reading cycle; it can be changed there for one cycle."
   },
   {
+   "fieldname": "distributor",
+   "fieldtype": "Data",
+   "label": "Usual Bill Distributor",
+   "description": "Printed on the route's cover sheet when its bills are printed."
+  },
+  {
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "In Use",
@@ -73,7 +80,7 @@
   {
    "fieldname": "stops_section",
    "fieldtype": "Section Break",
-   "label": "Meters on the route, in reading order"
+   "label": "Meters on the route, in walk order (reading and bill delivery)"
   },
   {
    "fieldname": "stops",
@@ -84,7 +91,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-16 12:00:00.000000",
+ "modified": "2026-11-26 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Reading Route",

@@ -90,6 +90,8 @@ JOBS = {
 	"snapshot_restore": (_U + "snapshots.restore", "snapshot"),
 	"run_cancel": (_U + "doctype.bill_run.bill_run.cancel_in_background", "run"),
 	"print_bills": (_U + "bill_print.print_run_bills_to_file", "run"),
+	"walk_build": (_U + "walk.build_from_references", "society"),
+	"walk_import": (_U + "walk.import_walk_order", "society"),
 }
 JOB = "job"
 JOB_STALE_AFTER = 30 * 60  # some steps report no count for minutes at a time

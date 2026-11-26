@@ -226,7 +226,7 @@ class IntegrationTestBillPrint(BillingCase):
 			with self.assertRaises(frappe.ValidationError):
 				bill_print.print_run_bills(run.name)  # the direct one-PDF address keeps its limit
 			# increment 56: more bills than one PDF holds are printed in parts, in delivery order (the demo society has one block, no routes)
-			out = bill_print.print_run_bills_to_file(run.name)
+			out = bill_print.print_run_bills_to_file(run.name, covers=0)  # increment 60: no route cover sheet, one page per bill
 			self.assertEqual((out["parts"], out["bills"]), (2, 2))
 			self.assertEqual([(f["part"], f["first"], f["last"], f["file_name"]) for f in out["files"]],
 			                 [(1, 1, 1, f"{run.name}-part-01-of-02.pdf"), (2, 2, 2, f"{run.name}-part-02-of-02.pdf")])

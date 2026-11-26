@@ -145,6 +145,8 @@
 		<div class="small muted">{{ lb(o, T, "Reference No") }}</div>
 		<div class="ref{{ '' if o.large else ' normal' }}">{{ (con.reference_no or "") | e }}</div>
 		{%- if con.legacy_account_no %}<div class="small muted">{{ lb(o, T, "Old account no") }} {{ con.legacy_account_no | e }}</div>{% endif %}
+		{#- increment 60: on in a layout saved before the option existed -#}
+		{%- if (o.walk if o.walk is defined else 1) and walk %}<div class="small strong">{{ walk | e }}</div>{% endif %}
 		{%- if o.barcode and barcode %}<img class="barcode" src="{{ barcode }}" alt="{{ (con.reference_no or '') | e }}">{% endif %}
 		{%- if o.dates %}
 		<table class="kv" style="margin-top: 1mm;">

@@ -9,6 +9,7 @@ notices or bank accounts, or the consumer's details change (FS-RUN-09).
 """
 
 import base64
+import contextlib
 import io
 import json
 import mimetypes
@@ -351,6 +352,26 @@ def charge_groups(lines) -> list:
 	return list(groups.values())
 
 
+@contextlib.contextmanager
+def walk_print():
+	"""Inside, bills are drawn for a run's bulk print: each shows its route and walk place."""
+	before = frappe.flags.get("ub_walk_print")
+	frappe.flags.ub_walk_print = True
+	try:
+		yield
+	finally:
+		frappe.flags.ub_walk_print = before
+
+
+def walk_label(bill) -> str:
+	if not bill.get("connection") or not frappe.db.exists("Connection", bill.connection):
+		return ""
+	from utility_billing.utility_billing import walk  # noqa: PLC0415
+
+	w = walk.of(bill.connection)
+	return w.label if w else ""
+
+
 def bill_context(bill, duplicate=0) -> dict:
 	snap = snapshot_of(bill)
 	soc = snap["society"]
@@ -379,6 +400,10 @@ def bill_context(bill, duplicate=0) -> dict:
 		"notices_second": soc.get("notices_second") or [], "payment_instructions_second": soc.get("payment_instructions_second"),
 		"watermark": watermark_of(bill, duplicate),
 		"duplicate": duplicate,
+		# increment 60: the account's route and place for the distributor ("Route 07 · 123"), on a run's bulk print only. It is read
+		# from the routes now, not the snapshot (it says how to deliver this print, not what was billed), so a bill downloaded or
+		# reprinted on its own leaves it out and still matches what was issued (QA-90)
+		"walk": walk_label(bill) if frappe.flags.get("ub_walk_print") else "",
 		"money": money, "qty": qty, "date": date, "month_name": month_name,
 	}
 
@@ -496,7 +521,8 @@ def charge_duplicate_fee(bill):
 
 
 def run_bills(run, block=None, route=None):
-	"""A run's bills in delivery order: block, route, property number (FS-RUN-08)."""
+	"""A run's bills in delivery order (FS-RUN-08): increment 60, the walk order: route by route, each in its route's order; the
+	accounts on no route after them, by block and property number."""
 	conditions, values = ["b.bill_run = %(run)s", "b.docstatus < 2"], {"run": run}
 	if block:
 		conditions.append("ifnull(p.block, '') = %(block)s")
@@ -505,12 +531,16 @@ def run_bills(run, block=None, route=None):
 		conditions.append("ifnull(c.route, '') = %(route)s")
 		values["route"] = "" if route == "(none)" else route
 	return frappe.db.sql(
-		f"""select b.name, ifnull(p.block, '') as block, ifnull(c.route, '') as route, p.property_no
+		f"""select b.name, ifnull(p.block, '') as block, ifnull(c.route, '') as route, p.property_no, s.sequence as position,
+			r.name as route_name
 		from `tabUtility Bill` b
 		left join `tabProperty` p on p.name = b.property
 		left join `tabConnection` c on c.name = b.connection
+		left join `tabReading Route` r on r.society = c.society and r.utility = c.utility and r.route_code = c.route and r.enabled = 1
+		left join `tabRoute Stop` s on s.parent = r.name and s.parenttype = 'Reading Route' and s.connection = c.name
 		where {' and '.join(conditions)}
-		order by ifnull(p.block, ''), ifnull(c.route, ''), length(p.property_no), p.property_no, b.name""",
+		order by ifnull(c.route, '') = '', length(ifnull(c.route, '')), ifnull(c.route, ''), ifnull(s.sequence, 999999999),
+			ifnull(p.block, ''), length(p.property_no), p.property_no, b.name""",
 		values, as_dict=True,
 	)
 
@@ -527,14 +557,17 @@ def readable_run(run):
 def run_print_groups(run: str):
 	"""Blocks and routes in a run, with bill counts, for the bulk print dialog."""
 	readable_run(run)
-	blocks, routes, pairs = {}, {}, {}
+	blocks, routes, pairs, routed = {}, {}, {}, 0
 	for b in run_bills(run):
+		routed += 1 if b.route_name else 0
 		block, route = b.block or "(none)", b.route or "(none)"
 		blocks[block] = blocks.get(block, 0) + 1
 		routes[route] = routes.get(route, 0) + 1
 		pairs.setdefault(block, {})[route] = pairs.get(block, {}).get(route, 0) + 1
 	# pairs: the routes of each block, so choosing a block offers only its routes (user's request 2026-11-16)
-	return {"total": sum(blocks.values()), "blocks": blocks, "routes": routes, "pairs": pairs, "limit": MAX_BILLS_PER_PDF}
+	# routed: bills on a route in use, which print in walk order with a cover sheet per route (increment 60)
+	return {"total": sum(blocks.values()), "blocks": blocks, "routes": routes, "pairs": pairs, "limit": MAX_BILLS_PER_PDF,
+	        "routed": routed}
 
 
 @frappe.whitelist()
@@ -547,7 +580,9 @@ def print_run_bills(run: str, block: str | None = None, route: str | None = None
 	if len(bills) > MAX_BILLS_PER_PDF:
 		frappe.throw(_("{0} bills is too many for one PDF; print one block or route at a time (up to {1}).").format(
 			len(bills), MAX_BILLS_PER_PDF))
-	send_pdf(pdf_of([b.name for b in bills]), _run_pdf_name(doc.name, block, route))
+	with walk_print():
+		content = pdf_of([b.name for b in bills])
+	send_pdf(content, _run_pdf_name(doc.name, block, route))
 
 
 def _run_pdf_name(run, block=None, route=None) -> str:
@@ -563,13 +598,17 @@ def print_parts(total: int) -> int:
 	return max(1, -(-cint(total) // MAX_BILLS_PER_PDF))
 
 
-def print_run_bills_to_file(run: str, block: str | None = None, route: str | None = None, part: int | str | None = None) -> dict:
+def print_run_bills_to_file(run: str, block: str | None = None, route: str | None = None, part: int | str | None = None,
+                            covers: int | str | None = 1) -> dict:
 	"""Print Bills from a background job (increments 55, 56): the run's bills in delivery order, drawn 50 at a time with the count
 	shown, kept as private files on the run (an earlier copy of the same PDF is replaced).
 
 	A selection of more than MAX_BILLS_PER_PDF bills is printed in parts of that many, in delivery order (increment 56: the demo
 	society has one block and no routes, so 21,446 bills couldn't be printed at all): `part` is one part's number, or empty for all of
-	them. Returns {"files": [{file_url, file_name, part, first, last, bills}], "bills", "parts", "file_url" (the first file)}."""
+	them. Returns {"files": [{file_url, file_name, part, first, last, bills}], "bills", "parts", "file_url" (the first file)}.
+
+	Increment 60: `covers` puts a cover sheet before each route's bills (and at the top of a part that starts inside a route), with
+	the route, its distributor and its bill count, so each pile is handed out as it comes off the printer."""
 	from utility_billing.utility_billing import delivery, progress, rights  # noqa: PLC0415
 
 	doc = readable_run(run)
@@ -595,8 +634,10 @@ def print_run_bills_to_file(run: str, block: str | None = None, route: str | Non
 		for old in frappe.get_all("File", filters={"attached_to_doctype": "Bill Run", "attached_to_name": doc.name}, fields=["name", "file_name"]):
 			if earlier.fullmatch(old.file_name or ""):
 				frappe.delete_doc("File", old.name, ignore_permissions=True)
-		content = _draw(these, lambda k, drawn=drawn: progress.step(
-			_("Drawing the bills") if parts == 1 else _("Part {0} of {1}: drawing the bills").format(n, parts), drawn + k, todo))
+		sheets = route_covers(doc, bills, first, len(these)) if cint(covers) else None
+		with walk_print():
+			content = _draw(these, lambda k, drawn=drawn: progress.step(
+				_("Drawing the bills") if parts == 1 else _("Part {0} of {1}: drawing the bills").format(n, parts), drawn + k, todo), sheets)
 		drawn += len(these)
 		f = frappe.get_doc({"doctype": "File", "file_name": file_name, "is_private": 1, "content": content,
 		                    "attached_to_doctype": "Bill Run", "attached_to_name": doc.name}).insert(ignore_permissions=True)
@@ -609,17 +650,50 @@ def print_run_bills_to_file(run: str, block: str | None = None, route: str | Non
 	return {"files": files, "bills": todo, "parts": parts, "file_url": files[0]["file_url"], "file_name": files[0]["file_name"]}
 
 
-def _draw(names, tell) -> bytes:
-	"""One PDF of these bills, drawn PRINT_GROUP at a time; tell(k) says how many are drawn so far."""
+def route_covers(run, bills, first, count) -> dict:
+	"""Cover sheets for the bills[first:first + count] of a print: {place in that part: HTML} before the first bill of each route,
+	and before the part's first bill when the part starts inside a route (increment 60)."""
+	routes = {}
+	for b in bills:
+		if b.route_name:
+			g = routes.setdefault(b.route_name, {"bills": 0, "from": b.position, "to": b.position})
+			g["bills"] += 1
+			g["to"] = b.position
+	if not routes:
+		return {}
+	info = {r.name: r for r in frappe.get_all("Reading Route", filters={"name": ["in", list(routes)]},
+	                                         fields=["name", "route_code", "description", "distributor", "reader"])}
+	society = frappe.db.get_value("Society", run.society, "society_name") if run.get("society") else ""
+	out, previous = {}, bills[first - 1].route_name if first else None
+	for k in range(count):
+		b = bills[first + k]
+		if b.route_name and (b.route_name != previous or k == 0):
+			r, g = info.get(b.route_name), routes[b.route_name]
+			out[k] = frappe.render_template("utility_billing/templates/bill/route_cover.html", {
+				"route": r, "bills": g["bills"], "from": cint(g["from"]), "to": cint(g["to"]), "continued": b.route_name == previous,
+				"starts_at": cint(b.position), "run": run.name, "month": month_name(run.get("billing_month")) if run.get("billing_month") else "",
+				"society": society or run.get("society") or ""})
+		previous = b.route_name
+	return out
+
+
+def _draw(names, tell, covers=None) -> bytes:
+	"""One PDF of these bills, drawn PRINT_GROUP at a time; tell(k) says how many are drawn so far. `covers`: {place: HTML of a
+	cover sheet printed before the bill at that place}."""
 	from pypdf import PdfReader, PdfWriter  # noqa: PLC0415
 
 	from utility_billing import pdf as ubpdf  # noqa: PLC0415
 
+	covers = covers or {}
 	options = pdf_options_for(names)
 	writer = PdfWriter()
-	for k in range(0, len(names), PRINT_GROUP):
-		tell(k)
-		writer.append(PdfReader(io.BytesIO(ubpdf.render(document_html(names[k:k + PRINT_GROUP]), options=options))))
+	cuts = sorted({0, len(names), *(k for k in covers if 0 <= k < len(names))})
+	for a, z in zip(cuts, cuts[1:], strict=False):
+		if a in covers:
+			writer.append(PdfReader(io.BytesIO(ubpdf.render(wrap_pages([covers[a]]), options=options))))
+		for k in range(a, z, PRINT_GROUP):
+			tell(k)
+			writer.append(PdfReader(io.BytesIO(ubpdf.render(document_html(names[k:min(k + PRINT_GROUP, z)]), options=options))))
 	out = io.BytesIO()
 	writer.write(out)
 	return out.getvalue()
