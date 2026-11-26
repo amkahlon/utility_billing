@@ -113,7 +113,49 @@ def load(name: str):
 		"exceptions": ex, "left": left, "steps": steps, "actions": actions,
 		"can_review": run.docstatus == 0 and bool(frappe.has_permission("Bill Run", "write", run)),
 		"can_calculate": run.docstatus == 0 and run.workflow_state in (None, "", "Draft", "Rejected") and frappe.has_permission("Bill Run", "write", run),
+		"reversed": reversed_info(run) if run.docstatus == 2 else None,
 	}
+
+
+def next_run(run):
+	"""The month's run that replaces a reversed one (started again), if there is one."""
+	return frappe.db.get_value("Bill Run", {"society": run.society, "utility": run.utility, "billing_month": run.billing_month,
+	                                        "supplementary": cint(run.get("supplementary")), "docstatus": ["<", 2]}, "name")
+
+
+def reversed_info(run) -> dict:
+	"""What the wizard says about a reversed run (increment 59): it used to show the run as if it were waiting at "Approve and post"."""
+	when = frappe.db.sql("""select max(e.posted_on) from `tabCustomer Ledger Entry` e join `tabUtility Bill` b on b.name = e.voucher_no
+		where e.voucher_type = 'Utility Bill' and e.entry_type = 'Reversal' and b.bill_run = %s""", run.name)[0][0]
+	return {
+		"on": str(when or run.modified), "by": frappe.db.get_value("User", run.modified_by, "full_name") or run.modified_by,
+		"reason": run.get("cancellation_reason"),
+		"bills": frappe.db.count("Utility Bill", {"bill_run": run.name, "docstatus": 2, "status": "Cancelled"}),
+		"journal": run.get("gl_journal"), "reversal_journal": run.get("reversal_journal"),
+		"messages_cancelled": frappe.db.count("Message Log", {"reference_doctype": "Utility Bill", "status": "Cancelled",
+		                                                      "reference_name": ["in", frappe.get_all("Utility Bill", filters={"bill_run": run.name},
+		                                                                                              pluck="name") or [""]]}),
+		"next_run": next_run(run),
+		"can_start_again": bool(frappe.has_permission("Bill Run", "create")),
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def start_again(name: str):
+	"""A reversed run's month billed afresh: a new draft run amending it (same society, utility, month, reading cycle, issue date and
+	exclusions), ready to calculate. If the month already has a run again, that one is returned."""
+	run = _run(name)
+	if run.docstatus != 2:
+		frappe.throw(_("Bill run {0} isn't reversed.").format(run.name))
+	if not frappe.has_permission("Bill Run", "create"):
+		raise frappe.PermissionError(_("You can't start bill runs."))
+	existing = next_run(run)
+	if existing:
+		return {"name": existing, "new": False}
+	new = frappe.copy_doc(run, ignore_no_copy=False)  # as the form's Amend: nothing of the reversed run's state, totals or journals
+	new.docstatus, new.amended_from = 0, run.name
+	new.insert()
+	return {"name": new.name, "new": True}
 
 
 @frappe.whitelist(methods=["POST"])

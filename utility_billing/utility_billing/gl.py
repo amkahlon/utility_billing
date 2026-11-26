@@ -221,18 +221,64 @@ def after_run_posted(run):
 		return None
 
 
+# ---------------------------------------------------------------- a reversed run (increment 59)
+# Reversing a run undoes its bills in the customer accounts. Its journal is never changed or deleted: the opposite journal ("Bill Run
+# Reversal"), made from the reversal entries at once, takes it back out of the general ledger. Those entries stay out of the daily
+# journals. A run whose own journal was never made (an account missing) has its bill entries in the reversal journal too, so the two net
+# out and neither reaches the general ledger.
+RUN_REVERSAL = "Bill Run Reversal"
+NOT_A_RUN_REVERSAL = """not (voucher_type = 'Utility Bill' and entry_type = 'Reversal'
+	and voucher_no in (select name from `tabUtility Bill` where status = 'Cancelled' and docstatus = 2 and ifnull(bill_run, '') != ''))"""
+
+
+def make_run_reversal_journal(run_name):
+	run = frappe.get_doc("Bill Run", run_name)
+	if run.docstatus != 2:
+		frappe.throw(_("Bill run {0} isn't reversed.").format(run_name))
+	entries = frappe.db.sql("""select e.name from `tabCustomer Ledger Entry` e join `tabUtility Bill` b on b.name = e.voucher_no
+		where e.voucher_type = 'Utility Bill' and b.bill_run = %s and ifnull(e.gl_journal, '') = ''
+		and (e.entry_type = 'Bill' or (e.entry_type = 'Reversal' and b.status = 'Cancelled' and b.docstatus = 2))
+		order by e.posted_on, e.seq""", run_name, pluck=True)
+	reason = (run.get("cancellation_reason") or "").strip()
+	j = build_journal(run.society, entries, RUN_REVERSAL, getdate(nowdate()),
+	                  _("Reversal of the bills of {0} ({1})").format(run.run_title, run_name) + (f": {reason}" if reason else ""),
+	                  bill_run=run_name)
+	if j and not run.get("reversal_journal"):
+		run.db_set("reversal_journal", j.name, update_modified=False)
+	return j
+
+
+def after_run_reversed(run):
+	"""Called when a run is reversed. As at posting, a missing account mapping doesn't stop it: Make Journals makes the journal later."""
+	frappe.db.savepoint("gl_run_reversal")
+	try:
+		return make_run_reversal_journal(run.name)
+	except MissingAccount as e:
+		frappe.db.rollback(save_point="gl_run_reversal")
+		frappe.msgprint(_("The run is reversed, but its reversal journal wasn't made: {0} Then use Make Journals.").format(e),
+		                indicator="orange", alert=True)
+		return None
+
+
+def pending_run_reversals(society):
+	return frappe.db.sql("""select distinct b.bill_run from `tabCustomer Ledger Entry` e join `tabUtility Bill` b on b.name = e.voucher_no
+		join `tabBill Run` r on r.name = b.bill_run
+		where e.society = %s and e.voucher_type = 'Utility Bill' and e.entry_type = 'Reversal' and ifnull(e.gl_journal, '') = ''
+		and b.status = 'Cancelled' and b.docstatus = 2 and r.docstatus = 2 order by 1""", society, pluck=True)
+
+
 def day_bounds(date):
 	d = getdate(date)
 	return f"{d} 00:00:00", f"{d} 23:59:59.999999"
 
 
 def make_daily_journal(society, date):
-	"""Everything posted to the society's customer accounts on `date` (by posting time), except bills,
-	which go to their bill run's journal."""
+	"""Everything posted to the society's customer accounts on `date` (by posting time), except bills, which go to their bill run's
+	journal, and the reversals of a reversed run's bills, which go to its reversal journal."""
 	start, end = day_bounds(date)
-	entries = frappe.get_all("Customer Ledger Entry", filters={
-		"society": society, "entry_type": ["not in", ["Bill", "Transfer"]], "gl_journal": ["is", "not set"],
-		"posted_on": ["between", [start, end]]}, pluck="name", order_by="posted_on, seq")
+	entries = frappe.db.sql(f"""select name from `tabCustomer Ledger Entry` where society = %s and entry_type not in ('Bill', 'Transfer')
+		and ifnull(gl_journal, '') = '' and posted_on between %s and %s and {NOT_A_RUN_REVERSAL} order by posted_on, seq""",
+		(society, start, end), pluck=True)
 	return build_journal(society, entries, "Daily Transactions", getdate(date),
 	                     _("Collections and account transactions of {0}").format(formatdate(date)))
 
@@ -243,10 +289,15 @@ def pending_runs(society):
 
 
 def make_journals_for(society, up_to=None):
-	"""Bill run journals still missing, then one daily journal per day with unjournaled entries up to `up_to`."""
+	"""Bill run journals still missing, reversal journals of reversed runs still missing, then one daily journal per day with
+	unjournaled entries up to `up_to`."""
 	made = []
 	for run in pending_runs(society):
 		j = make_bill_run_journal(run)
+		if j:
+			made.append(j.name)
+	for run in pending_run_reversals(society):
+		j = make_run_reversal_journal(run)
 		if j:
 			made.append(j.name)
 	for name in pending_deposits(society):  # deposits whose journal waited for an account mapping
@@ -259,9 +310,9 @@ def make_journals_for(society, up_to=None):
 		made.append(j.name)
 	up_to = getdate(up_to or nowdate())
 	rows = frappe.db.sql(
-		"""select distinct date(posted_on) from `tabCustomer Ledger Entry`
+		f"""select distinct date(posted_on) from `tabCustomer Ledger Entry`
 		where society = %s and entry_type not in ('Bill', 'Transfer') and ifnull(gl_journal, '') = '' and date(posted_on) <= %s
-		order by 1""", (society, up_to))
+		and {NOT_A_RUN_REVERSAL} order by 1""", (society, up_to))
 	for (day,) in rows:
 		j = make_daily_journal(society, day)
 		if j:

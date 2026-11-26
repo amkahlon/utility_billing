@@ -92,9 +92,13 @@ class BillRun(Document):
 		billing.check_run_cancellable(self)
 
 	def on_cancel(self):
-		billing.cancel_run_bills(self)
+		billing.cancel_run_bills(self)  # in the background job, already done a batch at a time: none left here
 		approval.log(self, approval.APPROVED, approval.CANCELLED)
 		self.db_update_all()
+		# increment 59: nothing of the run may stay in force: its journal is taken out of the general ledger by an opposite journal, and
+		# its messages not yet sent are cancelled
+		gl.after_run_reversed(self)
+		notify.after_run_reversed(self)
 
 	def on_trash(self):
 		for name in frappe.get_all("Utility Bill", filters={"bill_run": self.name, "docstatus": 0}, pluck="name"):
