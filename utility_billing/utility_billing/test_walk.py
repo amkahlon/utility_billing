@@ -74,6 +74,9 @@ class IntegrationTestWalkOrder(WalkCase):
 		plan = walk.preview_build(SOC, "Electricity", 2)
 		self.assertEqual(mine(plan), [{"code": "01", "accounts": 3, "existing": False, "in_use": False},
 		                              {"code": "02", "accounts": 2, "existing": False, "in_use": False}])
+		# the dialog's society box can hand back the society's name instead of its ID (visual check, 2026-11-26)
+		by_name = walk.preview_build(frappe.db.get_value("Society", SOC, "society_name"), "Electricity", 2)
+		self.assertEqual(mine(by_name), mine(plan))
 		self.route("02", [])  # a route with that code already: the group goes at its end
 		out = walk.build_from_references(SOC, "Electricity", 2)
 		self.assertGreaterEqual(out["created"], 1)

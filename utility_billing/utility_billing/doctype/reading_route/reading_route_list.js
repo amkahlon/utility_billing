@@ -91,7 +91,9 @@ function ub_walk_import(listview) {
 				.then((r) => {
 					listview.refresh();
 					frappe.msgprint({ title: __("Walk order imported"), indicator: "green",
-						message: __("{0} accounts put in order on {1} routes ({2} new).", [n(r.accounts), r.routes, r.created]) });
+						message: r.routes === 1
+							? __("{0} accounts put in order on 1 route ({1} new).", [n(r.accounts), r.created])
+							: __("{0} accounts put in order on {1} routes ({2} new).", [n(r.accounts), r.routes, r.created]) });
 				});
 		},
 	});

@@ -143,6 +143,15 @@ def move(route: str, accounts: str, where: str = END, after: str | None = None) 
 
 
 # ---------------------------------------------------------------- a first walk from the reference numbers
+def society_id(value):
+	"""The society's ID from its ID or its name: a dialog's society box shows the name and can hand that back (visual check,
+	2026-11-26: "Society Demo Society not found")."""
+	value = cstr(value).strip()
+	if value and not frappe.db.exists("Society", value):
+		value = frappe.db.get_value("Society", {"society_name": value}, "name") or value
+	return value
+
+
 def _check_may_build(society, utility):
 	if not frappe.has_permission(ROUTE, "create"):
 		raise frappe.PermissionError(_("You can't make reading routes."))
@@ -170,6 +179,7 @@ def _groups(names, digits) -> dict:
 @frappe.whitelist()
 def preview_build(society: str, utility: str, digits: int | str = 2) -> dict:
 	"""What Build from Reference Numbers would make: the routes (one per group of the leading digits) and their account counts."""
+	society = society_id(society)
 	_check_may_build(society, utility)
 	digits = cint(digits)
 	if not 1 <= digits <= 12:
@@ -189,6 +199,7 @@ def build_from_references(society: str, utility: str, digits: int | str = 2) -> 
 	gets the group at its end. Returns {"created", "extended", "accounts"}."""
 	from utility_billing.utility_billing import progress  # noqa: PLC0415
 
+	society = society_id(society)
 	plan = preview_build(society, utility, digits)
 	stopped = [g["code"] for g in plan["groups"] if g["existing"] and not g["in_use"]]
 	if stopped:
@@ -250,6 +261,7 @@ def walk_sheet(society: str, utility: str):
 	"""Download Walk Sheet: a CSV of sheet_rows, the same columns Import Walk Order reads."""
 	if not frappe.has_permission(ROUTE, "read"):
 		raise frappe.PermissionError(_("You can't see reading routes."))
+	society = society_id(society)
 	frappe.get_doc("Society", society).check_permission("read")
 	from frappe.utils.csvutils import build_csv_response  # noqa: PLC0415
 
@@ -314,6 +326,7 @@ def import_walk_order(society: str, utility: str, file_url: str) -> dict:
 	All of it or none of it. Returns {"routes", "created", "accounts"}."""
 	from utility_billing.utility_billing import opening, progress  # noqa: PLC0415
 
+	society = society_id(society)
 	_check_may_build(society, utility)
 	walk = read_sheet(society, utility, opening.read_file(file_url))
 	dest = {ref: route for route, refs in walk.items() for ref in refs}

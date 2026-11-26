@@ -150,7 +150,7 @@ function watch_calculation(frm) {
 function record_delivery(frm) {
 	const method = "utility_billing.utility_billing";
 	frappe.call({ method: `${method}.bill_print.run_print_groups`, args: { run: frm.doc.name } }).then(({ message: g }) => {
-		const options = (counts) => Object.entries(counts).map(([k, n]) => ({ value: k, label: `${k} (${n})` }));
+		const options = (counts) => ub_sorted_entries(counts).map(([k, n]) => ({ value: k, label: `${k} (${n})` }));
 		const d = new frappe.ui.Dialog({
 			title: __("Record Delivery"),
 			fields: [
@@ -181,12 +181,17 @@ function record_delivery(frm) {
 	});
 }
 
+// Blocks and routes in natural order: 01, 02 ... 10 ("10" first otherwise: a browser puts number-like keys before the rest).
+function ub_sorted_entries(counts) {
+	return Object.entries(counts).sort(([a], [b]) => (a === "(none)") - (b === "(none)") || a.localeCompare(b, undefined, { numeric: true }));
+}
+
 // Bulk print in delivery order, all bills or one block or route (FS-RUN-08). Increment 60: the walk order, route by route in each
 // route's order with a cover sheet per route; accounts on no route after them, by block and house number.
 function print_run_bills(frm) {
 	const method = "utility_billing.utility_billing.bill_print";
 	frappe.call({ method: `${method}.run_print_groups`, args: { run: frm.doc.name } }).then(({ message: g }) => {
-		const options = (counts) => Object.entries(counts).map(([k, n]) => ({ value: k, label: `${k} (${n})` }));
+		const options = (counts) => ub_sorted_entries(counts).map(([k, n]) => ({ value: k, label: `${k} (${n})` }));
 		const d = new frappe.ui.Dialog({
 			title: __("Print Bills"),
 			fields: [
