@@ -209,6 +209,94 @@ class IntegrationTestDashboard(BillingCase):
 		self.assertIsInstance(dashboard.get_dashboard(society="TST-EMPTY", month="2026-10-01")["attention"], list)
 
 
+class UnitTestOverviewRules(UnitTestCase):
+	"""Increment 61: the executive overview's own rules."""
+
+	def test_change_against_last_month(self):
+		self.assertEqual(dashboard.delta(110, 100), {"text": "+10.0%", "dir": "up", "good": True})
+		self.assertEqual(dashboard.delta(90, 100, up_is_good=False), {"text": "−10.0%", "dir": "down", "good": True})
+		self.assertEqual(dashboard.delta(100, 100)["dir"], "flat")
+		self.assertIsNone(dashboard.delta(5, 0))  # nothing last month: no percentage
+		self.assertEqual(dashboard.delta(80.5, 70, points=True)["text"], "+10.5 pts")
+		self.assertEqual(dashboard.delta(40, 0, points=True)["text"], "+40.0 pts")
+
+	def test_ages_keep_their_sign_and_the_part_brought_over_at_go_live(self):
+		from utility_billing.utility_billing import mis
+
+		parts = [("2026-12-08", 100), ("2026-10-15", 50)]
+		self.assertEqual(mis.allocate_age(parts, 200, "2026-11-27", detail=True), [(-11, 100, False), (43, 50, False), (43, 50, True)])
+		self.assertEqual(mis.allocate_age(parts, 200, "2026-11-27"), [(0, 100), (43, 50), (43, 50)])  # the reports: unchanged
+
+
+class IntegrationTestOverview(BillingCase):
+	"""Increment 61: the headline figures, what consumers owe by age, where the billing comes from, and the kept figures."""
+
+	def setUp(self):
+		super().setUp()
+		frappe.db.set_value("Property", self.prop, "block", "N Block")
+
+	october_posted = IntegrationTestDashboard.october_posted
+	get = IntegrationTestDashboard.get
+
+	def test_headline_figures_lead_the_dashboard(self):
+		self.october_posted()
+		d = self.get(month="2026-10-01")
+		h = {x["key"]: x for x in d["headline"]}
+		self.assertEqual([x["key"] for x in d["headline"]], ["billed", "collected", "efficiency", "receivable"])
+		self.assertEqual((h["billed"]["value"], h["billed"]["sub"], h["billed"]["delta"]),
+		                 ("Rs 22,260", "1 bill", {"text": "−62.6%", "dir": "down", "good": False}))
+		self.assertEqual((h["collected"]["value"], h["collected"]["sub"]), ("Rs 58,366", "of Rs 23,364 payable"))
+		self.assertEqual((h["efficiency"]["value"], h["efficiency"]["tone"], h["efficiency"]["target"]), ("249.8%", "green", 85))
+		self.assertEqual(len(h["efficiency"]["spark"]), 12)
+		self.assertEqual(h["receivable"]["value"], "Rs 1,104")  # on 31 October: September's unpaid part (October's bill is issued 1 November)
+		self.assertEqual(h["receivable"]["sub"], "of which arrears Rs 0")
+		for x in d["headline"]:
+			self.assertTrue(x["drill"], x["key"])
+
+	def test_what_consumers_owe_by_how_long_it_has_been_due(self):
+		self.october_posted()
+		with patch.object(dashboard, "nowdate", return_value="2026-11-10"):
+			a = self.get(month="2026-11-01")["ageing"]
+		bands = {b["key"]: b for b in a["bands"]}
+		self.assertEqual([b["key"] for b in a["bands"]], list(dashboard.AGE_BANDS))
+		# the October bill is due on 15 November: not yet due on the 10th; September's unpaid 1,104 is overdue
+		self.assertEqual((bands["Not yet due"]["amount"], bands["Not yet due"]["accounts"]), (22260, 1))
+		self.assertEqual(sum(b["amount"] for b in a["bands"]), 23364)
+		self.assertEqual(bands["Before go-live"]["amount"], 0)
+		self.assertEqual((a["total"], a["owing"], a["credit_raw"]), ("Rs 23,364", 1, 0))
+		self.assertAlmostEqual(sum(b["pct"] for b in a["bands"]), 100, delta=0.2)
+
+	def test_where_the_billing_comes_from(self):
+		self.october_posted()
+		d = self.get(month="2026-10-01")
+		self.assertAlmostEqual(sum(m["raw"] for m in d["mix"]), 22260, places=2)
+		self.assertEqual(d["mix"], sorted(d["mix"], key=lambda m: -m["raw"]))
+		self.assertEqual([(c["bills"], c["raw"], c["pct"]) for c in d["categories"]], [(1, 22260, 100.0)])
+
+	def test_figures_are_kept_until_something_changes(self):
+		self.october_posted()
+		frappe.flags.ub_dashboard_cache = True
+		try:
+			first = self.get(month="2026-10-01", refresh=1)
+			again = self.get(month="2026-10-01")
+			self.assertEqual((first["cached"], again["cached"], again["headline"]), (False, True, first["headline"]))
+			self.assertTrue(again["updated_label"])
+			frappe.db.set_value("Connection", self.conn, "sanctioned_load_kw", 7)  # a watched record changes
+			stale = self.get(month="2026-10-01", allow_stale=1)
+			self.assertEqual((stale["cached"], stale["stale"]), (True, True))  # the page shows it at once, then asks again
+			fresh = self.get(month="2026-10-01")
+			self.assertEqual((fresh["cached"], fresh["stale"]), (False, False))
+			self.assertTrue(self.get(month="2026-10-01")["cached"])
+			# the insights read the same kept figures instead of working them out again
+			from utility_billing.utility_billing import ai
+
+			with patch.object(dashboard, "Figures", side_effect=AssertionError("worked out again")):
+				self.assertTrue(ai.insights(SOC, "2026-10-01")["facts"])
+		finally:
+			frappe.flags.ub_dashboard_cache = False
+			frappe.cache.delete_keys("ub-dashboard:")
+
+
 class UnitTestUiAssets(UnitTestCase):
 	def test_ui_version_is_a_number_that_the_boot_hook_hands_to_the_browser(self):
 		from utility_billing import boot, ui_version

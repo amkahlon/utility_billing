@@ -114,14 +114,13 @@ def facts(society, month) -> list[dict]:
 	"""What changed this month, as numbered facts worked out by rules from the dashboard's own figures, each with where it comes from."""
 	from utility_billing.utility_billing import dashboard, mis  # noqa: PLC0415
 
-	month = mis.month_start(month)
-	as_of = min(getdate(nowdate()), getdate(frappe.utils.get_last_day(month)))
-	series = mis.monthly_series(society, mis.last_months(month, 12))
+	# the dashboard's own figures, kept for a while (increment 61: worked out a second time here, 13.6 s on 21,446 accounts)
+	figures = dashboard.figures_for(society, mis.month_start(month))
 	out = []
-	for k in dashboard.kpis_of(society, month, series, as_of):
+	for k in figures["kpis"]:
 		if k["value"] not in ("—", None):
 			out.append({"text": f"{k['label']}: {k['value']} ({k['note']})", "route": ["ub-dashboard"]})
-	for a in dashboard.attention_of(society, month, as_of)[:6]:
+	for a in figures["attention"][:6]:
 		out.append({"text": f"{a['title']} — {a['detail']}", "route": a["route"], "options": a.get("options") or {}})
 	for i, f in enumerate(out, start=1):
 		f["n"] = i
