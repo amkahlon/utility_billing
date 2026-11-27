@@ -70,23 +70,38 @@ def kpi(label, value, note, tone=MUTED, raw=None):
 	return {"label": label, "value": value, "note": note, "tone": tone, "raw": raw}
 
 
-def line_loss_card(society, month, series):
-	"""AT&C for the month when the DISCO bill (or feeder input units) is recorded; otherwise an honest placeholder."""
-	label = _("Line losses (AT&C)")
+LOSS_LABEL, ATC_LABEL = "Line losses", "Line losses (AT&C)"
+
+
+def collection_due(society, month, today):
+	"""The due date of the month's posted bill run while it hasn't passed yet; None once collections can be counted
+	(or there is no posted run)."""
+	due = frappe.db.get_value("Bill Run", {"society": society, "billing_month": mis.month_start(month), "docstatus": 1}, "due_date")
+	return getdate(due) if due and getdate(today) <= getdate(due) else None
+
+
+def line_loss_card(society, month, series, today=None):
+	"""AT&C for the month when the DISCO bill (or feeder input units) is recorded; otherwise an honest placeholder.
+	Until the bills fall due, AT&C would read close to 100% only because nothing has been paid yet, so the card shows the
+	line loss instead and says when AT&C follows."""
 	cur = losses.at_c_for(society, month, series[-1])
 	if not cur:
-		return kpi(label, "—", _("Needs the DISCO bill, not recorded yet"), MUTED)
+		return kpi(_(ATC_LABEL), "—", _("Needs the DISCO bill, not recorded yet"), MUTED)
+	watch, high = losses.levels(society)
+	tone = losses.TONE[losses.status_of(cur["input_kwh"], cur["billed_kwh"], watch, high)]
+	due = collection_due(society, month, today or nowdate())
+	if due and cur["loss_pct"] is not None:
+		return {**kpi(_(LOSS_LABEL), f"{cur['loss_pct']:.1f}%", _("AT&C after the due date, {0}").format(formatdate(due)), tone, cur["loss_pct"]),
+		        "drill": "Line Losses by Feeder and Transformer"}
 	if cur["atc"] is None:
-		return kpi(label, "—", _("Can't be worked out: nothing was billed"), MUTED)
+		return kpi(_(ATC_LABEL), "—", _("Can't be worked out: nothing was billed"), MUTED)
 	prev = losses.at_c_for(society, add_months(month, -1), series[-2]) if len(series) > 1 else None
 	if prev and prev["atc"] is not None:
 		delta = round(cur["atc"] - prev["atc"], 1)
 		note = _("{0} pts vs. last month").format(("+" if delta >= 0 else "−") + f"{abs(delta):.1f}")
 	else:
 		note = _("Line loss {0}%").format(f"{cur['loss_pct']:.1f}")
-	watch, high = losses.levels(society)
-	tone = losses.TONE[losses.status_of(cur["input_kwh"], cur["billed_kwh"], watch, high)]
-	return kpi(label, f"{cur['atc']:.1f}%", note, tone, cur["atc"])
+	return kpi(_(ATC_LABEL), f"{cur['atc']:.1f}%", note, tone, cur["atc"])
 
 
 def defaulter_stats(society, as_of, aged=None):
@@ -220,7 +235,7 @@ def connections_card(society, as_of):
 	return kpi(_("Active connections"), f"{active:,}", _("{0} disconnected").format(f"{off:,}") if off else _("None disconnected"), MUTED, active)
 
 
-def kpis_of(society, month, series, as_of, fig=None):
+def kpis_of(society, month, series, as_of, fig=None, today=None):
 	cur, prev = series[-1], series[-2] if len(series) > 1 else None
 	prev_month_name = getdate(add_months(month, -1)).strftime("%B")
 	billed_note = _("No bills last month")
@@ -244,7 +259,7 @@ def kpis_of(society, month, series, as_of, fig=None):
 		    (GOOD if rate >= 85 else WARN if rate >= 60 else BAD) if cur["bills"] else MUTED, cur["collected"]),
 		kpi(_("Total arrears"), rs(arrears), _("{0} vs. last month").format(signed_rs(delta)) if round(delta) else _("No change vs. last month"),
 		    BAD if round(delta) > 0 else GOOD, arrears),
-		line_loss_card(society, month, series),
+		line_loss_card(society, month, series, today),
 		kpi(_("Units billed"), f"{cur['units']:,.0f} kWh", (_("1 connection billed") if cur["bills"] == 1 else _("{0} connections billed").format(f"{cur['bills']:,}")), MUTED, cur["units"]),
 		kpi(_("Defaulters (60+ days)"), f"{defaulters:,}", _("{0} outstanding").format(rs(overdue_60)),
 		    BAD if defaulters else GOOD, defaulters),
@@ -410,10 +425,10 @@ def channels_of(society, month):
 ICONS = ("connections", "billed", "collected", "arrears", "losses", "units", "defaulters", "meters", "service")
 
 
-def cards_of(society, month, series, as_of, fig=None):
+def cards_of(society, month, series, as_of, fig=None, today=None):
 	"""The nine cards with an icon each and, where there is a monthly history, a sparkline of the last 12 months."""
 	sparks = {1: [m["billed"] for m in series], 2: [m["collected"] for m in series], 5: [m["units"] for m in series]}
-	cards = kpis_of(society, month, series, as_of, fig)
+	cards = kpis_of(society, month, series, as_of, fig, today)
 	for i, card in enumerate(cards):
 		card["icon"] = ICONS[i]
 		card["spark"] = sparks.get(i) if any(sparks.get(i) or []) else None
@@ -422,7 +437,7 @@ def cards_of(society, month, series, as_of, fig=None):
 
 # ---------------------------------------------------------------- the society's figures, kept for a while
 CACHE_SECONDS = 6 * 3600
-FIGURES_VERSION = 1  # raise when the figures' shape changes
+FIGURES_VERSION = 2  # raise when the figures' shape changes
 # A change to any of these makes the kept figures stale (a posting, a payment, a reading, a DISCO bill ...). Other changes (an
 # approval waiting, a failed message) show at the next Refresh, or the next day (the key carries the date).
 WATCHED = (("Customer Ledger Entry", "creation"), ("Utility Bill", "modified"), ("Bill Run", "modified"), ("Reading Cycle", "modified"),
@@ -452,7 +467,7 @@ def figures_for(society, month, refresh=False, allow_stale=False) -> dict:
 			return {**kept["data"], "cached": True, "stale": True}
 	series = mis.monthly_series(society, mis.last_months(month, 12))
 	fig = Figures(society, month, as_of)
-	cards = cards_of(society, month, series, as_of, fig)
+	cards = cards_of(society, month, series, as_of, fig, today)
 	steps, footer = steps_of(society, month, today)
 	feeders = feeders_of(society, month)
 	now = now_datetime()
