@@ -398,25 +398,102 @@ def bill_revised(bill):
 	return names
 
 
-@safe
-def bills_issued(run_name):
-	"""A bill run was posted: one message per bill with the PDF link (FS-NTF-01, 08)."""
-	names = []
-	for b in frappe.get_all("Utility Bill", filters={"bill_run": run_name, "docstatus": 1},
-	                        fields=["name", "connection", "billing_month", "current_amount", "payable_within_due", "payable_after_due", "due_date"]):
-		names += notify("bill.issued", b.connection, {
-			"bill_month": getdate(b.billing_month).strftime("%B %Y"), "amount": _money(b.payable_within_due), "amount_after_due": _money(b.payable_after_due),
-			"due_date": formatdate(b.due_date), "link": bill_link(b.name)}, reference=("Utility Bill", b.name))
-	queue_send(names)
+# Increment 62: the 21,446 messages of the demo's November run were never written. The job writing them, one transaction, was stopped
+# 11 minutes in (its worker was lost), so nothing was kept and nobody was told. Now the messages are kept every MESSAGE_BATCH bills
+# with the count shown, a bill that already has its message is skipped, and the run says how many bills have none, with a button to
+# write the rest.
+MESSAGE_BATCH = 500
+_NO_MESSAGE = """b.bill_run = %(run)s and b.docstatus = 1 and not exists (select 1 from `tabMessage Log` m
+	where m.reference_doctype = 'Utility Bill' and m.reference_name = b.name and m.event = 'bill.issued' and m.status != 'Cancelled')"""
+
+
+def bills_without_message(run_name) -> list:
+	"""The run's posted bills that have no "bill issued" message (a cancelled one doesn't count; a skipped one does: it says why
+	nothing could be sent)."""
+	return frappe.db.sql(f"""select b.name, b.connection, b.billing_month, b.payable_within_due, b.payable_after_due, b.due_date
+		from `tabUtility Bill` b where {_NO_MESSAGE} order by b.name""", {"run": run_name}, as_dict=True)
+
+
+def message_counts(run_name) -> dict:
+	bills = frappe.db.count("Utility Bill", {"bill_run": run_name, "docstatus": 1})
+	missing = frappe.db.sql(f"select count(*) from `tabUtility Bill` b where {_NO_MESSAGE}", {"run": run_name})[0][0] if bills else 0
+	return {"bills": bills, "missing": missing, "written": bills - missing}
+
+
+def write_bill_messages(run_name):
+	"""One "bill issued" message per posted bill that has none yet, with the PDF link (FS-NTF-01, 08). Kept every MESSAGE_BATCH
+	bills, so a stop loses at most one batch and writing again carries on. Returns the new Message Log names."""
+	from utility_billing.utility_billing import progress  # noqa: PLC0415
+
+	todo = bills_without_message(run_name)
+	names, batch = [], []
+	for k, b in enumerate(todo, start=1):
+		batch += notify("bill.issued", b.connection, {
+			"bill_month": getdate(b.billing_month).strftime("%B %Y"), "amount": _money(b.payable_within_due),
+			"amount_after_due": _money(b.payable_after_due), "due_date": formatdate(b.due_date), "link": bill_link(b.name)},
+			reference=("Utility Bill", b.name))
+		if k % MESSAGE_BATCH == 0 or k == len(todo):
+			progress.step(_("Writing the bill messages"), k, len(todo))
+			queue_send(batch)
+			names += batch
+			batch = []
+			if not frappe.flags.in_test:
+				frappe.db.commit()  # kept: a later stop doesn't lose these
 	return names
+
+
+bills_issued = safe(write_bill_messages)  # the name the posting hook and older callers use
+
+
+def _posted_run(run):
+	doc = frappe.get_doc("Bill Run", run)
+	doc.check_permission("read")
+	if doc.docstatus != 1 or doc.get("reversal_status") in ("Reversing", "Reversal stopped", "Reversed"):
+		frappe.throw(_("Bill messages are written for a posted run only."))
+	return doc
+
+
+def writing_now(run) -> bool:
+	"""The messages of this run are being written by the job posting started (the button's job can't run beside it)."""
+	from utility_billing.utility_billing import progress  # noqa: PLC0415
+
+	return progress.running(progress.get(progress.JOB, progress.job_key("bill_messages_posted", run), progress.JOB_STALE_AFTER))
+
+
+def write_run_messages(run: str) -> dict:
+	"""Write Bill Messages on a posted run (a background job with a progress bar): the messages its bills don't have yet."""
+	if not rights.can("messages.send"):
+		raise frappe.PermissionError(_("You can't send messages."))
+	if writing_now(run):
+		frappe.throw(_("The bill messages of {0} are being written now. Wait for that to finish.").format(run))
+	doc = _posted_run(run)
+	written = len(write_bill_messages(doc.name))
+	return {**message_counts(doc.name), "new": written}
+
+
+def write_posted_messages(run: str) -> dict:
+	"""The same, started by posting the run (as the user who posted it, who need not have the right to send messages): only what
+	posting writes anyway."""
+	doc = _posted_run(run)
+	written = len(write_bill_messages(doc.name))
+	return {**message_counts(doc.name), "new": written}
+
+
+@frappe.whitelist()
+def run_messages(run: str) -> dict:
+	"""How many of a run's posted bills have their "bill issued" message, for the run's form."""
+	frappe.get_doc("Bill Run", run).check_permission("read")
+	return {**message_counts(run), "can_write": rights.can("messages.send"), "writing": writing_now(run)}
 
 
 @safe
 def after_run_posted(run):
-	"""Bill Run on_submit hook point: the messages are written in the background for a big run."""
+	"""Bill Run on_submit hook point: the messages are written in the background, with a progress bar on the run."""
 	if frappe.flags.in_test:
 		return bills_issued(run.name)
-	frappe.enqueue("utility_billing.utility_billing.notify.bills_issued", run_name=run.name, queue="long", enqueue_after_commit=True)
+	from utility_billing.utility_billing import progress  # noqa: PLC0415
+
+	progress.start("bill_messages_posted", {"run": run.name}, _("Writing the bill messages of {0}").format(run.name))
 
 
 def after_run_reversed(run) -> int:

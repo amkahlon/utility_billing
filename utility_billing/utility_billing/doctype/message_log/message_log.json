@@ -224,6 +224,7 @@
    "fieldtype": "Dynamic Link",
    "label": "Document",
    "options": "reference_doctype",
+   "search_index": 1,
    "read_only": 1
   },
   {
@@ -243,7 +244,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 14:00:00.000000",
+ "modified": "2026-11-27 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Utility Billing",
  "name": "Message Log",

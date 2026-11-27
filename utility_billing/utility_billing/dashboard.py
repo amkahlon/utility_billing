@@ -279,6 +279,13 @@ def attention_of(society, month, as_of, fig=None):
 		    ["List", "Meter Reading"], {"reading_cycle": cycle.name, "status": "Flagged"})
 	if cycle and cycle.status == "Closed" and not run:
 		add("blue", _("Readings are closed: start the bill run"), _("Cycle {0}").format(cycle.name), ["List", "Bill Run"])
+	if run and frappe.db.get_value("Bill Run", run, "docstatus") == 1 and not frappe.db.get_value("Bill Run", run, "reversal_status"):
+		from utility_billing.utility_billing import notify  # noqa: PLC0415
+
+		counts = notify.message_counts(run)
+		if counts["missing"] and not notify.writing_now(run):  # increment 62: their consumers weren't told of the bill
+			add("amber", _("{0} posted bills have no bill message").format(f"{counts['missing']:,}"),
+			    _("Bill run {0}: write them from the run").format(run), ["Form", "Bill Run", run])
 
 	waiting = mis.REPORTS["pending_approvals"]["fn"](frappe._dict({"society": society}))["data"]
 	if waiting:
@@ -420,7 +427,7 @@ FIGURES_VERSION = 1  # raise when the figures' shape changes
 # approval waiting, a failed message) show at the next Refresh, or the next day (the key carries the date).
 WATCHED = (("Customer Ledger Entry", "creation"), ("Utility Bill", "modified"), ("Bill Run", "modified"), ("Reading Cycle", "modified"),
            ("Meter Reading", "modified"), ("DISCO Bill", "modified"), ("Payment Receipt", "modified"), ("Service Request", "modified"),
-           ("Meter", "modified"), ("Connection", "modified"))
+           ("Meter", "modified"), ("Connection", "modified"), ("Message Log", "creation"))
 
 
 def data_version() -> str:
