@@ -92,6 +92,8 @@ JOBS = {
 	"print_bills": (_U + "bill_print.print_run_bills_to_file", "run"),
 	"walk_build": (_U + "walk.build_from_references", "society"),
 	"walk_import": (_U + "walk.import_walk_order", "society"),
+	"bill_messages": (_U + "notify.write_run_messages", "run"),
+	"bill_messages_posted": (_U + "notify.write_posted_messages", "run"),
 }
 JOB = "job"
 JOB_STALE_AFTER = 30 * 60  # some steps report no count for minutes at a time

@@ -35,6 +35,7 @@ frappe.ui.form.on("Bill Run", {
 					if (bits.length) frm.dashboard.add_comment(__("Delivery of {0} bills: {1}", [s.total, bits.join(", ")]), "blue", true);
 				},
 			});
+			if (!frm.doc.reversal_status) show_bill_messages(frm);
 		}
 		const editable = frm.doc.docstatus === 0 && ["Draft", "Rejected", "", undefined].includes(frm.doc.workflow_state);
 		if (editable && frm.doc.calculation_status !== "Calculating") {
@@ -93,6 +94,26 @@ function reverse_run(frm) {
 
 // Increment 58: a run is reversed a batch of bills at a time. While it is going the form shows how far; if it stopped (an error, or
 // nothing heard for 30 minutes) the bills reversed so far stay reversed, and Reverse Again carries on with the rest.
+// Increment 62: how many posted bills have their "bill issued" message; the rest can be written (a background job with a progress
+// bar). Posting writes them itself; this is for a run whose writing was stopped.
+function show_bill_messages(frm) {
+	frappe.xcall("utility_billing.utility_billing.notify.run_messages", { run: frm.doc.name }).then((m) => {
+		if (!m.bills || frm.doc.name !== cur_frm.doc.name) return;
+		const n = (v) => format_number(v, null, 0);
+		if (!m.missing) return frm.dashboard.add_comment(__("Bill messages: all {0} written.", [n(m.bills)]), "green", true);
+		if (m.writing) return frm.dashboard.add_comment(__("Bill messages are being written: {0} of {1} so far.", [n(m.written), n(m.bills)]), "blue", true);
+		frm.dashboard.set_headline_alert(
+			__("{0} of {1} bills have no bill message yet: their consumers haven't been told of the bill.", [n(m.missing), n(m.bills)]), "orange");
+		if (!m.can_write) return;
+		frm.add_custom_button(__("Write Bill Messages"), () =>
+			frappe.confirm(__("Write the bill message for the {0} bills that have none? Bills that have one are left alone.", [n(m.missing)]), () =>
+				utility_billing.run_job("bill_messages", { run: frm.doc.name }, __("Writing the bill messages of {0}", [frm.doc.name])).then((r) => {
+					frappe.show_alert({ indicator: "green", message: __("{0} bill messages written; {1} of {2} bills have one.", [n(r.new), n(r.written), n(r.bills)]) }, 10);
+					frm.reload_doc();
+				})));
+	});
+}
+
 function show_reversal(frm) {
 	const name = frm.doc.name;
 	frappe

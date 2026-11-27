@@ -312,6 +312,75 @@ class IntegrationTestNotify(BillingCase):
 		self.assertEqual(frappe.local.response.type, "pdf")
 		self.assertTrue(frappe.local.response.filecontent.startswith(b"%PDF"))
 
+	# ---- increment 62: a run's bill messages survive a stop and the rest can be written
+	def bill_messages(self, run):
+		return frappe.get_all("Message Log", filters={"event": "bill.issued", "reference_doctype": "Utility Bill",
+		                                              "reference_name": ["in", frappe.get_all("Utility Bill", {"bill_run": run}, pluck="name")]},
+		                      fields=["name", "status", "reference_name"])
+
+	def test_writing_a_runs_messages_again_writes_only_the_missing_ones(self):
+		run = self.october_posted()
+		(first,) = self.bill_messages(run.name)
+		self.assertEqual(notify.message_counts(run.name), {"bills": 1, "missing": 0, "written": 1})
+		self.assertEqual(notify.write_bill_messages(run.name), [])  # nothing to do: never a second message
+		# the writing was stopped before this bill (as on the demo, 2026-11-26): it is counted as missing, then written once
+		frappe.db.delete("Message Log", {"name": first.name})
+		self.assertEqual(notify.message_counts(run.name)["missing"], 1)
+		frappe.set_user(BILLING_MANAGER)
+		out = notify.write_run_messages(run.name)
+		frappe.set_user("Administrator")
+		self.assertEqual((out["new"], out["missing"], out["written"]), (1, 0, 1))
+		self.assertEqual(len(self.bill_messages(run.name)), 1)
+
+	def test_a_cancelled_message_is_written_again_a_skipped_one_is_not(self):
+		run = self.october_posted()
+		(log,) = self.bill_messages(run.name)
+		frappe.db.set_value("Message Log", log.name, "status", "Skipped")
+		self.assertEqual(notify.message_counts(run.name)["missing"], 0)  # skipped says why nothing could be sent: it stands
+		frappe.db.set_value("Message Log", log.name, "status", "Cancelled")
+		self.assertEqual(notify.message_counts(run.name)["missing"], 1)
+		self.assertEqual(len(notify.write_bill_messages(run.name)), 1)
+
+	def test_messages_are_written_a_batch_at_a_time_with_the_count_shown(self):
+		run = self.october_posted()
+		frappe.db.delete("Message Log", {"event": "bill.issued"})
+		with patch.object(notify, "MESSAGE_BATCH", 1), patch("utility_billing.utility_billing.progress.step") as step:
+			self.assertEqual(len(notify.write_bill_messages(run.name)), 1)
+		step.assert_called_with("Writing the bill messages", 1, 1)
+
+	def test_only_senders_write_a_runs_messages_and_only_for_a_posted_run(self):
+		run = self.october_posted()
+		frappe.set_user(CASHIER)
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				notify.write_run_messages(run.name)
+		finally:
+			frappe.set_user("Administrator")
+		frappe.db.set_value("Bill Run", run.name, "reversal_status", "Reversed")  # a reversed run's bills stand no more
+		with self.assertRaises(frappe.ValidationError):
+			notify.write_run_messages(run.name)
+		frappe.db.set_value("Bill Run", run.name, {"reversal_status": None, "docstatus": 0})  # not posted
+		with self.assertRaises(frappe.ValidationError):
+			notify.write_run_messages(run.name)
+
+	def test_the_run_and_the_dashboard_say_when_bills_have_no_message(self):
+		from utility_billing.utility_billing import dashboard
+
+		run = self.october_posted()
+		frappe.db.delete("Message Log", {"event": "bill.issued"})
+		info = notify.run_messages(run.name)
+		self.assertEqual((info["missing"], info["bills"], info["writing"], info["can_write"]), (1, 1, False, True))
+		items = dashboard.get_dashboard(society=SOC, month="2026-10-01")["attention"]
+		self.assertIn("1 posted bills have no bill message", [i["title"] for i in items])
+		notify.write_bill_messages(run.name)
+		items = dashboard.get_dashboard(society=SOC, month="2026-10-01")["attention"]
+		self.assertNotIn("1 posted bills have no bill message", [i["title"] for i in items])
+		# while posting's own job writes them, the button's job waits
+		with patch.object(notify, "writing_now", return_value=True):
+			frappe.db.delete("Message Log", {"event": "bill.issued"})
+			with self.assertRaises(frappe.ValidationError):
+				notify.write_run_messages(run.name)
+
 	# ---- reminders and overdue notices (NTF-01)
 	def test_reminders_and_overdue_notices_go_once_per_bill(self):
 		self.october_posted()  # the October bill is due 15-11-2026 and the account still owes it
