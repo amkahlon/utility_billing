@@ -7,7 +7,7 @@ as zeros: they need the DISCO bill and the service request workflow."""
 
 import frappe
 from frappe import _
-from frappe.utils import add_days, add_months, cint, flt, formatdate, get_last_day, getdate, nowdate
+from frappe.utils import add_days, add_months, cint, cstr, flt, format_time, formatdate, get_last_day, getdate, now_datetime, nowdate
 
 from utility_billing.utility_billing import access, losses, mis
 from utility_billing.utility_billing import rights
@@ -89,15 +89,123 @@ def line_loss_card(society, month, series):
 	return kpi(label, f"{cur['atc']:.1f}%", note, tone, cur["atc"])
 
 
-def defaulter_stats(society, as_of):
-	"""(accounts with something 60+ days overdue, the amount that is 60+ days overdue)."""
+def defaulter_stats(society, as_of, aged=None):
+	"""(accounts with something 60+ days overdue, the amount that is 60+ days overdue). `aged`: mis.aging_for(..., detail=True)
+	when the caller has it (the same figures as the Defaulters report: the age floored at 0)."""
 	count, amount = 0, 0.0
-	for _acc, parts in mis.aging_for(society, as_of):
-		old = [a for age, a in parts if age >= 60]
+	for _acc, parts in (mis.aging_for(society, as_of, detail=True) if aged is None else aged):
+		old = [p[1] for p in parts if max(p[0], 0) >= 60]
 		if old:
 			count += 1
 			amount += sum(old)
 	return count, amount
+
+
+class Figures:
+	"""What several cards share, worked out once per call (increment 61: the dashboard read every account's balances four times
+	and aged them twice, 18.8 s on 21,446 accounts)."""
+
+	def __init__(self, society, month, as_of):
+		self.society, self.month, self.as_of = society, month, getdate(as_of)
+		self.rows = mis.account_rows(society, as_of)
+		self.aged = mis.aging_for(society, as_of, rows=self.rows, detail=True)
+		self.defaulters = defaulter_stats(society, as_of, self.aged)
+		self.before = mis.balance_totals(society, add_days(month, -1))
+
+	@property
+	def arrears(self):
+		return sum(flt(a.arrears_balance) + flt(a.surcharge_balance) + flt(a.fees_balance) for a in self.rows)
+
+	@property
+	def owed(self):
+		return sum(flt(a.balance) for a in self.rows if flt(a.balance) > 0)
+
+	@property
+	def credit(self):
+		return -sum(flt(a.balance) for a in self.rows if flt(a.balance) < 0)
+
+
+AGE_BANDS = ("Not yet due", "0-30 days", "31-60 days", "61-90 days", "91-180 days", "Over 180 days", "Before go-live")
+
+
+def ageing_of(fig) -> dict:
+	"""What consumers owe by how long it has been due: a band for bills not due yet, the report's five bands, and the part brought
+	over at go-live whose age the old system didn't give (the Arrears Ageing report counts both of these as 0-30 days)."""
+	amounts, accounts = dict.fromkeys(AGE_BANDS, 0.0), {b: set() for b in AGE_BANDS}
+	for acc, parts in fig.aged:
+		for age, amount, opening in parts:
+			band = AGE_BANDS[6] if opening else AGE_BANDS[0] if age < 0 else (
+				AGE_BANDS[1 + mis.BANDS.index(mis.band_of(age))])
+			amounts[band] += flt(amount)
+			accounts[band].add(acc.connection)
+	total = sum(amounts.values())
+	bands = [{"label": _(b), "key": b, "amount": round(amounts[b], 2), "value": rs(amounts[b]), "accounts": len(accounts[b]),
+	          "pct": round(mis.pct(amounts[b], total), 1)} for b in AGE_BANDS]
+	return {"bands": bands, "total": rs(total), "total_raw": round(total, 2), "credit": rs(fig.credit), "credit_raw": round(fig.credit, 2),
+	        "owing": sum(1 for a in fig.rows if flt(a.balance) > 0), "in_credit": sum(1 for a in fig.rows if flt(a.balance) < 0)}
+
+
+def mix_of(society, month) -> list[dict]:
+	"""The month's bills by charge line, largest first (taxes are their own lines)."""
+	rows = mis.sql("""select l.label, sum(l.amount) amount from `tabBill Line` l join `tabUtility Bill` b on b.name = l.parent
+		where b.society = %(s)s and b.docstatus = 1 and b.billing_month = %(m)s and l.parenttype = 'Utility Bill'
+		group by l.label having sum(l.amount) != 0 order by sum(l.amount) desc""", {"s": society, "m": month})
+	total = sum(flt(r.amount) for r in rows)
+	return [{"name": r.label, "value": rs(r.amount), "raw": flt(r.amount), "pct": round(mis.pct(r.amount, total), 1)} for r in rows]
+
+
+def categories_of(society, month) -> list[dict]:
+	"""The month's bills by consumer category: bills, units and current billing, in category name order (so each keeps its colour)."""
+	rows = mis.sql("""select ifnull(cc.category_name, b.consumer_category) name, count(*) bills, sum(b.units) units, sum(b.current_amount) amount
+		from `tabUtility Bill` b left join `tabConsumer Category` cc on cc.name = b.consumer_category
+		where b.society = %(s)s and b.docstatus = 1 and b.billing_month = %(m)s group by 1 order by 1""", {"s": society, "m": month})
+	total = sum(flt(r.amount) for r in rows)
+	return [{"name": r.name or _("(none)"), "bills": cint(r.bills), "units": flt(r.units), "value": rs(r.amount), "raw": flt(r.amount),
+	         "pct": round(mis.pct(r.amount, total), 1)} for r in rows]
+
+
+def delta(now, before, up_is_good=True, points=False):
+	"""A change against last month for a headline card: {text, dir: up | down | flat, good: True | False | None}. A percentage
+	change, or with `points` the difference in percentage points (for a rate)."""
+	now, before = flt(now), flt(before)
+	if not before and not points:
+		return None
+	change = now - before if points else (now - before) / abs(before) * 100
+	if abs(change) < 0.05:
+		return {"text": _("No change"), "dir": "flat", "good": None}
+	up = change > 0
+	text = _("{0} pts").format(("+" if up else "−") + f"{abs(change):.1f}") if points else signed_pct(change)
+	return {"text": text, "dir": "up" if up else "down", "good": up == up_is_good}
+
+
+def headline_of(society, month, series, fig, cards) -> list[dict]:
+	"""The four figures the dashboard leads with: billed, collected, collection efficiency and what consumers owe, each with its
+	change against last month and its 12-month trend."""
+	cur, prev = series[-1], series[-2] if len(series) > 1 else {}
+	by = {c["icon"]: c for c in cards}
+	rate = cur["rate"] if cur["bills"] else None
+	prev_name = getdate(add_months(month, -1)).strftime("%b")
+	vs = _("vs. {0}").format(prev_name)
+	return [
+		{"key": "billed", "label": _("Billed this cycle"), "value": rs(cur["billed"]), "raw": cur["billed"],
+		 "sub": (_("1 bill") if cur["bills"] == 1 else _("{0} bills").format(f"{cur['bills']:,}")) if cur["bills"] else _("No bills in this cycle"),
+		 "delta": delta(cur["billed"], prev.get("billed")), "vs": vs, "spark": [m["billed"] for m in series], "drill": "Bill Register"},
+		{"key": "collected", "label": _("Collected"), "value": rs(cur["collected"]), "raw": cur["collected"],
+		 "sub": _("of {0} payable").format(rs(cur["payable"])) if cur["payable"] else _("Nothing payable yet"),
+		 "delta": delta(cur["collected"], prev.get("collected")), "vs": vs, "spark": [m["collected"] for m in series], "drill": "Collections"},
+		{"key": "efficiency", "label": _("Collection efficiency"), "value": f"{rate:.1f}%" if rate is not None else "—", "raw": rate,
+		 "sub": _("Target {0}%").format(TARGET), "gauge": rate, "target": TARGET,
+		 "tone": None if rate is None else GOOD if rate >= TARGET else WARN if rate >= 60 else BAD,
+		 "delta": delta(rate, prev.get("rate"), points=True) if rate is not None and prev.get("bills") else None, "vs": vs,
+		 "spark": [m["rate"] for m in series], "drill": "Collection vs Billing by Category and Block"},
+		{"key": "receivable", "label": _("Owed by consumers"), "value": rs(fig.owed), "raw": fig.owed,
+		 "sub": _("of which arrears {0}").format(by["arrears"]["value"]) if by.get("arrears") else "",
+		 "delta": delta(fig.owed, fig.before.owed, up_is_good=False), "vs": _("vs. 1 {0}").format(getdate(month).strftime("%b")),
+		 "drill": "Arrears Ageing"},
+	]
+
+
+TARGET = 85  # collection efficiency a society aims for (%); the card turns green from here, amber from 60
 
 
 def connections_card(society, as_of):
@@ -112,7 +220,7 @@ def connections_card(society, as_of):
 	return kpi(_("Active connections"), f"{active:,}", _("{0} disconnected").format(f"{off:,}") if off else _("None disconnected"), MUTED, active)
 
 
-def kpis_of(society, month, series, as_of):
+def kpis_of(society, month, series, as_of, fig=None):
 	cur, prev = series[-1], series[-2] if len(series) > 1 else None
 	prev_month_name = getdate(add_months(month, -1)).strftime("%B")
 	billed_note = _("No bills last month")
@@ -120,13 +228,11 @@ def kpis_of(society, month, series, as_of):
 		billed_note = _("{0} vs. {1}").format(signed_pct((cur["billed"] - prev["billed"]) / prev["billed"] * 100), prev_month_name)
 	rate = cur["rate"]
 
-	accounts = mis.account_rows(society, as_of)
-	arrears = sum(flt(a.arrears_balance) + flt(a.surcharge_balance) + flt(a.fees_balance) for a in accounts)
-	before = mis.account_rows(society, add_days(month, -1))
-	arrears_before = sum(flt(a.arrears_balance) + flt(a.surcharge_balance) + flt(a.fees_balance) for a in before)
-	delta = arrears - arrears_before
+	fig = fig or Figures(society, month, as_of)
+	arrears = fig.arrears
+	delta = arrears - fig.before.arrears
 
-	defaulters, overdue_60 = defaulter_stats(society, as_of)
+	defaulters, overdue_60 = fig.defaulters
 
 	defective = frappe.get_all("Meter", filters={"society": society, "status": "Defective"}, pluck="modified")
 	stale = sum(1 for m in defective if (getdate(as_of) - getdate(m)).days > 60)
@@ -158,7 +264,7 @@ def service_card(society, as_of):
 SEVERITY = {"red": 0, "amber": 1, "blue": 2}
 
 
-def attention_of(society, month, as_of):
+def attention_of(society, month, as_of, fig=None):
 	"""What needs somebody's attention now, most serious first, each with where to go. Plain rules over the live data (no AI):
 	the place the AI insights planned in notes/ai-analytics-roadmap.md will appear next to."""
 	items = []
@@ -189,7 +295,7 @@ def attention_of(society, month, as_of):
 		add("blue", _("Enter the DISCO bill to see line losses"), _("No DISCO bill is recorded for this month"), ["Form", "DISCO Bill", "new"],
 		    {"society": society, "billing_month": str(month)})
 
-	count, amount = defaulter_stats(society, as_of)
+	count, amount = fig.defaulters if fig else defaulter_stats(society, as_of)
 	if count:
 		add("red", _("{0} accounts are 60+ days overdue").format(f"{count:,}"), _("{0} outstanding").format(rs(amount)),
 		    ["ub-recovery"], {"society": society})
@@ -297,19 +403,68 @@ def channels_of(society, month):
 ICONS = ("connections", "billed", "collected", "arrears", "losses", "units", "defaulters", "meters", "service")
 
 
-def cards_of(society, month, series, as_of):
+def cards_of(society, month, series, as_of, fig=None):
 	"""The nine cards with an icon each and, where there is a monthly history, a sparkline of the last 12 months."""
 	sparks = {1: [m["billed"] for m in series], 2: [m["collected"] for m in series], 5: [m["units"] for m in series]}
-	cards = kpis_of(society, month, series, as_of)
+	cards = kpis_of(society, month, series, as_of, fig)
 	for i, card in enumerate(cards):
 		card["icon"] = ICONS[i]
 		card["spark"] = sparks.get(i) if any(sparks.get(i) or []) else None
 	return cards
 
 
+# ---------------------------------------------------------------- the society's figures, kept for a while
+CACHE_SECONDS = 6 * 3600
+FIGURES_VERSION = 1  # raise when the figures' shape changes
+# A change to any of these makes the kept figures stale (a posting, a payment, a reading, a DISCO bill ...). Other changes (an
+# approval waiting, a failed message) show at the next Refresh, or the next day (the key carries the date).
+WATCHED = (("Customer Ledger Entry", "creation"), ("Utility Bill", "modified"), ("Bill Run", "modified"), ("Reading Cycle", "modified"),
+           ("Meter Reading", "modified"), ("DISCO Bill", "modified"), ("Payment Receipt", "modified"), ("Service Request", "modified"),
+           ("Meter", "modified"), ("Connection", "modified"))
+
+
+def data_version() -> str:
+	return "|".join(cstr(frappe.db.sql(f"select max(`{f}`) from `tab{dt}`")[0][0]) for dt, f in WATCHED)
+
+
+def figures_for(society, month, refresh=False, allow_stale=False) -> dict:
+	"""Everything on the dashboard that is the society's, not the viewer's. Kept in the cache while none of the WATCHED records
+	changes, so a second visit opens at once (increment 61: 18.8 s every time before). `allow_stale` (the page): figures kept from
+	before a change come back at once marked "stale", and the page asks again for fresh ones. Tests work it out fresh."""
+	month = mis.month_start(month)
+	today = getdate(nowdate())
+	as_of = min(today, getdate(get_last_day(month)))
+	use_cache = not frappe.flags.in_test or frappe.flags.ub_dashboard_cache
+	# FIGURES_VERSION: figures kept by an older release (other keys) are never handed to a newer page
+	key, version = f"ub-dashboard:{FIGURES_VERSION}:{society}:{month}:{today}", data_version()
+	if use_cache and not refresh:
+		kept = frappe.cache.get_value(key)
+		if kept and kept.get("version") == version:
+			return {**kept["data"], "cached": True, "stale": False}
+		if kept and allow_stale:
+			return {**kept["data"], "cached": True, "stale": True}
+	series = mis.monthly_series(society, mis.last_months(month, 12))
+	fig = Figures(society, month, as_of)
+	cards = cards_of(society, month, series, as_of, fig)
+	steps, footer = steps_of(society, month, today)
+	feeders = feeders_of(society, month)
+	now = now_datetime()
+	data = {
+		"kpis": cards, "headline": headline_of(society, month, series, fig, cards), "ageing": ageing_of(fig),
+		"mix": mix_of(society, month), "categories": categories_of(society, month),
+		"attention": attention_of(society, month, as_of, fig), "series": series, "steps": steps, "footer": footer,
+		"feeders": feeders, "feeders_have_input": any(f["input_kwh"] != "—" for f in feeders), "channels": channels_of(society, month),
+		"updated": str(now), "updated_label": format_time(now, "HH:mm"),
+	}
+	if use_cache:
+		frappe.cache.set_value(key, {"version": version, "data": data}, expires_in_sec=CACHE_SECONDS)
+	return {**data, "cached": False, "stale": False}
+
+
 # ---------------------------------------------------------------- the call
 @frappe.whitelist()
-def get_dashboard(society: str | None = None, month: str | None = None):
+def get_dashboard(society: str | None = None, month: str | None = None, refresh: int | str | None = None,
+                  allow_stale: int | str | None = None):
 	if not rights.can("dashboard.view"):
 		raise frappe.PermissionError(_("You don't have access to the dashboard."))
 	societies = access.visible_societies(order_by="creation desc")
@@ -321,19 +476,15 @@ def get_dashboard(society: str | None = None, month: str | None = None):
 		frappe.throw(_("Society {0} not found.").format(society))
 	month = mis.month_start(month or latest_billing_month(society))
 	today = getdate(nowdate())
-	as_of = min(today, getdate(get_last_day(month)))
-	series = mis.monthly_series(society, mis.last_months(month, 12))
-	steps, footer = steps_of(society, month, today)
-	feeders = feeders_of(society, month)
 	energy = frappe.db.get_value("Society", society, "enable_electricity")
+	full_name = frappe.db.get_value("User", frappe.session.user, "full_name")
 	return {
 		"society": society, "society_name": frappe.db.get_value("Society", society, "society_name"),
 		"societies": picker(societies, society),
 		"data_label": data_label(society), "month": str(month), "month_label": getdate(month).strftime("%B %Y"),
 		"months": [{"value": str(m), "label": getdate(m).strftime("%B %Y")} for m in mis.last_months(month if month > today else today, 13)][::-1],
 		"subtitle": _("{0} · {1} billing cycle").format(_("Electricity") if energy else _("Billing"), getdate(month).strftime("%B %Y")),
-		"kpis": cards_of(society, month, series, as_of), "attention": attention_of(society, month, as_of), "series": series, "steps": steps, "footer": footer,
-		"feeders": feeders, "feeders_have_input": any(f["input_kwh"] != "—" for f in feeders), "channels": channels_of(society, month),
-		"user": {"name": frappe.session.user, "full_name": frappe.db.get_value("User", frappe.session.user, "full_name"),
-		         "initials": "".join(w[0] for w in (frappe.db.get_value("User", frappe.session.user, "full_name") or "U").split()[:2]).upper()},
+		**figures_for(society, month, cint(refresh), cint(allow_stale)),
+		"user": {"name": frappe.session.user, "full_name": full_name,
+		         "initials": "".join(w[0] for w in (full_name or "U").split()[:2]).upper()},
 	}
