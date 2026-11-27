@@ -282,7 +282,7 @@ if (!window.ub_icon) {
 				.map(([key, drill]) => {
 					const k = by[key];
 					const empty = k.raw === null || k.raw === undefined;
-					return `<div class="ub-op ${empty ? "is-empty" : ""}" data-drill="${e(drill)}" role="button" tabindex="0">
+					return `<div class="ub-op ${empty ? "is-empty" : ""}" data-drill="${e(k.drill || drill)}" role="button" tabindex="0">
 						<div class="ub-op-icon">${ub_icon(key)}</div>
 						<div class="ub-op-body"><div class="ub-op-label">${e(k.label)}</div><div class="ub-op-value">${e(k.value)}</div>
 						<div class="ub-op-note"><span class="ub-dot ${e(k.tone)}"></span>${e(k.note)}</div></div></div>`;

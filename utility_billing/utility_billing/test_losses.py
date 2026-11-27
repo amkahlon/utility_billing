@@ -2,8 +2,11 @@
 """Increment 10: the DISCO bill, line losses, AT&C, transformer loading and DISCO reconciliation (FS-RPT-08, 30-34, 38).
 Integration data is spec test case 1 (house N 2308): October billed 264 kWh = 22,260; September billed 811 kWh = 59,470."""
 
+from unittest.mock import patch
+
 import frappe
 from frappe.tests import UnitTestCase
+from frappe.utils import add_days, formatdate
 
 from utility_billing.utility_billing import dashboard, losses, mis
 from utility_billing.utility_billing.test_billing import SOC, BillingCase, ensure
@@ -193,6 +196,22 @@ class IntegrationTestLosses(BillingCase):
 		self.assertTrue(d["feeders_have_input"])
 		d = dashboard.get_dashboard(society=SOC, month="2026-08-01")
 		self.assertEqual({k["label"]: k for k in d["kpis"]}["Line losses (AT&C)"]["value"], "—")
+
+	def test_the_card_shows_the_line_loss_until_the_bills_fall_due(self):
+		"""Defect 2026-11-27: the day after posting, AT&C read 100% only because nothing had been paid yet."""
+		self.both_months()
+		due = frappe.db.get_value("Bill Run", {"society": SOC, "billing_month": "2026-10-01", "docstatus": 1}, "due_date")
+
+		def card(today):
+			with patch.object(dashboard, "nowdate", return_value=str(today)):
+				return {k["icon"]: k for k in dashboard.get_dashboard(society=SOC, month="2026-10-01")["kpis"]}["losses"]
+
+		c = card(due)  # the last day to pay: still the line loss
+		self.assertEqual((c["label"], c["value"], c["raw"], c["tone"], c["note"], c["drill"]),
+		                 ("Line losses", "12.0%", 12.0, "red", f"AT&C after the due date, {formatdate(due)}", "Line Losses by Feeder and Transformer"))
+		c = card(add_days(due, 1))  # collections now count: AT&C, opening the AT&C report
+		self.assertEqual((c["label"], c["value"], c["note"], c.get("drill")), ("Line losses (AT&C)", "12.0%", "−88.0 pts vs. last month", None))
+		self.assertIsNone(dashboard.collection_due(SOC, "2026-08-01", due))  # no posted run that month
 
 	def test_rights(self):
 		self.october_posted()

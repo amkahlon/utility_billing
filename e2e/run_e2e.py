@@ -1195,7 +1195,9 @@ def t_modern_dashboard(d: Desk):
 	eq((res["kpis"][0]["label"], cards["Active connections"]["value"], active > 0), ("Active connections", f"{active:,}", True), "active connections")
 	eq((cards["Billed this cycle"]["value"], cards["Units billed"]["value"], cards["Units billed"]["note"]),
 	   ("Rs 22,700", "300 kWh", "1 connection billed"), "November figures")
-	eq((cards["Line losses (AT&C)"]["value"], cards["Open service requests"]["value"]), ("—", "0"), "line losses unavailable without a DISCO bill; no open service requests")
+	loss = {k["icon"]: k for k in res["kpis"]}["losses"]
+	eq((loss["label"], loss["value"], cards["Open service requests"]["value"]), ("Line losses (AT&C)", "—", "0"),
+	   "line losses unavailable without a DISCO bill; no open service requests")
 	eq([s["state"] for s in res["steps"]][:3], ["done", "done", "done"], "readings, review and bill run are done")
 	eq(len(res["series"]), 12, "12 months")
 	if not res["channels"] or res["channels"][0]["name"] != "Cash":
@@ -1263,7 +1265,7 @@ def t_losses(d: Desk):
 	expect_error(lambda: run_report(USERS["bo"], "DISCO Bill vs Resident Billing", from_date="2026-11-01", to_date="2026-11-30"))
 
 	dash = USERS["mgmt"].call("utility_billing.utility_billing.dashboard.get_dashboard", society=S["society"], month="2026-11-01")
-	card = {k["label"]: k for k in dash["kpis"]}["Line losses (AT&C)"]
+	card = {k["icon"]: k for k in dash["kpis"]}["losses"]  # "Line losses" until the bills fall due, then "Line losses (AT&C)"
 	if card["value"] == "—" or not card["value"].endswith("%"):
 		raise AssertionError(f"dashboard line-loss card still empty: {card}")
 	eq((dash["feeders"][0]["input_kwh"], dash["feeders"][0]["loss"], dash["feeders"][0]["status"], dash["feeders"][0]["tone"]),
