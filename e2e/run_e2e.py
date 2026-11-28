@@ -171,6 +171,12 @@ def eq(actual, expected, what=""):
 		raise AssertionError(f"{what}: expected {expected!r}, got {actual!r}")
 
 
+def first_difference(want: str, got: str, around=45) -> str:
+	"""Where two long texts part, short enough to read in a log line: the expected and the actual text at the first difference."""
+	i = next((n for n, (a, b) in enumerate(zip(want, got)) if a != b), min(len(want), len(got)))
+	return f"at {i}: expected ...{want[max(0, i - around):i + around]!r}, got ...{got[max(0, i - around):i + around]!r}"
+
+
 # ---------------------------------------------------------------- shared state
 S: dict = {}
 
@@ -2286,8 +2292,11 @@ def t_bill_designer_print(d: Desk):
 	text = " ".join(" ".join(p.extract_text() for p in pages).split())
 	eq((len(pages), ref in text, "Office Copy" in text), (1, True, True), "the exact PDF, one page")
 	_, text = get_pdf(USERS["cashier"], "download_bill", name=S["bill"])  # superseded since QA-69 (increment 37): marked so, otherwise exact
-	eq((" ".join(text.replace("SUPERSEDED", " ").split()), "SUPERSEDED" in text), (S["bill_text"], True),
-	   "the bill issued before the template still reprints exactly, marked superseded")
+	# exact, character for character; only the spacing may differ where the SUPERSEDED stamp sits over the text
+	want, got = "".join(S["bill_text"].split()), "".join(text.replace("SUPERSEDED", "").split())
+	if got != want:
+		raise AssertionError("the bill issued before the template doesn't reprint exactly " + first_difference(want, got))
+	eq("SUPERSEDED" in text, True, "the reprint is marked superseded")
 	# increment 38 (user, 2026-11-21): Frappe's print view prints a superseded bill too; other cancelled documents are still refused
 	r = USERS["cashier"].s.get(f"{URL}/printview", params={"doctype": "Utility Bill", "name": S["bill"]})
 	eq((r.status_code, "SUPERSEDED" in r.text, "Not allowed to print cancelled" in r.text), (200, True, False), "the print view prints the superseded bill")
