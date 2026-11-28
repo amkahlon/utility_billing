@@ -91,7 +91,7 @@ def fill_preview(rev):
 	rev.meter_reading, rev.previous_reading, rev.old_present_reading = reading.name, reading.previous_reading, reading.present_reading
 	rev.old_category = bill.consumer_category
 	data, units, _category = calculate_revision(bill, rev.kind, rev.new_present_reading, rev.new_category)
-	rev.old_units, rev.new_units = flt(bill.units), flt(units)
+	rev.old_units, rev.new_units = flt(bill.import_units if bill.nm_method else bill.units), flt(units)  # both as the meter recorded them
 	rev.old_current, rev.new_current = flt(bill.current_amount), flt(data["current_amount"])
 	rev.difference = round(rev.new_current - rev.old_current, 2)
 	rev.new_payable_within_due = flt(data["payable_within_due"])

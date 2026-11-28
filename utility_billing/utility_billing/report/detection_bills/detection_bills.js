@@ -1,7 +1,7 @@
 // Copyright (c) 2026, SoftVerx. All rights reserved. See license.txt.
 // Generated from utility_billing/utility_billing/mis.py by build_mis.py; edit the filters there.
 
-frappe.query_reports["Detection Bills and Abnormal Consumption"] = {
+frappe.query_reports["Detection Bills"] = {
 	filters: [
  {
   "fieldname": "society",
@@ -10,10 +10,16 @@ frappe.query_reports["Detection Bills and Abnormal Consumption"] = {
   "options": "Society"
  },
  {
-  "fieldname": "month",
-  "label": "Billing Month",
+  "fieldname": "from_date",
+  "label": "From",
   "fieldtype": "Date",
   "default": frappe.datetime.month_start()
+ },
+ {
+  "fieldname": "to_date",
+  "label": "To",
+  "fieldtype": "Date",
+  "default": frappe.datetime.get_today()
  }
 ],
 };

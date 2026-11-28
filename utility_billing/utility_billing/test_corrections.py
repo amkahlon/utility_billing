@@ -88,6 +88,20 @@ class IntegrationTestCorrections(BillingCase):
 		reading = frappe.get_doc("Meter Reading", old.meter_reading)
 		self.assertEqual((reading.present_reading, reading.units, reading.corrected_from), (3881, 240, 3905))
 
+	def test_an_approved_revision_is_listed_with_the_adjustments(self):
+		"""Increment 64 (user, 2026-11-28): an approved bill revision didn't show in Adjustments by Reason and Approver."""
+		with today("2026-11-10"):
+			rev = self.approve_revision(self.revision())
+		wide = {"society": SOC, "from_date": "2026-01-01", "to_date": "2030-12-31"}
+		_c, data, *_x = mis.run("adjustments_register", wide)
+		row = next(r for r in data if r["name"] == rev.name)
+		self.assertEqual((row["doctype"], row["note_type"], row["against_bill"], row["amount"], row["signed"], row["reason_code"], row["maker"],
+		                  row["approved_by"]), ("Bill Revision", "Revised Bill", self.bill_doc.name, 1_680, -1_680, "READ-WRONG", BILLING_OFFICER, BILLING_MANAGER))
+		self.assertIn("units 264.0 → 240.0", row["remarks"])
+		self.assertEqual(data[-1]["signed"], -1_680)  # the net effect counts it
+		self.assertEqual([r["name"] for r in mis.run("adjustments_register", {**wide, "note_type": "Revised Bill"})[1] if r.get("doctype")], [rev.name])
+		self.assertEqual(mis.run("adjustments_register", {**wide, "note_type": "Credit Note"})[1], [])
+
 	def test_payment_channels_show_the_latest_version(self):
 		with today("2026-11-10"):
 			rev = self.approve_revision(self.revision())

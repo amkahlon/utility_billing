@@ -117,36 +117,117 @@ def nodues_certificates(f):
 
 
 # ---------------------------------------------------------------- detection bills and abnormal consumption (RPT-12)
-@report("detection_abnormal", "Detection Bills and Abnormal Consumption", BILLING + ["Recovery Officer"],
-        [PERIOD[0], dict(fieldname="month", label="Billing Month", fieldtype="Date", default="@month_start")],
-        "Detection bills assessed, and the month's bills whose units are less than half or more than twice the account's own average.",
-        ref_doctype="Utility Bill")
-def detection_abnormal(f):
+# ---------------------------------------------------------------- monthly units, with the previous system's bills (increment 64)
+DELIVERED = "case when ifnull(b.nm_method, '') != '' then b.import_units else b.units end"  # what the meter recorded: imports for solar accounts
+
+
+def first_billed_month(society):
+	"""The society's first billing month in this system; the previous system's bills (Legacy Bill) cover the months before it."""
+	m = frappe.db.sql("select min(billing_month) from `tabUtility Bill` where society = %s and docstatus = 1", society)[0][0]
+	return getdate(m) if m else None
+
+
+def monthly_units(society, first, last, connections=None) -> dict:
+	"""{connection: {month: units}} for the months first..last: the units on the posted bills (imports for solar accounts) and, for months
+	without one, the units billed by the previous system. Without the migrated history every account would look new for a year."""
+	first, last = month_start(first), month_start(last)
+	cond = " and b.connection in %(c)s" if connections else ""
+	v = {"s": society, "a": first, "z": last, "c": tuple(connections or ())}
+	out = defaultdict(dict)
+	for r in sql(f"""select b.connection, b.billing_month m, sum({DELIVERED}) u from `tabUtility Bill` b where b.society = %(s)s and b.docstatus = 1
+	                and b.billing_month between %(a)s and %(z)s {cond} group by b.connection, b.billing_month""", v):
+		out[r.connection][getdate(r.m)] = flt(r.u)
+	solar = solar_accounts(society)
+	for r in sql(f"""select b.connection, b.billing_month m, sum(b.units) u from `tabLegacy Bill` b where b.society = %(s)s
+	                and b.billing_month between %(a)s and %(z)s {cond} group by b.connection, b.billing_month""", v):
+		if r.connection not in solar:
+			out[r.connection].setdefault(getdate(r.m), flt(r.u))
+	return out
+
+
+def solar_accounts(society) -> set:
+	"""Accounts billed under net metering here. The previous system's units for them are net (imports less exports, often negative), not
+	what the meter imported, so their history starts with their first bill here."""
+	return set(frappe.db.sql_list("""select distinct connection from `tabUtility Bill` where society = %s and docstatus = 1
+	                                 and ifnull(nm_method, '') != ''""", society))
+
+
+@report("detection_bills", "Detection Bills", BILLING + ["Recovery Officer"], PERIOD,
+        "Detection bills requested in the period: the units and amount assessed, and where each request stands.",
+        ref_doctype="Service Request")
+def detection_bills(f):
+	a, z = _period(f)
+	data = sql("""select name request, date(requested_on) requested_on, connection, consumer_name, assessed_units units, assessed_amount amount,
+	              status, adjustment from `tabService Request` where society = %(s)s and kind = 'Detection bill'
+	              and date(requested_on) between %(a)s and %(z)s order by requested_on, name""", {"s": society_of(f), "a": a, "z": z})
+	for d in data:
+		d.status = _(d.status)
+	return {"columns": [col("Request", "request", "Link", 130, "Service Request"), col("Requested On", "requested_on", "Date", 110),
+	                    col("Account", "connection", "Link", 120, "Connection"), col("Consumer", "consumer_name", width=170),
+	                    col("Units Assessed", "units", "Float", 110), col("Amount", "amount", "Currency", 120), col("Status", "status", width=110),
+	                    col("Billed By", "adjustment", width=140)],
+	        "data": data,
+	        "summary": [{"value": len(data), "label": _("Detection bills"), "datatype": "Int", "indicator": "Blue"},
+	                    {"value": round(sum(flt(d.units) for d in data), 2), "label": _("Units assessed"), "datatype": "Float", "indicator": "Blue"},
+	                    {"value": round(sum(flt(d.amount) for d in data), 2), "label": _("Amount assessed"), "datatype": "Currency", "indicator": "Orange"}]}
+
+
+ABNORMAL_LOW, ABNORMAL_HIGH = 0.5, 2.0
+SEASON_MIN_ACCOUNTS = 20  # fewer accounts with history than this: no seasonal adjustment
+
+
+def season_factor(pairs) -> float:
+	"""How the society's use moved from the months compared with to this month: the units now of the accounts with history over their
+	average before. Summer to winter halves everyone's use; dividing it out leaves what is unusual for the account itself."""
+	pairs = [(flt(now), flt(avg)) for now, avg in pairs if flt(avg) > 0]
+	if len(pairs) < SEASON_MIN_ACCOUNTS:
+		return 1.0
+	before = sum(a for _n, a in pairs)
+	return sum(n for n, _a in pairs) / before if before else 1.0
+
+
+@report("abnormal_consumption", "Abnormal Consumption", BILLING + ["Recovery Officer"],
+        [PERIOD[0], dict(fieldname="month", label="Billing Month", fieldtype="Date", default="@month_start"),
+         dict(fieldname="show", label="Show", fieldtype="Select", options="\nUnusually low\nUnusually high")],
+        "The month's bills whose units are less than half or more than twice what the account's own last 3 months lead to expect, "
+        "allowing for the change of season (the previous system's bills count for the months before go-live).")
+def abnormal_consumption(f):
 	s = society_of(f)
 	month = month_start(f.get("month") or nowdate())
-	data = []
-	for d in sql("""select name, connection, consumer_name, assessed_units, assessed_amount, status, adjustment, requested_on from `tabService Request`
-	               where society = %(s)s and kind = 'Detection bill' and requested_on between %(a)s and %(z)s""",
-	             {"s": s, "a": add_months(month, -11), "z": frappe.utils.get_last_day(month)}):
-		data.append({"kind": _("Detection bill"), "connection": d.connection, "consumer_name": d.consumer_name, "units": flt(d.assessed_units),
-		             "amount": flt(d.assessed_amount), "note": _("{0}, {1}").format(_(d.status), d.adjustment or d.name)})
-	bills = sql("""select connection, consumer_name, units from `tabUtility Bill` where society = %(s)s and docstatus = 1 and billing_month = %(m)s""",
-	            {"s": s, "m": month})
+	bills = sql(f"""select b.name bill, b.connection, b.consumer_name, {DELIVERED} units, {BLOCK} block
+	               from `tabUtility Bill` b left join `tabProperty` p on p.name = b.property
+	               where b.society = %(s)s and b.docstatus = 1 and b.billing_month = %(m)s""", {"s": s, "m": month})
+	before = [getdate(add_months(month, -i)) for i in (1, 2, 3)]
+	hist = monthly_units(s, before[-1], before[0])
+	compared = []
 	for b in bills:
-		hist = [flt(x.units) for x in sql("""select units from `tabUtility Bill` where connection = %(c)s and docstatus = 1 and billing_month < %(m)s
-		                                    and billing_month >= %(f)s""", {"c": b.connection, "m": month, "f": add_months(month, -3)})]
-		if len(hist) < 2:
+		h = [hist[b.connection][m] for m in before if m in hist.get(b.connection, {})]
+		if len(h) >= 2 and sum(h) > 0:
+			compared.append((b, sum(h) / len(h), len(h)))
+	factor = season_factor((b.units, avg) for b, avg, _n in compared)
+	data = []
+	for b, avg, n in compared:
+		expected = avg * factor
+		ratio = flt(b.units) / expected if expected > 0 else 0
+		if ABNORMAL_LOW <= ratio <= ABNORMAL_HIGH:
 			continue
-		avg = sum(hist) / len(hist)
-		if avg <= 0:
+		kind = _("Unusually low") if ratio < ABNORMAL_LOW else _("Unusually high")
+		if f.get("show") and _(f.show) != kind:
 			continue
-		ratio = flt(b.units) / avg
-		if ratio < 0.5 or ratio > 2:
-			data.append({"kind": _("Unusually low") if ratio < 0.5 else _("Unusually high"), "connection": b.connection, "consumer_name": b.consumer_name,
-			             "units": flt(b.units), "amount": None, "note": _("{0} units against an average of {1} ({2}% of normal)").format(
-			                 flt(b.units), round(avg), round(ratio * 100))})
-	return {"columns": [col("What", "kind", width=140), col("Account", "connection", "Link", 110, "Connection"), col("Consumer", "consumer_name", width=160),
-	                    col("Units", "units", "Float", 90), col("Amount", "amount", "Currency", 110), col("Note", "note", width=320)], "data": data}
+		data.append({"kind": kind, "connection": b.connection, "consumer_name": b.consumer_name, "block": b.block, "bill": b.bill,
+		             "units": flt(b.units), "average": round(avg, 1), "expected": round(expected, 1), "percent": round(ratio * 100), "months": n})
+	data.sort(key=lambda r: (r["kind"] != _("Unusually low"), r["percent"] if r["kind"] == _("Unusually low") else -r["percent"]))
+	low = sum(1 for r in data if r["kind"] == _("Unusually low"))
+	return {"columns": [col("What", "kind", width=120), col("Account", "connection", "Link", 120, "Connection"), col("Consumer", "consumer_name", width=170),
+	                    col("Block", "block", width=90), col("Bill", "bill", "Link", 140, "Utility Bill"), col("Units", "units", "Float", 90),
+	                    col("Average Before", "average", "Float", 110), col("Expected Now", "expected", "Float", 110),
+	                    col("% of Expected", "percent", "Int", 100), col("Months Averaged", "months", "Int", 110)],
+	        "data": data,
+	        "summary": [{"value": low, "label": _("Unusually low"), "datatype": "Int", "indicator": "Orange"},
+	                    {"value": len(data) - low, "label": _("Unusually high"), "datatype": "Int", "indicator": "Red"}],
+	        "message": _("Expected now = the account's average of the 3 months before (at least 2 billed) × how the whole society's use moved since "
+	                     "({0}%), so the change of season isn't counted as unusual. Units are what the meter recorded (imports, for solar accounts).").format(
+	                         round(factor * 100))}
 
 
 # ---------------------------------------------------------------- channel fees (RPT-22)
@@ -242,22 +323,28 @@ def consumption_analytics(f):
 
 
 def _theft(s, month):
-	bills = sql(f"""select b.connection, b.consumer_name, b.units, b.consumer_category cat, ifnull(p.plot_size_class, '') size, {BLOCK} block
+	bills = sql(f"""select b.connection, b.consumer_name, {DELIVERED} units, b.consumer_category cat, ifnull(p.plot_size_class, '') size, {BLOCK} block
 	               from `tabUtility Bill` b left join `tabProperty` p on p.name = b.property
 	               where b.society = %(s)s and b.docstatus = 1 and b.billing_month = %(m)s""", {"s": s, "m": month})
 	peers = defaultdict(list)
 	for b in bills:
 		peers[(b.cat, b.size)].append(flt(b.units))
+	medians = {k: statistics.median(v) for k, v in peers.items() if len(v) >= 5}
+	hist = monthly_units(s, add_months(month, -6), add_months(month, -1))
+	own_of = {}
+	for b in bills:
+		h = list(hist.get(b.connection, {}).values())
+		own_of[b.connection] = sum(h) / len(h) if len(h) >= 3 else None
+	factor = season_factor((b.units, own_of[b.connection]) for b in bills if own_of[b.connection])
 	data = []
 	for b in bills:
 		reasons = []
-		hist = [flt(x.units) for x in sql("""select units from `tabUtility Bill` where connection = %(c)s and docstatus = 1 and billing_month < %(m)s
-		                                    and billing_month >= %(f)s""", {"c": b.connection, "m": month, "f": add_months(month, -6)})]
-		own = sum(hist) / len(hist) if len(hist) >= 3 else None
-		if own and own > 0 and flt(b.units) < own * 0.5:
-			reasons.append(_("dropped to {0}% of its own 6-month average ({1})").format(round(flt(b.units) / own * 100), round(own)))
-		group = peers[(b.cat, b.size)]
-		median = statistics.median(group) if len(group) >= 5 else None
+		own = own_of[b.connection]
+		expected = own * factor if own else None
+		if expected and expected > 0 and flt(b.units) < expected * 0.5:
+			reasons.append(_("dropped to {0}% of what its own 6-month average ({1}) leads to expect this season").format(
+				round(flt(b.units) / expected * 100), round(own)))
+		median = medians.get((b.cat, b.size))
 		if median and median > 0 and flt(b.units) < median * 0.3:
 			reasons.append(_("{0}% of the median of similar properties ({1})").format(round(flt(b.units) / median * 100), round(median)))
 		if reasons:
@@ -267,12 +354,20 @@ def _theft(s, month):
 	return {"columns": [col("Account", "connection", "Link", 110, "Connection"), col("Consumer", "consumer_name", width=160), col("Block", "block", width=90),
 	                    col("Units", "units", "Float", 90), col("Own Average", "own_average", "Float", 100), col("Similar Median", "peer_median", "Float", 110),
 	                    col("Why Suspected", "why", width=380)], "data": data,
-	        "message": _("A lead for inspection, not a finding: units below half the account's own 6-month average, or below 30% of the median of at least 5 properties of the same category and plot size.")}
+	        "message": _("A lead for inspection, not a finding: units below half of what the account's own 6-month average leads to expect "
+	                     "once the society's change of season ({0}%) is allowed for (the previous system's bills count), or below 30% of the median of at "
+	                     "least 5 properties of the same category and plot size. Solar accounts are judged on their imports.").format(round(factor * 100))}
 
 
 def _seasonality(s, month):
-	rows = sql("""select month(billing_month) m, avg(units) u, count(*) n from `tabUtility Bill` where society = %(s)s and docstatus = 1
-	              and billing_month between %(f)s and %(t)s group by month(billing_month) order by 1""", {"s": s, "f": add_months(month, -23), "t": month})
+	cutoff = first_billed_month(s) or add_months(month, 1)
+	rows = sql(f"""select month(m) m, avg(u) u, count(*) n from (
+	                 select b.billing_month m, {DELIVERED} u from `tabUtility Bill` b where b.society = %(s)s and b.docstatus = 1
+	                 and b.billing_month between %(f)s and %(t)s
+	                 union all
+	                 select billing_month, units from `tabLegacy Bill` where society = %(s)s and billing_month between %(f)s and %(t)s
+	                 and billing_month < %(c)s and connection not in %(solar)s) x group by month(m) order by 1""",
+	           {"s": s, "f": add_months(month, -23), "t": month, "c": cutoff, "solar": tuple(solar_accounts(s)) or ("",)})
 	overall = statistics.mean([flt(r.u) for r in rows]) if rows else 0
 	data = [{"month": getdate(f"2000-{int(r.m):02d}-01").strftime("%B"), "avg_units": round(flt(r.u), 1), "bills": cint(r.n),
 	         "index": round(flt(r.u) / overall * 100) if overall else None} for r in rows]
@@ -280,16 +375,20 @@ def _seasonality(s, month):
 	                    col("Season Index (100 = average)", "index", "Int", 200)], "data": data,
 	        "chart": {"data": {"labels": [d["month"] for d in data], "datasets": [{"name": _("Season index"), "values": [d["index"] or 0 for d in data]}]},
 	                  "type": "bar"} if data else None,
-	        "message": _("The last 24 months of bills, by calendar month.")}
+	        "message": _("The last 24 months of bills by calendar month, the previous system's included. Units are what the meter recorded.")}
 
 
 def _forecast(s, month):
 	billed = {str(r.m): flt(r.v) for r in sql("""select billing_month m, sum(current_amount) v from `tabUtility Bill` where society = %(s)s
 	                                             and docstatus = 1 and status = 'Posted' group by billing_month""", {"s": s})}
+	for r in sql("""select billing_month m, sum(current_amount) v from `tabLegacy Bill` where society = %(s)s and billing_month < %(c)s
+	               group by billing_month""", {"s": s, "c": first_billed_month(s) or add_months(month, 1)}):
+		billed.setdefault(str(r.m), flt(r.v))
 	val = lambda d: billed.get(str(month_start(d)), 0.0)  # noqa: E731
 	recent = [val(add_months(month, -i)) for i in range(0, 3)]
 	year_ago = [val(add_months(month, -12 - i)) for i in range(0, 3)]
-	growth = (sum(recent) / sum(year_ago)) if sum(year_ago) else None
+	both = [(r, y) for r, y in zip(recent, year_ago) if r and y]  # only months billed in both years
+	growth = (sum(r for r, _y in both) / sum(y for _r, y in both)) if len(both) == 3 else None
 	data = []
 	for i in range(1, 4):
 		m = add_months(month, i)
@@ -301,7 +400,7 @@ def _forecast(s, month):
 			fc, how = (sum(nonzero) / len(nonzero) if nonzero else 0), _("average of the last 3 months")
 		data.append({"month": getdate(m).strftime("%b %Y"), "forecast": round(fc, 2), "basis": how})
 	return {"columns": [col("Month", "month", width=110), col("Forecast Billing", "forecast", "Currency", 150), col("How", "basis", width=320)],
-	        "data": data if any(d["forecast"] for d in data) else [], "message": _("A simple forecast of billing from the society's own history.")}
+	        "data": data if any(d["forecast"] for d in data) else [], "message": _("A simple forecast of billing from the society's own history, the previous system's bills included.")}
 
 
 

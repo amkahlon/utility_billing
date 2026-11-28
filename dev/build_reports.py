@@ -91,11 +91,14 @@ def build_reports():
 			rep = frappe.get_doc("Report", spec["name"])
 			rep.set("roles", roles)
 			rep.ref_doctype = spec["ref_doctype"]
+			# never a "background report" (increment 64): Frappe turns one on by itself after a slow run, and the page then shows only a queue
+			rep.prepared_report, rep.disable_prepared_report_automation = 0, 1
 			rep.save()
 			print("updated:", spec["name"])
 		else:
 			frappe.get_doc({"doctype": "Report", "report_name": spec["name"], "ref_doctype": spec["ref_doctype"],
-			                "report_type": "Script Report", "is_standard": "Yes", "module": MODULE, "roles": roles}).insert()
+			                "report_type": "Script Report", "is_standard": "Yes", "module": MODULE, "roles": roles,
+			                "prepared_report": 0, "disable_prepared_report_automation": 1}).insert()
 			print("created:", spec["name"])
 		folder = APP / "report" / frappe.scrub(spec["name"])
 		folder.mkdir(parents=True, exist_ok=True)
@@ -169,9 +172,20 @@ def build_sidebar():
 	print("sidebar sections:", [s for s, _l in GROUPS], "items:", len(doc.items))
 
 
+GONE = ["Detection Bills and Abnormal Consumption"]  # split into Detection Bills and Abnormal Consumption (increment 64)
+
+
+def remove_gone():
+	for name in GONE:
+		if frappe.db.exists("Report", name):
+			frappe.delete_doc("Report", name, force=True, ignore_permissions=True)
+			print("removed:", name)
+
+
 frappe.init(site="ub.localhost", sites_path=".")
 frappe.connect()
 build_kpi()
+remove_gone()
 frappe.db.commit()
 build_reports()
 build_sidebar()

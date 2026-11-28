@@ -23,6 +23,7 @@ from utility_billing.utility_billing import rights
 
 VIEWERS = set(mis.RECOVERY + ["Billing Officer", "Billing Manager"])
 DONE = ("Valid", "Approved", "Estimated")
+MIGRATED = "Migrated"  # a month billed by the previous system
 
 
 def require_viewer():
@@ -31,15 +32,28 @@ def require_viewer():
 
 
 def histories(society, month, connections=None):
-	"""{connection: [(billing_month, units, status)]} for the 12 months up to `month`, oldest first."""
+	"""{connection: [(billing_month, units, status)]} for the 12 months up to `month`, oldest first: the readings, and the previous
+	system's bills for the months without one."""
 	start = add_months(month, -11)
 	cond = " and r.connection in %(c)s" if connections else ""
+	values = {"s": society, "a": start, "b": month, "st": DONE, "c": tuple(connections or ())}
 	out = defaultdict(list)
 	for r in frappe.db.sql(f"""select r.connection, r.billing_month, r.units, r.status from `tabMeter Reading` r
 	                          where r.society = %(s)s and r.billing_month between %(a)s and %(b)s and r.status in %(st)s {cond}
-	                          order by r.billing_month""", {"s": society, "a": start, "b": month, "st": DONE, "c": tuple(connections or ())},
-	                       as_dict=True):
+	                          order by r.billing_month""", values, as_dict=True):
 		out[r.connection].append((getdate(r.billing_month), flt(r.units), r.status))
+	# months before go-live: the units the previous system billed (increment 64), so a year's pattern is there from the first month
+	from utility_billing.utility_billing.mis_more import solar_accounts  # noqa: PLC0415
+
+	read = {c: {m for m, _u, _s in h} for c, h in out.items()}
+	solar = solar_accounts(society)  # the previous system's units for these are net of exports: not comparable with readings
+	for r in frappe.db.sql(f"""select r.connection, r.billing_month, sum(r.units) units from `tabLegacy Bill` r
+	                          where r.society = %(s)s and r.billing_month between %(a)s and %(b)s {cond}
+	                          group by r.connection, r.billing_month""", values, as_dict=True):
+		if r.connection not in solar and getdate(r.billing_month) not in read.get(r.connection, ()):
+			out[r.connection].append((getdate(r.billing_month), flt(r.units), MIGRATED))
+	for h in out.values():
+		h.sort(key=lambda x: x[0])
 	return out
 
 
