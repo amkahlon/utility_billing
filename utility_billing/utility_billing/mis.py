@@ -509,8 +509,8 @@ def fpa_qta_register(f):
          dict(fieldname="from_date", label="From", fieldtype="Date", default="@month_start"),
          dict(fieldname="to_date", label="To", fieldtype="Date", default="@today"),
          dict(fieldname="reason_code", label="Reason", fieldtype="Link", options="Reason Code"),
-         dict(fieldname="note_type", label="Type", fieldtype="Select", options="\nCredit Note\nDebit Note")],
-        "Approved credit and debit notes with the reason, who made them and who approved them (revised bills come later).",
+         dict(fieldname="note_type", label="Type", fieldtype="Select", options="\nCredit Note\nDebit Note\nRevised Bill")],
+        "Approved credit and debit notes and revised bills, with the reason, who made them and who approved them.",
         ref_doctype="Account Adjustment")
 def adjustments_register(f):
 	s, (a, b) = society_of(f), period(f, month_start(nowdate()))
@@ -520,10 +520,25 @@ def adjustments_register(f):
 		from `tabAccount Adjustment` aa left join `tabReason Code` rc on rc.name = aa.reason_code
 		where aa.society = %(s)s and aa.docstatus = 1 and aa.posting_date between %(a)s and %(b)s {cond}
 		order by aa.posting_date, aa.name""", {"s": s, "a": a, "b": b, "reason_code": f.get("reason_code"), "note_type": f.get("note_type")})
-	data = [dict(r, signed=flt(r.amount) if r.note_type == "Debit Note" else -flt(r.amount)) for r in rows]
+	data = [dict(r, doctype="Account Adjustment", signed=flt(r.amount) if r.note_type == "Debit Note" else -flt(r.amount)) for r in rows]
+	# approved bill revisions (increment 64): dated on approval; the amount is the change in the bill's current charges
+	if f.get("note_type") in (None, "", "Revised Bill"):
+		cond = " and r.reason_code = %(reason_code)s" if f.get("reason_code") else ""
+		for r in sql(f"""select r.name, date(r.approved_on) posting_date, r.connection, r.consumer_name, r.original_bill against_bill, r.revised_bill,
+				r.kind, r.difference, r.old_units, r.new_units, r.reason_code, rc.description reason, r.remarks,
+				ifnull(r.requested_by, r.owner) maker, r.approved_by, r.approved_on
+			from `tabBill Revision` r left join `tabReason Code` rc on rc.name = r.reason_code
+			where r.society = %(s)s and r.docstatus = 1 and date(r.approved_on) between %(a)s and %(b)s {cond}""",
+			{"s": s, "a": a, "b": b, "reason_code": f.get("reason_code")}):
+			data.append({"name": r.name, "doctype": "Bill Revision", "note_type": _("Revised Bill"), "posting_date": r.posting_date, "connection": r.connection,
+			             "consumer_name": r.consumer_name, "against_bill": r.against_bill, "bucket": _("Bill"), "amount": abs(flt(r.difference)),
+			             "signed": flt(r.difference), "reason_code": r.reason_code, "reason": r.reason,
+			             "remarks": _("{0}: units {1} → {2}, new bill {3}. {4}").format(_(r.kind), flt(r.old_units), flt(r.new_units), r.revised_bill, r.remarks or ""),
+			             "maker": r.maker, "approved_by": r.approved_by, "approved_on": r.approved_on})
+		data.sort(key=lambda r: (getdate(r["posting_date"]), r["name"]))
 	if data:
 		data.append(total_row("name", _("Net effect on balances (+ debit, − credit)"), data, ("signed",)))
-	return {"columns": [col("Note", "name", "Link", 130, "Account Adjustment"), col("Type", "note_type", width=90),
+	return {"columns": [col("Note", "name", "Dynamic Link", 130, "doctype"), col("Type", "note_type", width=100),
 	                    col("Date", "posting_date", "Date", 90), col("Account", "connection", "Link", 110, "Connection"),
 	                    col("Consumer", "consumer_name", width=140), col("Bill Corrected", "against_bill", "Link", 130, "Utility Bill"),
 	                    col("Balance", "bucket", width=80), col("Amount", "amount", "Currency", 100), col("Net Effect", "signed", "Currency", 100),

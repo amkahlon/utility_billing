@@ -168,6 +168,22 @@ class IntegrationTestNetMetering(NetMeteringCase):
 		self.assertEqual((sep.units_carried_in, sep.units, sep.units_carried_out), (200, 100, 0))
 		self.assertEqual(sep.lines[0].amount, 6_700)
 
+	def test_a_revision_of_a_solar_bill_compares_imported_units(self):
+		"""Increment 64: the revision showed 0 units before (billed after the credit) against 400 after (imported)."""
+		from unittest.mock import patch  # noqa: PLC0415
+
+		from utility_billing.install import create_default_reason_codes  # noqa: PLC0415
+		from utility_billing.utility_billing import corrections  # noqa: PLC0415
+
+		create_default_reason_codes()
+		self.method(netmeter.NET)
+		self.read("2026-08-01", 16_838, 20_611)  # 300 imported, 500 exported: nothing billed
+		aug = self.bill(self.post(self.make_run("2026-08-01", "2026-09-11")))
+		with patch.object(corrections, "nowdate", return_value="2026-09-12"):
+			rev = frappe.get_doc({"doctype": "Bill Revision", "original_bill": aug.name, "kind": "Corrected reading", "reason_code": "READ-WRONG",
+			                      "remarks": "Mistyped", "new_present_reading": 16_938}).insert()
+		self.assertEqual((rev.old_units, rev.new_units, rev.old_current, rev.new_current), (300, 400, aug.current_amount, aug.current_amount))
+
 	def test_buyback_and_charges_on_imported_units(self):
 		self.method(netmeter.BUYBACK)
 		duty = frappe.get_doc("Tariff", frappe.db.get_value("Tariff", {"society": SOC, "consumer_category": self.cat, "docstatus": 1}))

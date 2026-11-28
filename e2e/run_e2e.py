@@ -1865,7 +1865,7 @@ def t_reports_more(d: Desk):
 	s["channel_fees"] = [{"mode": "Bank Transfer", "fee_percent": "1.5", "fixed_fee": "0", "cap": "100"}]
 	d.save_doc(s)
 	for user, name, filters in ((gm, "Installment Plans", {"society": soc}), (gm, "Consumer Movement", wide), (gm, "Disconnections and Reconnections", wide),
-	                            (bo, "No-Dues Certificates Issued", wide), (bo, "Detection Bills and Abnormal Consumption", {"society": soc, "month": "2026-11-01"}),
+	                            (bo, "No-Dues Certificates Issued", wide), (bo, "Detection Bills", wide), (bo, "Abnormal Consumption", {"society": soc, "month": "2026-11-01"}),
 	                            (ao, "Channel Fees and Commissions", wide), (ao, "Revenue against Target", {"society": soc, "year": "2026"}),
 	                            (aud, "Consumption Analytics", {"society": soc, "month": "2026-11-01", "show": "Seasonality"})):
 		run_report(user, name, **filters)

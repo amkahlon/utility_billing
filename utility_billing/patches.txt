@@ -26,3 +26,4 @@ utility_billing.patches.v0_1.merge_split_types
 utility_billing.patches.v0_1.unique_keys
 utility_billing.patches.v0_1.check_meter_links
 utility_billing.patches.v0_1.migration_batch_stamps
+utility_billing.patches.v0_1.split_detection_report

@@ -74,9 +74,60 @@ class IntegrationTestReportsMore(BillingCase):
 
 	def test_detection_bills_are_listed(self):
 		sr = self.request("DETECT", assessed_load_kw=2, hours_per_day=6, assessed_days=10, rate_per_unit=40)
-		_c, data, *_x = run("detection_abnormal", month=nowdate())
-		self.assertEqual((data[0]["kind"], data[0]["units"], data[0]["amount"]), ("Detection bill", 120, 4800))
-		self.assertIn(sr.name, data[0]["note"])
+		_c, data, _m, _ch, summary = run("detection_bills", from_date=nowdate(), to_date=nowdate())
+		self.assertEqual((data[0]["request"], data[0]["connection"], data[0]["units"], data[0]["amount"]), (sr.name, self.conn, 120, 4800))
+		self.assertEqual([x["value"] for x in summary], [1, 120, 4800])
+		self.assertEqual(run("detection_bills", from_date="2020-01-01", to_date="2020-01-31")[1], [])
+
+	# ---- increment 64 (user, 2026-11-28): the previous system's bills are the history before go-live
+	def legacy(self, units_by_month):
+		for month, units in units_by_month.items():
+			frappe.get_doc({"doctype": "Legacy Bill", "society": SOC, "connection": self.conn, "billing_month": month, "units": units,
+			                "current_amount": units * 70}).insert()
+
+	def test_abnormal_consumption_counts_the_previous_systems_bills(self):
+		# September billed 811 units; June to August averaged 300 in the previous system: 270% of normal
+		_c, data, *_x = run("abnormal_consumption", month="2026-09-01")
+		self.assertEqual(data, [])  # no history, nothing to compare with
+		self.legacy({"2026-06-01": 250, "2026-07-01": 300, "2026-08-01": 350})
+		_c, data, _m, _ch, summary = run("abnormal_consumption", month="2026-09-01")
+		self.assertEqual((data[0]["kind"], data[0]["connection"], data[0]["units"], data[0]["average"], data[0]["expected"], data[0]["percent"], data[0]["months"]),
+		                 ("Unusually high", self.conn, 811, 300, 300, 270, 3))  # one account: no season to allow for
+		self.assertEqual([x["value"] for x in summary], [0, 1])
+		self.assertEqual(run("abnormal_consumption", month="2026-09-01", show="Unusually low")[1], [])
+		# a solar account: the previous system kept its net units, not its imports, so that history isn't used
+		from utility_billing.utility_billing import mis_more  # noqa: PLC0415
+
+		with patch.object(mis_more, "solar_accounts", return_value={self.conn}):
+			self.assertEqual(run("abnormal_consumption", month="2026-09-01")[1], [])
+
+	def test_the_change_of_season_is_not_unusual(self):
+		from utility_billing.utility_billing import mis_more  # noqa: PLC0415
+
+		# 20 accounts that all halved (summer to winter): the society moved to 50%, so halving is expected
+		self.assertEqual(mis_more.season_factor([(100, 200)] * 20), 0.5)
+		self.assertEqual(mis_more.season_factor([(100, 200)] * 19), 1.0)  # too few to tell the season from the accounts
+		self.assertEqual(mis_more.season_factor([(100, 200)] * 19 + [(100, 0)]), 1.0)  # no history doesn't count
+
+	def test_theft_suspicion_and_analytics_read_the_previous_systems_bills(self):
+		from utility_billing.utility_billing import anomaly  # noqa: PLC0415
+
+		# 2,000 then 3,000 a month in the previous system until June, then 100: September's 811 is well under half
+		self.legacy({**{f"2025-{m:02d}-01": 2000 for m in (7, 8, 9, 10, 11, 12)}, **{f"2026-{m:02d}-01": 3000 for m in range(1, 7)},
+		             "2026-07-01": 100, "2026-08-01": 100})
+		hist = anomaly.histories(SOC, "2026-09-01")[self.conn]
+		self.assertEqual((len(hist), hist[0][2], hist[-3][2], hist[-1][2]), (12, "Migrated", "Migrated", "Valid"))  # July from the previous system; September read here
+		row = next(r for r in anomaly.scores(SOC, "2026-09-01") if r["connection"] == self.conn)
+		self.assertGreaterEqual(row["score"], 30)
+		self.assertIn("Units fell from about 2667", row["reasons"][0])  # October to June
+		_c, data, *_x = run("consumption_analytics", month="2026-09-01", show="Theft Suspicion")
+		mine = next(r for r in data if r["connection"] == self.conn)
+		self.assertEqual(mine["own_average"], 2033)  # March to August: (4 × 3,000 + 2 × 100) / 6
+		self.assertIn("dropped to 40% of what its own 6-month average (2033)", mine["why"])
+		_c, data, *_x = run("consumption_analytics", month="2026-09-01", show="Seasonality")
+		self.assertIn("July", [d["month"] for d in data])  # a month before go-live, from the previous system
+		_c, data, *_x = run("consumption_analytics", month="2026-09-01", show="Revenue Forecast")
+		self.assertIn("same month last year", data[0]["basis"])  # October 2025 came from the previous system
 
 	def test_channel_fees(self):
 		soc = frappe.get_doc("Society", SOC)

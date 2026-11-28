@@ -31,7 +31,7 @@ frappe.query_reports["Adjustments by Reason and Approver"] = {
   "fieldname": "note_type",
   "label": "Type",
   "fieldtype": "Select",
-  "options": "\nCredit Note\nDebit Note"
+  "options": "\nCredit Note\nDebit Note\nRevised Bill"
  }
 ],
 };
