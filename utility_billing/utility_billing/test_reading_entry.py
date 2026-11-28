@@ -186,7 +186,10 @@ class IntegrationTestReadingEntry(IntegrationTestCase):
 		# a society the client isn't given
 		client.set("societies", [])
 		client.all_societies = 0
-		client.append("societies", {"society": frappe.db.get_value("Society", {"name": ["!=", SOC]}, "name")})
+		other = "TST-RDE-OTHER"  # its own second society: a fresh site (CI) has no other one to borrow
+		if not frappe.db.exists("Society", other):
+			frappe.get_doc({"doctype": "Society", "society_name": "Reading Entry Other Society", "short_name": other}).insert()
+		client.append("societies", {"society": other})
 		client.save()
 		refused = call(readings=rows[:1], idempotency_key="M2")
 		self.assertEqual((refused["accepted"], refused["rejected"]), (0, 1))
