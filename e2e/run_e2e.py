@@ -2293,7 +2293,7 @@ def t_bill_designer_print(d: Desk):
 	eq((len(pages), ref in text, "Office Copy" in text), (1, True, True), "the exact PDF, one page")
 	_, text = get_pdf(USERS["cashier"], "download_bill", name=S["bill"])  # superseded since QA-69 (increment 37): marked so, otherwise exact
 	# exact, character for character; only the spacing may differ where the SUPERSEDED stamp sits over the text
-	want, got = "".join(S["bill_text"].split()), "".join(text.replace("SUPERSEDED", "").split())
+	want, got = "".join(S["bill_text"].split()), "".join(text.split()).replace("SUPERSEDED", "")  # the stamp can come out of the PDF split by a break
 	if got != want:
 		raise AssertionError("the bill issued before the template doesn't reprint exactly " + first_difference(want, got))
 	eq("SUPERSEDED" in text, True, "the reprint is marked superseded")
